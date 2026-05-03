@@ -1,0 +1,65 @@
+package routes
+
+import (
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/handlers"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/middleware"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+func SetupRouter(db *gorm.DB) *gin.Engine {
+	r := gin.Default()
+
+	// CORS middleware can be added here if needed
+
+	// Initialize handlers
+	homeHandler := &handlers.HomeHandler{DB: db}
+	categoryHandler := &handlers.CategoryHandler{DB: db}
+	itemDefHandler := &handlers.ItemDefinitionHandler{DB: db}
+	inventoryItemHandler := &handlers.InventoryItemHandler{DB: db}
+
+	// API v1 group
+	v1 := r.Group("/api/v1")
+	v1.Use(middleware.SupabaseAuthMiddleware())
+	{
+		// Homes
+		homes := v1.Group("/homes")
+		{
+			homes.GET("", homeHandler.GetHomes)
+			homes.POST("", homeHandler.CreateHome)
+			homes.PUT("/:id", homeHandler.UpdateHome)
+			homes.DELETE("/:id", homeHandler.DeleteHome)
+			homes.POST("/:id/default", homeHandler.SetDefaultHome)
+		}
+
+		// Categories
+		categories := v1.Group("/categories")
+		{
+			categories.GET("", categoryHandler.GetCategories)
+			categories.POST("", categoryHandler.CreateCategory)
+			categories.PUT("/:id", categoryHandler.UpdateCategory)
+			categories.DELETE("/:id", categoryHandler.DeleteCategory)
+		}
+
+		// Item Definitions
+		itemDefs := v1.Group("/item-definitions")
+		{
+			itemDefs.GET("", itemDefHandler.GetItemDefinitions)
+			itemDefs.POST("", itemDefHandler.CreateItemDefinition)
+			itemDefs.PUT("/:id", itemDefHandler.UpdateItemDefinition)
+			itemDefs.DELETE("/:id", itemDefHandler.DeleteItemDefinition)
+		}
+
+		// Inventory Items
+		inventory := v1.Group("/inventory")
+		{
+			inventory.GET("", inventoryItemHandler.GetInventoryItems)
+			inventory.POST("", inventoryItemHandler.CreateInventoryItem)
+			inventory.PUT("/:id", inventoryItemHandler.UpdateInventoryItem)
+			inventory.PATCH("/:id/quantity", inventoryItemHandler.UpdateInventoryItemQuantity)
+			inventory.DELETE("/:id", inventoryItemHandler.DeleteInventoryItem)
+		}
+	}
+
+	return r
+}
