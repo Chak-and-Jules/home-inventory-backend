@@ -139,6 +139,7 @@ func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
 		return
 	}
 
+	var err error
 	err = h.DB.Transaction(func(tx *gorm.DB) error {
 		// Unset all default homes for the user
 		if err := tx.Model(&models.UserHome{}).Where("user_id = ?", userID).Update("is_default", false).Error; err != nil {
