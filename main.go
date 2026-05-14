@@ -18,6 +18,13 @@ func main() {
 		log.Println("No .env file found. Using OS environment variables.")
 	}
 
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "" {
+		appEnv = "production"
+		os.Setenv("APP_ENV", appEnv)
+	}
+	log.Printf("Starting application in %s environment\n", appEnv)
+
 	// Database Connection String
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=require",
 		os.Getenv("DB_HOST"),

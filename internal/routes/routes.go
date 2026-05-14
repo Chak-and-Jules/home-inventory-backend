@@ -10,6 +10,8 @@ import (
 func SetupRouter(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
 
+	r.Use(middleware.CORSMiddleware())
+
 	// CORS middleware can be added here if needed
 
 	// Initialize handlers
