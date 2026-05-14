@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -56,10 +57,8 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 }
 
 func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid item definition ID"})
+	id, ok := utils.ParseUUIDParam(c, "id", "Invalid item definition ID")
+	if !ok {
 		return
 	}
 
@@ -87,10 +86,8 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 }
 
 func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid item definition ID"})
+	id, ok := utils.ParseUUIDParam(c, "id", "Invalid item definition ID")
+	if !ok {
 		return
 	}
 

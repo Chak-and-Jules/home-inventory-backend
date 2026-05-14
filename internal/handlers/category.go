@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -48,10 +49,8 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 }
 
 func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
+	id, ok := utils.ParseUUIDParam(c, "id", "Invalid category ID")
+	if !ok {
 		return
 	}
 
@@ -70,10 +69,8 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 }
 
 func (h *CategoryHandler) DeleteCategory(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
+	id, ok := utils.ParseUUIDParam(c, "id", "Invalid category ID")
+	if !ok {
 		return
 	}
 

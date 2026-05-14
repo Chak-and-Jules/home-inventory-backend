@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -50,14 +51,8 @@ func (h *InventoryItemHandler) verifyHomeWriteAccess(c *gin.Context, homeID uuid
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
-	homeIDStr := c.Query("home_id")
-	if homeIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "home_id query parameter is required"})
-		return
-	}
-	homeID, err := uuid.Parse(homeIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid home_id"})
+	homeID, ok := utils.ParseUUIDQuery(c, "home_id", "Invalid home_id")
+	if !ok {
 		return
 	}
 
@@ -75,14 +70,8 @@ func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
 }
 
 func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
-	homeIDStr := c.Query("home_id")
-	if homeIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "home_id query parameter is required"})
-		return
-	}
-	homeID, err := uuid.Parse(homeIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid home_id"})
+	homeID, ok := utils.ParseUUIDQuery(c, "home_id", "Invalid home_id")
+	if !ok {
 		return
 	}
 
@@ -113,10 +102,8 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 }
 
 func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid inventory item ID"})
+	id, ok := utils.ParseUUIDParam(c, "id", "Invalid inventory item ID")
+	if !ok {
 		return
 	}
 
@@ -152,10 +139,8 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 }
 
 func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid inventory item ID"})
+	id, ok := utils.ParseUUIDParam(c, "id", "Invalid inventory item ID")
+	if !ok {
 		return
 	}
 
@@ -185,10 +170,8 @@ func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) {
 }
 
 func (h *InventoryItemHandler) DeleteInventoryItem(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid inventory item ID"})
+	id, ok := utils.ParseUUIDParam(c, "id", "Invalid inventory item ID")
+	if !ok {
 		return
 	}
 
