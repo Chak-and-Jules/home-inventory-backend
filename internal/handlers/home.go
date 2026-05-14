@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -70,10 +71,8 @@ func (h *HomeHandler) CreateHome(c *gin.Context) {
 
 func (h *HomeHandler) UpdateHome(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
-	homeIDStr := c.Param("id")
-	homeID, err := uuid.Parse(homeIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid home ID"})
+	homeID, ok := utils.ParseUUIDParam(c, "id", "Invalid home ID")
+	if !ok {
 		return
 	}
 
@@ -103,10 +102,8 @@ func (h *HomeHandler) UpdateHome(c *gin.Context) {
 
 func (h *HomeHandler) DeleteHome(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
-	homeIDStr := c.Param("id")
-	homeID, err := uuid.Parse(homeIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid home ID"})
+	homeID, ok := utils.ParseUUIDParam(c, "id", "Invalid home ID")
+	if !ok {
 		return
 	}
 
@@ -130,10 +127,8 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 
 func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
-	homeIDStr := c.Param("id")
-	homeID, err := uuid.Parse(homeIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid home ID"})
+	homeID, ok := utils.ParseUUIDParam(c, "id", "Invalid home ID")
+	if !ok {
 		return
 	}
 
