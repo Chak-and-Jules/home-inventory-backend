@@ -1,0 +1,401 @@
+From a047a98c7ef5b076ccab6ab74b000cbc608715af Mon Sep 17 00:00:00 2001
+From: "google-labs-jules[bot]"
+ <161369871+google-labs-jules[bot]@users.noreply.github.com>
+Date: Thu, 14 May 2026 13:32:03 +0000
+Subject: [PATCH] Add unit tests for middleware and utils
+
+---
+ internal/middleware/auth_test.go | 162 +++++++++++++++++++++++++++++++
+ internal/middleware/cors_test.go |  72 ++++++++++++++
+ internal/utils/gin_utils_test.go | 132 +++++++++++++++++++++++++
+ 3 files changed, 366 insertions(+)
+ create mode 100644 internal/middleware/auth_test.go
+ create mode 100644 internal/middleware/cors_test.go
+ create mode 100644 internal/utils/gin_utils_test.go
+
+diff --git a/internal/middleware/auth_test.go b/internal/middleware/auth_test.go
+new file mode 100644
+index 0000000..63953d2
+--- /dev/null
++++ b/internal/middleware/auth_test.go
+@@ -0,0 +1,162 @@
++package middleware
++
++import (
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"testing"
++	"time"
++
++	"github.com/gin-gonic/gin"
++	"github.com/golang-jwt/jwt/v5"
++	"github.com/google/uuid"
++)
++
++func TestSupabaseAuthMiddleware(t *testing.T) {
++	gin.SetMode(gin.TestMode)
++
++	// Set a mock secret for testing
++	os.Setenv("SUPABASE_JWT_SECRET", "mock-secret-for-testing-only")
++	defer os.Unsetenv("SUPABASE_JWT_SECRET")
++
++	mockSecret := []byte(os.Getenv("SUPABASE_JWT_SECRET"))
++
++	tests := []struct {
++		name           string
++		setupAuth      func(req *http.Request)
++		expectedStatus int
++		expectUserID   bool
++	}{
++		{
++			name: "Missing Authorization header",
++			setupAuth: func(req *http.Request) {
++				// Do not set Authorization header
++			},
++			expectedStatus: http.StatusUnauthorized,
++			expectUserID:   false,
++		},
++		{
++			name: "Invalid format (no Bearer)",
++			setupAuth: func(req *http.Request) {
++				req.Header.Set("Authorization", "InvalidFormatToken")
++			},
++			expectedStatus: http.StatusUnauthorized,
++			expectUserID:   false,
++		},
++		{
++			name: "Invalid token signature",
++			setupAuth: func(req *http.Request) {
++				token := generateToken("123e4567-e89b-12d3-a456-426614174000", []byte("wrong-secret"))
++				req.Header.Set("Authorization", "Bearer "+token)
++			},
++			expectedStatus: http.StatusUnauthorized,
++			expectUserID:   false,
++		},
++		{
++			name: "Expired token",
++			setupAuth: func(req *http.Request) {
++				token := generateExpiredToken("123e4567-e89b-12d3-a456-426614174000", mockSecret)
++				req.Header.Set("Authorization", "Bearer "+token)
++			},
++			expectedStatus: http.StatusUnauthorized,
++			expectUserID:   false,
++		},
++		{
++			name: "Missing subject",
++			setupAuth: func(req *http.Request) {
++				token := generateTokenNoSub(mockSecret)
++				req.Header.Set("Authorization", "Bearer "+token)
++			},
++			expectedStatus: http.StatusUnauthorized,
++			expectUserID:   false,
++		},
++		{
++			name: "Invalid subject (not UUID)",
++			setupAuth: func(req *http.Request) {
++				token := generateToken("invalid-uuid", mockSecret)
++				req.Header.Set("Authorization", "Bearer "+token)
++			},
++			expectedStatus: http.StatusUnauthorized,
++			expectUserID:   false,
++		},
++		{
++			name: "Valid token",
++			setupAuth: func(req *http.Request) {
++				token := generateToken("123e4567-e89b-12d3-a456-426614174000", mockSecret)
++				req.Header.Set("Authorization", "Bearer "+token)
++			},
++			expectedStatus: http.StatusOK,
++			expectUserID:   true,
++		},
++	}
++
++	for _, tc := range tests {
++		t.Run(tc.name, func(t *testing.T) {
++			r := gin.New()
++			r.Use(SupabaseAuthMiddleware())
++			r.GET("/protected", func(c *gin.Context) {
++				userID, exists := c.Get("userID")
++				if !exists {
++					c.JSON(http.StatusInternalServerError, gin.H{"error": "user ID not set"})
++					return
++				}
++				c.JSON(http.StatusOK, gin.H{"userID": userID})
++			})
++
++			req, _ := http.NewRequest(http.MethodGet, "/protected", nil)
++			tc.setupAuth(req)
++
++			w := httptest.NewRecorder()
++			r.ServeHTTP(w, req)
++
++			if w.Code != tc.expectedStatus {
++				t.Errorf("Expected status %d, got %d", tc.expectedStatus, w.Code)
++			}
++
++			if tc.expectUserID {
++				var response map[string]interface{}
++				if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
++					t.Fatalf("Failed to parse response body: %v", err)
++				}
++
++				uidStr, ok := response["userID"].(string)
++				if !ok {
++					t.Errorf("Response body does not contain userID string")
++				} else {
++					if _, err := uuid.Parse(uidStr); err != nil {
++						t.Errorf("Returned userID is not a valid UUID: %v", err)
++					}
++				}
++			}
++		})
++	}
++}
++
++// Helpers for token generation
++
++func generateToken(sub string, secret []byte) string {
++	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
++		"sub": sub,
++		"exp": time.Now().Add(time.Hour).Unix(),
++	})
++	tokenString, _ := token.SignedString(secret)
++	return tokenString
++}
++
++func generateExpiredToken(sub string, secret []byte) string {
++	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
++		"sub": sub,
++		"exp": time.Now().Add(-time.Hour).Unix(),
++	})
++	tokenString, _ := token.SignedString(secret)
++	return tokenString
++}
++
++func generateTokenNoSub(secret []byte) string {
++	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
++		"exp": time.Now().Add(time.Hour).Unix(),
++	})
++	tokenString, _ := token.SignedString(secret)
++	return tokenString
++}
+diff --git a/internal/middleware/cors_test.go b/internal/middleware/cors_test.go
+new file mode 100644
+index 0000000..55e3d0a
+--- /dev/null
++++ b/internal/middleware/cors_test.go
+@@ -0,0 +1,72 @@
++package middleware
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"testing"
++
++	"github.com/gin-gonic/gin"
++)
++
++func TestCORSMiddleware(t *testing.T) {
++	gin.SetMode(gin.TestMode)
++
++	t.Run("OPTIONS Request", func(t *testing.T) {
++		r := gin.New()
++		r.Use(CORSMiddleware())
++		r.OPTIONS("/test", func(c *gin.Context) {
++			c.String(http.StatusOK, "should not be reached")
++		})
++
++		req, _ := http.NewRequest(http.MethodOptions, "/test", nil)
++		w := httptest.NewRecorder()
++
++		r.ServeHTTP(w, req)
++
++		if w.Code != http.StatusNoContent {
++			t.Errorf("Expected status %d, got %d", http.StatusNoContent, w.Code)
++		}
++
++		checkCORSHeaders(t, w)
++	})
++
++	t.Run("GET Request", func(t *testing.T) {
++		r := gin.New()
++		r.Use(CORSMiddleware())
++		r.GET("/test", func(c *gin.Context) {
++			c.String(http.StatusOK, "success")
++		})
++
++		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
++		w := httptest.NewRecorder()
++
++		r.ServeHTTP(w, req)
++
++		if w.Code != http.StatusOK {
++			t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
++		}
++
++		if w.Body.String() != "success" {
++			t.Errorf("Expected body 'success', got '%s'", w.Body.String())
++		}
++
++		checkCORSHeaders(t, w)
++	})
++}
++
++func checkCORSHeaders(t *testing.T, w *httptest.ResponseRecorder) {
++	headers := w.Header()
++
++	expectedHeaders := map[string]string{
++		"Access-Control-Allow-Origin":      "*",
++		"Access-Control-Allow-Credentials": "true",
++		"Access-Control-Allow-Headers":     "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With",
++		"Access-Control-Allow-Methods":     "POST, OPTIONS, GET, PUT, PATCH, DELETE",
++	}
++
++	for key, expectedValue := range expectedHeaders {
++		if headers.Get(key) != expectedValue {
++			t.Errorf("Expected header %s to be '%s', got '%s'", key, expectedValue, headers.Get(key))
++		}
++	}
++}
+diff --git a/internal/utils/gin_utils_test.go b/internal/utils/gin_utils_test.go
+new file mode 100644
+index 0000000..532901e
+--- /dev/null
++++ b/internal/utils/gin_utils_test.go
+@@ -0,0 +1,132 @@
++package utils
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"testing"
++
++	"github.com/gin-gonic/gin"
++	"github.com/google/uuid"
++)
++
++func TestParseUUIDParam(t *testing.T) {
++	gin.SetMode(gin.TestMode)
++
++	tests := []struct {
++		name         string
++		paramValue   string
++		expectStatus int
++		expectValid  bool
++	}{
++		{
++			name:         "Valid UUID",
++			paramValue:   "123e4567-e89b-12d3-a456-426614174000",
++			expectStatus: http.StatusOK,
++			expectValid:  true,
++		},
++		{
++			name:         "Invalid UUID",
++			paramValue:   "invalid-uuid",
++			expectStatus: http.StatusBadRequest,
++			expectValid:  false,
++		},
++		{
++			name:         "Empty string",
++			paramValue:   "",
++			expectStatus: http.StatusBadRequest,
++			expectValid:  false,
++		},
++	}
++
++	for _, tc := range tests {
++		t.Run(tc.name, func(t *testing.T) {
++			w := httptest.NewRecorder()
++			c, _ := gin.CreateTestContext(w)
++			c.Params = gin.Params{gin.Param{Key: "id", Value: tc.paramValue}}
++
++			id, ok := ParseUUIDParam(c, "id", "Invalid ID")
++
++			if tc.expectValid {
++				if !ok {
++					t.Errorf("Expected valid UUID but got invalid")
++				}
++				if id.String() != tc.paramValue {
++					t.Errorf("Expected ID %s, got %s", tc.paramValue, id.String())
++				}
++			} else {
++				if ok {
++					t.Errorf("Expected invalid UUID but got valid")
++				}
++				if id != uuid.Nil {
++					t.Errorf("Expected Nil UUID, got %v", id)
++				}
++				if w.Code != tc.expectStatus {
++					t.Errorf("Expected status %d, got %d", tc.expectStatus, w.Code)
++				}
++			}
++		})
++	}
++}
++
++func TestParseUUIDQuery(t *testing.T) {
++	gin.SetMode(gin.TestMode)
++
++	tests := []struct {
++		name         string
++		queryValue   string
++		expectStatus int
++		expectValid  bool
++	}{
++		{
++			name:         "Valid UUID",
++			queryValue:   "123e4567-e89b-12d3-a456-426614174000",
++			expectStatus: http.StatusOK,
++			expectValid:  true,
++		},
++		{
++			name:         "Invalid UUID",
++			queryValue:   "invalid-uuid",
++			expectStatus: http.StatusBadRequest,
++			expectValid:  false,
++		},
++		{
++			name:         "Empty value",
++			queryValue:   "",
++			expectStatus: http.StatusBadRequest,
++			expectValid:  false,
++		},
++	}
++
++	for _, tc := range tests {
++		t.Run(tc.name, func(t *testing.T) {
++			w := httptest.NewRecorder()
++			c, _ := gin.CreateTestContext(w)
++			if tc.queryValue == "" {
++				c.Request, _ = http.NewRequest(http.MethodGet, "/", nil)
++			} else {
++				c.Request, _ = http.NewRequest(http.MethodGet, "/?id="+tc.queryValue, nil)
++			}
++
++			id, ok := ParseUUIDQuery(c, "id", "Invalid ID")
++
++			if tc.expectValid {
++				if !ok {
++					t.Errorf("Expected valid UUID but got invalid")
++				}
++				if id.String() != tc.queryValue {
++					t.Errorf("Expected ID %s, got %s", tc.queryValue, id.String())
++				}
++			} else {
++				if ok {
++					t.Errorf("Expected invalid UUID but got valid")
++				}
++				if id != uuid.Nil {
++					t.Errorf("Expected Nil UUID, got %v", id)
++				}
++				if w.Code != tc.expectStatus {
++					t.Errorf("Expected status %d, got %d", tc.expectStatus, w.Code)
++				}
++			}
++		})
++	}
++}
+--
+2.53.0
