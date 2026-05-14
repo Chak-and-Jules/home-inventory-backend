@@ -8,3 +8,9 @@
 ## Running tests
 
 Run `go test ./...`
+
+## Status
+
+### Code Coverage
+
+[[![Codecov](https://codecov.io/github/Chak-and-Jules/home-inventory-backend/graphs/icicle.svg?token=UTALTUNJ65)]]
