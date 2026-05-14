@@ -17,17 +17,17 @@ type InventoryItemHandler struct {
 
 type CreateInventoryItemRequest struct {
 	ItemDefinitionID uuid.UUID  `json:"item_definition_id" binding:"required"`
-	Quantity         float64    `json:"quantity" binding:"required"`
+	Quantity         float64    `json:"quantity" binding:"required,gte=0"`
 	ExpirationDate   *time.Time `json:"expiration_date"`
 }
 
 type UpdateInventoryItemRequest struct {
-	Quantity       float64    `json:"quantity" binding:"required"`
+	Quantity       float64    `json:"quantity" binding:"required,gte=0"`
 	ExpirationDate *time.Time `json:"expiration_date"`
 }
 
 type UpdateQuantityRequest struct {
-	Quantity float64 `json:"quantity" binding:"required"`
+	Quantity float64 `json:"quantity" binding:"required,gte=0"`
 }
 
 // getUserHome retrieves the user's home access record
