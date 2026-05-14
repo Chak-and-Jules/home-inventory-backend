@@ -30,21 +30,26 @@ type UpdateQuantityRequest struct {
 	Quantity float64 `json:"quantity" binding:"required"`
 }
 
-// verifyHomeAccess checks if the user has access to the home
-func (h *InventoryItemHandler) verifyHomeAccess(c *gin.Context, homeID uuid.UUID) bool {
+// getUserHome retrieves the user's home access record
+func (h *InventoryItemHandler) getUserHome(c *gin.Context, homeID uuid.UUID) (*models.UserHome, error) {
 	userID := c.MustGet("userID").(uuid.UUID)
 	var userHome models.UserHome
 	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
-		return false
+		return nil, err
 	}
-	return true
+	return &userHome, nil
+}
+
+// verifyHomeAccess checks if the user has access to the home
+func (h *InventoryItemHandler) verifyHomeAccess(c *gin.Context, homeID uuid.UUID) bool {
+	_, err := h.getUserHome(c, homeID)
+	return err == nil
 }
 
 // verifyHomeWriteAccess checks if the user has owner or editor access to the home
 func (h *InventoryItemHandler) verifyHomeWriteAccess(c *gin.Context, homeID uuid.UUID) bool {
-	userID := c.MustGet("userID").(uuid.UUID)
-	var userHome models.UserHome
-	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
+	userHome, err := h.getUserHome(c, homeID)
+	if err != nil {
 		return false
 	}
 	return userHome.Role == "owner" || userHome.Role == "editor"
