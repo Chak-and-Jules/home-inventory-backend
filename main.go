@@ -41,8 +41,7 @@ func main() {
 	}
 
 	// Auto-migrate models (creates/updates tables based on struct definitions)
-	// Note: Profiles, Homes, UserHomes, and SizeUnits are initially created by raw SQL
-	// to support the auth.users trigger properly, but AutoMigrate ensures structs match.
+
 	log.Println("Running AutoMigrate...")
 	err = db.AutoMigrate(
 		&models.Profile{},
