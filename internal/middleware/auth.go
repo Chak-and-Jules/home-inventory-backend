@@ -20,13 +20,17 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
+		if !strings.HasPrefix(authHeader, "Bearer ") {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
 			return
 		}
 
-		tokenString := parts[1]
+		tokenString := authHeader[7:]
+		if strings.Contains(tokenString, " ") {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
+			return
+		}
+
 		jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
 		if jwtSecret == "" {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "JWT secret is not configured"})
