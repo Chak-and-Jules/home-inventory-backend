@@ -217,3 +217,186 @@ func TestDeleteItemDefinition_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestCreateItemDefinition_InvalidJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+
+	router := gin.New()
+	router.POST("/item-definitions", handler.CreateItemDefinition)
+
+	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", strings.NewReader("invalid-json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestCreateItemDefinition_DBError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+
+	categoryID := uuid.New()
+	sizeUnitID := uuid.New()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "item_definitions"`)).
+		WillReturnError(gorm.ErrInvalidDB)
+	mock.ExpectRollback()
+
+	router := gin.New()
+	router.POST("/item-definitions", handler.CreateItemDefinition)
+
+	reqBody := `{"name":"Test Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
+	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUpdateItemDefinition_InvalidID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+
+	router := gin.New()
+	router.PUT("/item-definitions/:id", handler.UpdateItemDefinition)
+
+	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/invalid-uuid", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestUpdateItemDefinition_InvalidJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+	id := uuid.New()
+
+	router := gin.New()
+	router.PUT("/item-definitions/:id", handler.UpdateItemDefinition)
+
+	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+id.String(), strings.NewReader("invalid-json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestUpdateItemDefinition_DBError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+
+	id := uuid.New()
+	categoryID := uuid.New()
+	sizeUnitID := uuid.New()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "item_definitions"`)).
+		WillReturnError(gorm.ErrInvalidDB)
+	mock.ExpectRollback()
+
+	router := gin.New()
+	router.PUT("/item-definitions/:id", handler.UpdateItemDefinition)
+
+	reqBody := `{"name":"Updated Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
+	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+id.String(), strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeleteItemDefinition_InvalidID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+
+	router := gin.New()
+	router.DELETE("/item-definitions/:id", handler.DeleteItemDefinition)
+
+	req, _ := http.NewRequest(http.MethodDelete, "/item-definitions/invalid-uuid", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeleteItemDefinition_DBError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+
+	id := uuid.New()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "item_definitions" WHERE id = $1`)).
+		WithArgs(id.String()).
+		WillReturnError(gorm.ErrInvalidDB)
+	mock.ExpectRollback()
+
+	router := gin.New()
+	router.DELETE("/item-definitions/:id", handler.DeleteItemDefinition)
+
+	req, _ := http.NewRequest(http.MethodDelete, "/item-definitions/"+id.String(), nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
