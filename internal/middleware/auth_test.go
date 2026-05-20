@@ -1,6 +1,11 @@
 package middleware
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -81,6 +86,55 @@ func TestSupabaseAuthMiddleware_ValidSecret(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	// We expect a 200 OK because the secret is valid and the token is valid
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestSupabaseAuthMiddleware_ValidECDSAToken(t *testing.T) {
+	gin.SetMode(gin.ReleaseMode)
+	os.Unsetenv("SUPABASE_JWT_SECRET")
+	defer os.Unsetenv("SUPABASE_JWT_PUBLIC_KEY")
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: publicKeyBytes,
+	})
+
+	os.Setenv("SUPABASE_JWT_PUBLIC_KEY", string(publicKeyPEM))
+
+	r := gin.New()
+	r.Use(SupabaseAuthMiddleware())
+	r.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	userID := uuid.New().String()
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{
+		"sub": userID,
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+	tokenString, err := token.SignedString(privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenString)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 	}
@@ -246,7 +300,7 @@ func TestSupabaseAuthMiddleware_FailedParseClaims(t *testing.T) {
 		c.Status(http.StatusOK)
 	})
 
-    // To hit the `!ok` block for claims, we could implement custom claims struct instead of MapClaims
+	// To hit the `!ok` block for claims, we could implement custom claims struct instead of MapClaims
 	// Then jwt.Parse will result in token.Claims not being jwt.MapClaims
 	type CustomClaims struct {
 		jwt.RegisteredClaims
