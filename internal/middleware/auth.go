@@ -20,7 +20,6 @@ var supabaseUrl string
 var jwksURL string
 var jwtSecret string
 
-// SupabaseAuthMiddleware verifies the JWT token provided by Supabase
 func SupabaseAuthMiddleware() gin.HandlerFunc {
 	supabaseUrl = os.Getenv("SUPABASE_URL")
 	if supabaseUrl == "" {
@@ -48,8 +47,7 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		jwtPublicKey := os.Getenv("SUPABASE_JWT_PUBLIC_KEY")
-		if jwtSecret == "" && jwtPublicKey == "" {
+		if jwtSecret == "" {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "JWT secret is not configured"})
 			return
 		}
