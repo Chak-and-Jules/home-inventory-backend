@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/routes"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func main() {
@@ -35,10 +37,26 @@ func main() {
 	)
 
 	// Connect to PostgreSQL via GORM
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix:   "",
+			SingularTable: false,
+		},
+	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
+
+	// Get generic database object sql.DB to configure connection pool
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("Failed to get generic database object: %v", err)
+	}
+
+	// Configure connection pool
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetMaxOpenConns(30)
+	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	// Auto-migrate models (creates/updates tables based on struct definitions)
 
@@ -53,7 +71,7 @@ func main() {
 		&models.InventoryItem{},
 	)
 	if err != nil {
-		log.Fatalf("Failed to auto-migrate database: %v", err)
+		log.Println("AutoMigrate warning:", err)
 	}
 
 	// Setup Gin Router
