@@ -4,8 +4,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,6 +20,10 @@ import (
 func TestSupabaseAuthMiddleware_EmptySecret(t *testing.T) {
 	// Set Gin to release mode for cleaner test output
 	gin.SetMode(gin.ReleaseMode)
+
+	// Set a dummy supabase URL to avoid panic
+	os.Setenv("SUPABASE_URL", "https://dummy.supabase.co")
+	defer os.Unsetenv("SUPABASE_URL")
 
 	// Ensure secret is empty
 	os.Unsetenv("SUPABASE_JWT_SECRET")
@@ -66,6 +70,10 @@ func TestSupabaseAuthMiddleware_ValidSecret(t *testing.T) {
 	os.Setenv("SUPABASE_JWT_SECRET", secret)
 	defer os.Unsetenv("SUPABASE_JWT_SECRET")
 
+	// Set a dummy supabase URL to avoid panic
+	os.Setenv("SUPABASE_URL", "https://dummy.supabase.co")
+	defer os.Unsetenv("SUPABASE_URL")
+
 	r := gin.New()
 	r.Use(SupabaseAuthMiddleware())
 	r.GET("/test", func(c *gin.Context) {
@@ -74,8 +82,9 @@ func TestSupabaseAuthMiddleware_ValidSecret(t *testing.T) {
 
 	userID := uuid.New().String()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": userID,
-		"exp": time.Now().Add(time.Hour).Unix(),
+		"sub":   userID,
+		"email": "test@example.com",
+		"exp":   time.Now().Add(time.Hour).Unix(),
 	})
 	tokenString, _ := token.SignedString([]byte(secret))
 
@@ -93,25 +102,47 @@ func TestSupabaseAuthMiddleware_ValidSecret(t *testing.T) {
 
 func TestSupabaseAuthMiddleware_ValidECDSAToken(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
-	os.Unsetenv("SUPABASE_JWT_SECRET")
-	defer os.Unsetenv("SUPABASE_JWT_PUBLIC_KEY")
+
+	secret := "super-secret-key"
+	os.Setenv("SUPABASE_JWT_SECRET", secret)
+	defer os.Unsetenv("SUPABASE_JWT_SECRET")
 
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	xB64 := base64.RawURLEncoding.EncodeToString(privateKey.PublicKey.X.Bytes())
+	yB64 := base64.RawURLEncoding.EncodeToString(privateKey.PublicKey.Y.Bytes())
+	kid := "test-key"
 
-	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: publicKeyBytes,
-	})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/v1/.well-known/jwks.json" {
+			http.NotFound(w, r)
+			return
+		}
 
-	os.Setenv("SUPABASE_JWT_PUBLIC_KEY", string(publicKeyPEM))
+		jwks := map[string]interface{}{
+			"keys": []map[string]interface{}{
+				{
+					"kty": "EC",
+					"use": "sig",
+					"crv": "P-256",
+					"kid": kid,
+					"x":   xB64,
+					"y":   yB64,
+					"alg": "ES256",
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(jwks)
+	}))
+	defer server.Close()
+
+	os.Setenv("SUPABASE_URL", server.URL)
+	defer os.Unsetenv("SUPABASE_URL")
 
 	r := gin.New()
 	r.Use(SupabaseAuthMiddleware())
@@ -121,9 +152,12 @@ func TestSupabaseAuthMiddleware_ValidECDSAToken(t *testing.T) {
 
 	userID := uuid.New().String()
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{
-		"sub": userID,
-		"exp": time.Now().Add(time.Hour).Unix(),
+		"sub":   userID,
+		"email": "test@example.com",
+		"exp":   time.Now().Add(time.Hour).Unix(),
 	})
+	token.Header["kid"] = kid
+
 	tokenString, err := token.SignedString(privateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +176,9 @@ func TestSupabaseAuthMiddleware_ValidECDSAToken(t *testing.T) {
 
 func TestSupabaseAuthMiddleware_Format(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
+	os.Setenv("SUPABASE_URL", "https://dummy.supabase.co")
+	defer os.Unsetenv("SUPABASE_URL")
+
 	r := gin.New()
 	r.Use(SupabaseAuthMiddleware())
 	r.GET("/test", func(c *gin.Context) {
@@ -203,6 +240,9 @@ func TestSupabaseAuthMiddleware_Format(t *testing.T) {
 
 func TestSupabaseAuthMiddleware_FullCoverage(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
+	os.Setenv("SUPABASE_URL", "https://dummy.supabase.co")
+	defer os.Unsetenv("SUPABASE_URL")
+
 	secret := "super-secret-key"
 	os.Setenv("SUPABASE_JWT_SECRET", secret)
 	defer os.Unsetenv("SUPABASE_JWT_SECRET")
@@ -290,6 +330,9 @@ func TestSupabaseAuthMiddleware_FullCoverage(t *testing.T) {
 
 func TestSupabaseAuthMiddleware_FailedParseClaims(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
+	os.Setenv("SUPABASE_URL", "https://dummy.supabase.co")
+	defer os.Unsetenv("SUPABASE_URL")
+
 	secret := "super-secret-key"
 	os.Setenv("SUPABASE_JWT_SECRET", secret)
 	defer os.Unsetenv("SUPABASE_JWT_SECRET")
