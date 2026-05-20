@@ -92,7 +92,14 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 // FetchAndVerifyToken validates a Supabase token using the ECDSA public key
 func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
-		// Fetch JWKS from Supabase
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
+			if jwtSecret == "" {
+				return nil, fmt.Errorf("JWT secret is not configured")
+			}
+			return []byte(jwtSecret), nil
+		}
+
+		// Fetch JWKS from Supabase for ECDSA verification
 		resp, err := http.Get(jwksURL)
 		if err != nil {
 			return nil, fmt.Errorf("could not fetch JWKS: %v", err)
