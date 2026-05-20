@@ -13,6 +13,8 @@ import (
 
 // SupabaseAuthMiddleware verifies the JWT token provided by Supabase
 func SupabaseAuthMiddleware() gin.HandlerFunc {
+	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
+
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -32,6 +34,7 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 		}
 
 		jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
+		tokenString := parts[1]
 		if jwtSecret == "" {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "JWT secret is not configured"})
 			return
