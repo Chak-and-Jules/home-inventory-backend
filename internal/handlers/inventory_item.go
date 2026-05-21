@@ -52,7 +52,7 @@ func (h *InventoryItemHandler) verifyHomeWriteAccess(c *gin.Context, homeID uuid
 	if err != nil {
 		return false
 	}
-	return userHome.Role == "owner" || userHome.Role == "editor"
+	return userHome.Role == models.RoleOwner || userHome.Role == models.RoleEditor
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
