@@ -280,7 +280,7 @@ func TestDeleteHome(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "homes" WHERE id = \$1`).
+		mock.ExpectExec(`DELETE FROM "homes" WHERE ".*"."id" = \$1`).
 			WithArgs(homeID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectCommit()
@@ -365,7 +365,7 @@ func TestDeleteHome(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "homes" WHERE id = \$1`).
+		mock.ExpectExec(`DELETE FROM "homes" WHERE ".*"."id" = \$1`).
 			WithArgs(homeID).
 			WillReturnError(errors.New("delete error"))
 		mock.ExpectRollback()

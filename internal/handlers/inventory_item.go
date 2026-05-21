@@ -191,7 +191,7 @@ func (h *InventoryItemHandler) DeleteInventoryItem(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.InventoryItem{}, "id = ?", id).Error; err != nil {
+	if err := h.DB.Delete(&models.InventoryItem{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete inventory item"})
 		return
 	}

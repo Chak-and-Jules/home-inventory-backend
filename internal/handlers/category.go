@@ -74,7 +74,7 @@ func (h *CategoryHandler) DeleteCategory(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.Category{}, "id = ?", id).Error; err != nil {
+	if err := h.DB.Delete(&models.Category{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete category"})
 		return
 	}

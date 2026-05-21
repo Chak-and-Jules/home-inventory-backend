@@ -3,8 +3,8 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"strings"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -681,7 +681,7 @@ func TestDeleteInventoryItem(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "inventory_items" WHERE id = \$1`).
+		mock.ExpectExec(`DELETE FROM "inventory_items" WHERE ".*"."id" = \$1`).
 			WithArgs(itemID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectCommit()
@@ -774,7 +774,7 @@ func TestDeleteInventoryItem(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "inventory_items" WHERE id = \$1`).
+		mock.ExpectExec(`DELETE FROM "inventory_items" WHERE ".*"."id" = \$1`).
 			WithArgs(itemID).
 			WillReturnError(errors.New("delete error"))
 		mock.ExpectRollback()
