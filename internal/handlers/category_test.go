@@ -134,6 +134,10 @@ func TestGetCategories(t *testing.T) {
 	handler := &CategoryHandler{DB: gormDB}
 
 	t.Run("success", func(t *testing.T) {
+		handler.mu.Lock()
+		handler.cacheValid = false
+		handler.mu.Unlock()
+
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		req, _ := http.NewRequest(http.MethodGet, "/categories", nil)
@@ -150,6 +154,10 @@ func TestGetCategories(t *testing.T) {
 	})
 
 	t.Run("db error", func(t *testing.T) {
+		handler.mu.Lock()
+		handler.cacheValid = false
+		handler.mu.Unlock()
+
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		req, _ := http.NewRequest(http.MethodGet, "/categories", nil)
@@ -164,7 +172,6 @@ func TestGetCategories(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
-
 func TestUpdateCategory(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
