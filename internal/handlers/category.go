@@ -60,7 +60,10 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Model(&models.Category{}).Where("id = ?", id).Updates(models.Category{Name: req.Name, ParentID: req.ParentID}).Error; err != nil {
+	if err := h.DB.Model(&models.Category{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"name":      req.Name,
+		"parent_id": req.ParentID,
+	}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update category"})
 		return
 	}
