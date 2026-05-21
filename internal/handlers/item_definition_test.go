@@ -202,7 +202,7 @@ func TestDeleteItemDefinition_Success(t *testing.T) {
 	id := uuid.New()
 
 	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "item_definitions" WHERE id = $1`)).
+	mock.ExpectExec(`DELETE FROM "item_definitions" WHERE ".*"."id" = \$1`).
 		WithArgs(id.String()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
@@ -385,7 +385,7 @@ func TestDeleteItemDefinition_DBError(t *testing.T) {
 	id := uuid.New()
 
 	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "item_definitions" WHERE id = $1`)).
+	mock.ExpectExec(`DELETE FROM "item_definitions" WHERE ".*"."id" = \$1`).
 		WithArgs(id.String()).
 		WillReturnError(gorm.ErrInvalidDB)
 	mock.ExpectRollback()

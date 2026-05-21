@@ -133,7 +133,7 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.Home{}, "id = ?", homeID).Error; err != nil {
+	if err := h.DB.Delete(&models.Home{}, homeID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete home"})
 		return
 	}

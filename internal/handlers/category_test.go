@@ -315,7 +315,7 @@ func TestDeleteCategory(t *testing.T) {
 		c.Params = []gin.Param{{Key: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}}
 
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "categories"`).
+		mock.ExpectExec(`DELETE FROM "categories" WHERE ".*"."id" = \$1`).
 			WithArgs("123e4567-e89b-12d3-a456-426614174000").
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
@@ -346,7 +346,7 @@ func TestDeleteCategory(t *testing.T) {
 		c.Params = []gin.Param{{Key: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}}
 
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "categories"`).
+		mock.ExpectExec(`DELETE FROM "categories" WHERE ".*"."id" = \$1`).
 			WithArgs("123e4567-e89b-12d3-a456-426614174000").
 			WillReturnError(errors.New("db error"))
 		mock.ExpectRollback()
