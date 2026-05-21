@@ -51,7 +51,28 @@ func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
 	c.JSON(http.StatusOK, defs)
 }
 
+func (h *ItemDefinitionHandler) verifyAdmin(c *gin.Context) bool {
+	userID, exists := c.Get("userID")
+	if !exists {
+		return false
+	}
+	uid, ok := userID.(uuid.UUID)
+	if !ok {
+		return false
+	}
+	var profile models.Profile
+	if err := h.DB.First(&profile, uid).Error; err != nil {
+		return false
+	}
+	return profile.IsAdmin
+}
+
 func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
+	if !h.verifyAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required to create item definitions"})
+		return
+	}
+
 	var req ItemDefinitionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -80,6 +101,11 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 }
 
 func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
+	if !h.verifyAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required to update item definitions"})
+		return
+	}
+
 	id, ok := utils.ParseUUIDParam(c, "id", "Invalid item definition ID")
 	if !ok {
 		return
@@ -113,6 +139,11 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 }
 
 func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
+	if !h.verifyAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required to delete item definitions"})
+		return
+	}
+
 	id, ok := utils.ParseUUIDParam(c, "id", "Invalid item definition ID")
 	if !ok {
 		return

@@ -9,6 +9,7 @@ import (
 // Profile represents a user profile
 type Profile struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey"`
+	IsAdmin   bool      `gorm:"default:false"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
