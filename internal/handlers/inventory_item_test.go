@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -37,7 +38,7 @@ func TestVerifyHomeAccess(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "viewer"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
 
 		access := handler.verifyHomeAccess(c, homeID)
 		assert.True(t, access)
@@ -71,7 +72,7 @@ func TestVerifyHomeWriteAccess(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		access := handler.verifyHomeWriteAccess(c, homeID)
 		assert.True(t, access)
@@ -85,7 +86,7 @@ func TestVerifyHomeWriteAccess(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "editor"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
 
 		access := handler.verifyHomeWriteAccess(c, homeID)
 		assert.True(t, access)
@@ -99,7 +100,7 @@ func TestVerifyHomeWriteAccess(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "viewer"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
 
 		access := handler.verifyHomeWriteAccess(c, homeID)
 		assert.False(t, access)
@@ -245,7 +246,7 @@ func TestCreateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "editor"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
 
 		mock.ExpectBegin()
 		mock.ExpectQuery(`INSERT INTO "inventory_items" \("home_id","item_definition_id","quantity","expiration_date","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6\) RETURNING "id"`).
@@ -286,7 +287,7 @@ func TestCreateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "viewer"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
 
 		handler.CreateInventoryItem(c)
 
@@ -306,7 +307,7 @@ func TestCreateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		handler.CreateInventoryItem(c)
 
@@ -326,7 +327,7 @@ func TestCreateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "editor"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
 
 		mock.ExpectBegin()
 		mock.ExpectQuery(`INSERT INTO "inventory_items" \("home_id","item_definition_id","quantity","expiration_date","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6\) RETURNING "id"`).
@@ -365,7 +366,7 @@ func TestUpdateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "inventory_items" SET .*`).
@@ -433,7 +434,7 @@ func TestUpdateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "viewer"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
 
 		handler.UpdateInventoryItem(c)
 
@@ -458,7 +459,7 @@ func TestUpdateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		handler.UpdateInventoryItem(c)
 
@@ -483,7 +484,7 @@ func TestUpdateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "inventory_items" SET .*`).
@@ -522,7 +523,7 @@ func TestUpdateInventoryItemQuantity(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "inventory_items" SET .*`).
@@ -590,7 +591,7 @@ func TestUpdateInventoryItemQuantity(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "viewer"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
 
 		handler.UpdateInventoryItemQuantity(c)
 
@@ -615,7 +616,7 @@ func TestUpdateInventoryItemQuantity(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		handler.UpdateInventoryItemQuantity(c)
 
@@ -640,7 +641,7 @@ func TestUpdateInventoryItemQuantity(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "inventory_items" SET .*`).
@@ -678,7 +679,7 @@ func TestDeleteInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`DELETE FROM "inventory_items" WHERE id = \$1`).
@@ -771,7 +772,7 @@ func TestDeleteInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`DELETE FROM "inventory_items" WHERE id = \$1`).

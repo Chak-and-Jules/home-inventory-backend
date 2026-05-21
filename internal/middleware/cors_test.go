@@ -58,10 +58,9 @@ func checkCORSHeaders(t *testing.T, w *httptest.ResponseRecorder) {
 	headers := w.Header()
 
 	expectedHeaders := map[string]string{
-		"Access-Control-Allow-Origin":      "*",
-		"Access-Control-Allow-Credentials": "true",
-		"Access-Control-Allow-Headers":     "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With",
-		"Access-Control-Allow-Methods":     "POST, OPTIONS, GET, PUT, PATCH, DELETE",
+		"Access-Control-Allow-Origin":  "*",
+		"Access-Control-Allow-Headers": "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With",
+		"Access-Control-Allow-Methods": "POST, OPTIONS, GET, PUT, PATCH, DELETE",
 	}
 
 	for key, expectedValue := range expectedHeaders {

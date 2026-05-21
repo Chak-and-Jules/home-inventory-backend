@@ -80,7 +80,7 @@ func (h *HomeHandler) CreateHome(c *gin.Context) {
 		userHome := models.UserHome{
 			UserID:    userID,
 			HomeID:    home.ID,
-			Role:      "owner",
+			Role:      models.RoleOwner,
 			IsDefault: false,
 		}
 		if err := tx.Create(&userHome).Error; err != nil {
