@@ -20,21 +20,11 @@ func main() {
 		log.Println("No .env file found. Using OS environment variables.")
 	}
 
-	appEnv := os.Getenv("APP_ENV")
-	if appEnv == "" {
-		appEnv = "production"
-		os.Setenv("APP_ENV", appEnv)
-	}
+	appEnv := initAppEnv()
 	log.Printf("Starting application in %s environment\n", appEnv)
 
 	// Database Connection String
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=require",
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_NAME"),
-		os.Getenv("DB_PORT"),
-	)
+	dsn := buildPostgresDSN()
 
 	// Connect to PostgreSQL via GORM
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
@@ -54,9 +44,7 @@ func main() {
 	}
 
 	// Configure connection pool
-	sqlDB.SetMaxIdleConns(5)
-	sqlDB.SetMaxOpenConns(30)
-	sqlDB.SetConnMaxLifetime(time.Hour)
+	configureConnectionPool(sqlDB)
 
 	// Auto-migrate models (creates/updates tables based on struct definitions)
 
@@ -77,13 +65,47 @@ func main() {
 	// Setup Gin Router
 	r := routes.SetupRouter(db)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	port := serverPort()
 
 	log.Printf("Starting server on port %s...\n", port)
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+func initAppEnv() string {
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "" {
+		appEnv = "production"
+		os.Setenv("APP_ENV", appEnv)
+	}
+	return appEnv
+}
+
+func buildPostgresDSN() string {
+	return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=require",
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_NAME"),
+		os.Getenv("DB_PORT"),
+	)
+}
+
+func configureConnectionPool(sqlDB interface {
+	SetMaxIdleConns(int)
+	SetMaxOpenConns(int)
+	SetConnMaxLifetime(time.Duration)
+}) {
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetMaxOpenConns(30)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+}
+
+func serverPort() string {
+	port := os.Getenv("PORT")
+	if port == "" {
+		return "8080"
+	}
+	return port
 }

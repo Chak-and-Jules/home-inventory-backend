@@ -3,16 +3,82 @@ package main
 import (
 	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestMainEnvInit(t *testing.T) {
-	// Simple test to ensure main can handle APP_ENV setting
-	oldEnv := os.Getenv("APP_ENV")
-	defer os.Setenv("APP_ENV", oldEnv)
+type fakeSQLDB struct {
+	maxIdleConns    int
+	maxOpenConns    int
+	connMaxLifetime time.Duration
+}
 
-	os.Unsetenv("APP_ENV")
+func (f *fakeSQLDB) SetMaxIdleConns(n int) {
+	f.maxIdleConns = n
+}
 
-	// We can't fully run main() easily because it will attempt to connect to DB
-	// and run a server. We could extract parts of main into testable functions if needed.
-	// For now, testing the actual routing and handlers gives us the coverage we need for the business logic.
+func (f *fakeSQLDB) SetMaxOpenConns(n int) {
+	f.maxOpenConns = n
+}
+
+func (f *fakeSQLDB) SetConnMaxLifetime(d time.Duration) {
+	f.connMaxLifetime = d
+}
+
+func TestInitAppEnvDefaultsToProduction(t *testing.T) {
+	t.Setenv("APP_ENV", "")
+
+	appEnv := initAppEnv()
+
+	assert.Equal(t, "production", appEnv)
+	assert.Equal(t, "production", getenv(t, "APP_ENV"))
+}
+
+func TestInitAppEnvKeepsExistingValue(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+
+	appEnv := initAppEnv()
+
+	assert.Equal(t, "development", appEnv)
+	assert.Equal(t, "development", getenv(t, "APP_ENV"))
+}
+
+func TestBuildPostgresDSN(t *testing.T) {
+	t.Setenv("DB_HOST", "db.example.com")
+	t.Setenv("DB_USER", "inventory_user")
+	t.Setenv("DB_PASSWORD", "secret")
+	t.Setenv("DB_NAME", "inventory")
+	t.Setenv("DB_PORT", "5432")
+
+	dsn := buildPostgresDSN()
+
+	assert.Equal(t, "host=db.example.com user=inventory_user password=secret dbname=inventory port=5432 sslmode=require", dsn)
+}
+
+func TestConfigureConnectionPool(t *testing.T) {
+	sqlDB := &fakeSQLDB{}
+
+	configureConnectionPool(sqlDB)
+
+	assert.Equal(t, 5, sqlDB.maxIdleConns)
+	assert.Equal(t, 30, sqlDB.maxOpenConns)
+	assert.Equal(t, time.Hour, sqlDB.connMaxLifetime)
+}
+
+func TestServerPortDefaultsTo8080(t *testing.T) {
+	t.Setenv("PORT", "")
+
+	assert.Equal(t, "8080", serverPort())
+}
+
+func TestServerPortUsesEnvironmentValue(t *testing.T) {
+	t.Setenv("PORT", "3000")
+
+	assert.Equal(t, "3000", serverPort())
+}
+
+func getenv(t *testing.T, key string) string {
+	t.Helper()
+	return os.Getenv(key)
 }
