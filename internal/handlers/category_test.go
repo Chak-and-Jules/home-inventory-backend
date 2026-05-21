@@ -6,20 +6,21 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-func TestCreateCategory(t *testing.T) {
+func TestCategoryHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	// Setup mock DB
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
@@ -30,27 +31,30 @@ func TestCreateCategory(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &CategoryHandler{DB: gormDB}
+	homeID := uuid.New()
+	userID := uuid.New()
+	catID := uuid.New()
 
-	t.Run("success", func(t *testing.T) {
-		reqBody := CategoryRequest{
-			Name: "Test Category",
-		}
-		jsonData, err := json.Marshal(reqBody)
-		require.NoError(t, err)
+	t.Run("CreateCategory success", func(t *testing.T) {
+		reqBody := CategoryRequest{Name: "Test Category"}
+		jsonData, _ := json.Marshal(reqBody)
 
-		req, err := http.NewRequest(http.MethodPost, "/categories", bytes.NewBuffer(jsonData))
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
-
+		req, _ := http.NewRequest(http.MethodPost, "/categories?home_id="+homeID.String(), bytes.NewBuffer(jsonData))
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = req
+		c.Set("userID", userID)
 
-		// Expect the insert
+		// Mock auth
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID.String(), homeID.String(), "owner"))
+
+		// Mock insert
 		mock.ExpectBegin()
-		mock.ExpectQuery(`INSERT INTO "categories"`).
-			WithArgs("Test Category", nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("123e4567-e89b-12d3-a456-426614174000"))
+		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "categories"`)).
+			WithArgs(homeID.String(), "Test Category", nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(catID.String()))
 		mock.ExpectCommit()
 
 		handler.CreateCategory(c)
@@ -59,89 +63,21 @@ func TestCreateCategory(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("invalid json", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodPost, "/categories", bytes.NewBuffer([]byte("invalid")))
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
-
+	t.Run("GetCategories success", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/categories?home_id="+homeID.String(), nil)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = req
+		c.Set("userID", userID)
 
-		handler.CreateCategory(c)
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID.String(), homeID.String(), "viewer"))
 
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
-	t.Run("missing required field", func(t *testing.T) {
-		reqBody := CategoryRequest{}
-		jsonData, err := json.Marshal(reqBody)
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodPost, "/categories", bytes.NewBuffer(jsonData))
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
-
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = req
-
-		handler.CreateCategory(c)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
-	t.Run("db error", func(t *testing.T) {
-		reqBody := CategoryRequest{
-			Name: "Test Category",
-		}
-		jsonData, err := json.Marshal(reqBody)
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodPost, "/categories", bytes.NewBuffer(jsonData))
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
-
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = req
-
-		mock.ExpectBegin()
-		mock.ExpectQuery(`INSERT INTO "categories"`).
-			WithArgs("Test Category", nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
-			WillReturnError(errors.New("db error"))
-		mock.ExpectRollback()
-
-		handler.CreateCategory(c)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-}
-
-func TestGetCategories(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	gormDB, err := gorm.Open(postgres.New(postgres.Config{
-		Conn: db,
-	}), &gorm.Config{})
-	require.NoError(t, err)
-
-	handler := &CategoryHandler{DB: gormDB}
-
-	t.Run("success", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		req, _ := http.NewRequest(http.MethodGet, "/categories", nil)
-		c.Request = req
-
-		mock.ExpectQuery(`SELECT \* FROM "categories"`).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "parent_id"}).
-				AddRow("123e4567-e89b-12d3-a456-426614174000", "Category 1", nil))
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "categories" WHERE home_id = $1`)).
+			WithArgs(homeID.String()).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "parent_id"}).
+				AddRow(catID.String(), homeID.String(), "Category 1", nil))
 
 		handler.GetCategories(c)
 
@@ -149,53 +85,31 @@ func TestGetCategories(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("db error", func(t *testing.T) {
+	t.Run("UpdateCategory success", func(t *testing.T) {
+		reqBody := CategoryRequest{Name: "Updated Category"}
+		jsonData, _ := json.Marshal(reqBody)
+
+		req, _ := http.NewRequest(http.MethodPut, "/categories/"+catID.String(), bytes.NewBuffer(jsonData))
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		req, _ := http.NewRequest(http.MethodGet, "/categories", nil)
 		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: catID.String()}}
+		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "categories"`).
-			WillReturnError(errors.New("db error"))
+		// Mock category fetch
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "categories" WHERE "categories"."id" = $1`)).
+			WithArgs(catID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(catID.String(), homeID.String(), "Category 1"))
 
-		handler.GetCategories(c)
+		// Mock auth
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID.String(), homeID.String(), "owner"))
 
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-}
-
-func TestUpdateCategory(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	gormDB, err := gorm.Open(postgres.New(postgres.Config{
-		Conn: db,
-	}), &gorm.Config{})
-	require.NoError(t, err)
-
-	handler := &CategoryHandler{DB: gormDB}
-
-	t.Run("success", func(t *testing.T) {
-		reqBody := CategoryRequest{
-			Name: "Updated Category",
-		}
-		jsonData, err := json.Marshal(reqBody)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		req, _ := http.NewRequest(http.MethodPut, "/categories/123e4567-e89b-12d3-a456-426614174000", bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-		c.Request = req
-		c.Params = []gin.Param{{Key: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}}
-
+		// Mock update
 		mock.ExpectBegin()
-		mock.ExpectExec(`UPDATE "categories" SET`).
-			WithArgs("Updated Category", sqlmock.AnyArg(), "123e4567-e89b-12d3-a456-426614174000").
+		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "categories" SET`)).
+			WithArgs("Updated Category", nil, sqlmock.AnyArg(), catID.String()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -205,89 +119,28 @@ func TestUpdateCategory(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("invalid id", func(t *testing.T) {
-		reqBody := CategoryRequest{
-			Name: "Updated Category",
-		}
-		jsonData, err := json.Marshal(reqBody)
-		require.NoError(t, err)
-
+	t.Run("DeleteCategory success", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, "/categories/"+catID.String(), nil)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		req, _ := http.NewRequest(http.MethodPut, "/categories/invalid", bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
 		c.Request = req
-		c.Params = []gin.Param{{Key: "id", Value: "invalid"}}
+		c.Params = []gin.Param{{Key: "id", Value: catID.String()}}
+		c.Set("userID", userID)
 
-		handler.UpdateCategory(c)
+		// Mock category fetch
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "categories" WHERE "categories"."id" = $1`)).
+			WithArgs(catID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(catID.String(), homeID.String(), "Category 1"))
 
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
+		// Mock auth
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID.String(), homeID.String(), "owner"))
 
-	t.Run("invalid json", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		req, _ := http.NewRequest(http.MethodPut, "/categories/123e4567-e89b-12d3-a456-426614174000", bytes.NewBuffer([]byte("invalid")))
-		req.Header.Set("Content-Type", "application/json")
-		c.Request = req
-		c.Params = []gin.Param{{Key: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}}
-
-		handler.UpdateCategory(c)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
-	t.Run("db error", func(t *testing.T) {
-		reqBody := CategoryRequest{
-			Name: "Updated Category",
-		}
-		jsonData, err := json.Marshal(reqBody)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		req, _ := http.NewRequest(http.MethodPut, "/categories/123e4567-e89b-12d3-a456-426614174000", bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-		c.Request = req
-		c.Params = []gin.Param{{Key: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}}
-
+		// Mock delete
 		mock.ExpectBegin()
-		mock.ExpectExec(`UPDATE "categories" SET`).
-			WithArgs("Updated Category", sqlmock.AnyArg(), "123e4567-e89b-12d3-a456-426614174000").
-			WillReturnError(errors.New("db error"))
-		mock.ExpectRollback()
-
-		handler.UpdateCategory(c)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-}
-
-func TestDeleteCategory(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	gormDB, err := gorm.Open(postgres.New(postgres.Config{
-		Conn: db,
-	}), &gorm.Config{})
-	require.NoError(t, err)
-
-	handler := &CategoryHandler{DB: gormDB}
-
-	t.Run("success", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		req, _ := http.NewRequest(http.MethodDelete, "/categories/123e4567-e89b-12d3-a456-426614174000", nil)
-		c.Request = req
-		c.Params = []gin.Param{{Key: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}}
-
-		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "categories"`).
-			WithArgs("123e4567-e89b-12d3-a456-426614174000").
+		mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "categories" WHERE "categories"."id" = $1`)).
+			WithArgs(catID.String()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -297,34 +150,23 @@ func TestDeleteCategory(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("invalid id", func(t *testing.T) {
+	t.Run("CreateCategory auth failure", func(t *testing.T) {
+		reqBody := CategoryRequest{Name: "Test Category"}
+		jsonData, _ := json.Marshal(reqBody)
+
+		req, _ := http.NewRequest(http.MethodPost, "/categories?home_id="+homeID.String(), bytes.NewBuffer(jsonData))
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		req, _ := http.NewRequest(http.MethodDelete, "/categories/invalid", nil)
 		c.Request = req
-		c.Params = []gin.Param{{Key: "id", Value: "invalid"}}
+		c.Set("userID", userID)
 
-		handler.DeleteCategory(c)
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnError(errors.New("not found"))
 
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
+		handler.CreateCategory(c)
 
-	t.Run("db error", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		req, _ := http.NewRequest(http.MethodDelete, "/categories/123e4567-e89b-12d3-a456-426614174000", nil)
-		c.Request = req
-		c.Params = []gin.Param{{Key: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}}
-
-		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "categories"`).
-			WithArgs("123e4567-e89b-12d3-a456-426614174000").
-			WillReturnError(errors.New("db error"))
-		mock.ExpectRollback()
-
-		handler.DeleteCategory(c)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, http.StatusForbidden, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }

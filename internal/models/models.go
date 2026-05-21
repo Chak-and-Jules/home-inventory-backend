@@ -21,6 +21,12 @@ type Home struct {
 	UpdatedAt time.Time
 }
 
+const (
+	RoleOwner  = "owner"
+	RoleEditor = "editor"
+	RoleViewer = "viewer"
+)
+
 // UserHome defines the many-to-many relationship and roles for users and homes
 type UserHome struct {
 	UserID    uuid.UUID `gorm:"type:uuid;primaryKey"`
@@ -46,18 +52,21 @@ type SizeUnit struct {
 // Category represents an optional 2-level category hierarchy
 type Category struct {
 	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	HomeID    uuid.UUID  `gorm:"type:uuid;not null;index"`
 	Name      string     `gorm:"type:varchar(255);not null"`
 	ParentID  *uuid.UUID `gorm:"type:uuid;index"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
 	// Relations
+	Home   Home      `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
 	Parent *Category `gorm:"foreignKey:ParentID;constraint:OnDelete:CASCADE"`
 }
 
 // ItemDefinition represents the blueprint of an item
 type ItemDefinition struct {
 	ID          uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	HomeID      uuid.UUID  `gorm:"type:uuid;not null;index"`
 	Name        string     `gorm:"type:varchar(255);not null"`
 	Description string     `gorm:"type:text"`
 	CategoryID  *uuid.UUID `gorm:"type:uuid;index"`
@@ -68,6 +77,7 @@ type ItemDefinition struct {
 	UpdatedAt   time.Time
 
 	// Relations
+	Home     Home      `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
 	Category *Category `gorm:"foreignKey:CategoryID;constraint:OnDelete:SET NULL"`
 	SizeUnit *SizeUnit `gorm:"foreignKey:SizeUnitID;constraint:OnDelete:RESTRICT"`
 }

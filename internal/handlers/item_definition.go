@@ -24,15 +24,36 @@ type ItemDefinitionRequest struct {
 }
 
 func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
+	homeID, ok := utils.ParseUUIDQuery(c, "home_id", "Invalid home_id")
+	if !ok {
+		return
+	}
+
+	if !utils.VerifyHomeAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this home"})
+		return
+	}
+
 	var defs []models.ItemDefinition
-	if err := h.DB.Preload("Category").Preload("SizeUnit").Find(&defs).Error; err != nil {
+	if err := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID).Find(&defs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch item definitions"})
 		return
 	}
+
 	c.JSON(http.StatusOK, defs)
 }
 
 func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
+	homeID, ok := utils.ParseUUIDQuery(c, "home_id", "Invalid home_id")
+	if !ok {
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		return
+	}
+
 	var req ItemDefinitionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -40,6 +61,7 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 	}
 
 	def := models.ItemDefinition{
+		HomeID:      homeID,
 		Name:        req.Name,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
@@ -62,6 +84,17 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 		return
 	}
 
+	var def models.ItemDefinition
+	if err := h.DB.First(&def, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Item definition not found"})
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, def.HomeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		return
+	}
+
 	var req ItemDefinitionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -77,7 +110,7 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 		"image_url":    req.ImageURL,
 	}
 
-	if err := h.DB.Model(&models.ItemDefinition{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+	if err := h.DB.Model(&def).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item definition"})
 		return
 	}
@@ -91,7 +124,18 @@ func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.ItemDefinition{}, "id = ?", id).Error; err != nil {
+	var def models.ItemDefinition
+	if err := h.DB.First(&def, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Item definition not found"})
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, def.HomeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		return
+	}
+
+	if err := h.DB.Delete(&def).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete item definition (it might be in use)"})
 		return
 	}
