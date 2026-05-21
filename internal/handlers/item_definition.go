@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
@@ -11,7 +12,10 @@ import (
 )
 
 type ItemDefinitionHandler struct {
-	DB *gorm.DB
+	DB         *gorm.DB
+	mu         sync.RWMutex
+	cache      []models.ItemDefinition
+	cacheValid bool
 }
 
 type ItemDefinitionRequest struct {
@@ -24,11 +28,26 @@ type ItemDefinitionRequest struct {
 }
 
 func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
+	h.mu.RLock()
+	if h.cacheValid {
+		defs := h.cache
+		h.mu.RUnlock()
+		c.JSON(http.StatusOK, defs)
+		return
+	}
+	h.mu.RUnlock()
+
 	var defs []models.ItemDefinition
 	if err := h.DB.Preload("Category").Preload("SizeUnit").Find(&defs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch item definitions"})
 		return
 	}
+
+	h.mu.Lock()
+	h.cache = defs
+	h.cacheValid = true
+	h.mu.Unlock()
+
 	c.JSON(http.StatusOK, defs)
 }
 
@@ -74,6 +93,10 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 		return
 	}
 
+	h.mu.Lock()
+	h.cacheValid = false
+	h.mu.Unlock()
+
 	c.JSON(http.StatusCreated, def)
 }
 
@@ -108,6 +131,10 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 		return
 	}
 
+	h.mu.Lock()
+	h.cacheValid = false
+	h.mu.Unlock()
+
 	c.JSON(http.StatusOK, gin.H{"message": "Item definition updated successfully"})
 }
 
@@ -122,10 +149,14 @@ func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.ItemDefinition{}, "id = ?", id).Error; err != nil {
+	if err := h.DB.Delete(&models.ItemDefinition{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete item definition (it might be in use)"})
 		return
 	}
+
+	h.mu.Lock()
+	h.cacheValid = false
+	h.mu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Item definition deleted successfully"})
 }

@@ -52,7 +52,7 @@ func (h *InventoryItemHandler) verifyHomeWriteAccess(c *gin.Context, homeID uuid
 	if err != nil {
 		return false
 	}
-	return userHome.Role == "owner" || userHome.Role == "editor"
+	return userHome.Role == models.RoleOwner || userHome.Role == models.RoleEditor
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
@@ -191,7 +191,7 @@ func (h *InventoryItemHandler) DeleteInventoryItem(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.InventoryItem{}, "id = ?", id).Error; err != nil {
+	if err := h.DB.Delete(&models.InventoryItem{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete inventory item"})
 		return
 	}

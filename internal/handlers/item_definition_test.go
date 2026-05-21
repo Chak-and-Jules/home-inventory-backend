@@ -138,6 +138,8 @@ func TestCreateItemDefinition_Success(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
+
 	userID := uuid.New()
 
 	categoryID := uuid.New()
@@ -215,6 +217,8 @@ func TestDeleteItemDefinition_Success(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
+
 	userID := uuid.New()
 
 	id := uuid.New()
@@ -223,7 +227,7 @@ func TestDeleteItemDefinition_Success(t *testing.T) {
 		WithArgs(userID, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "is_admin"}).AddRow(userID, true))
 	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "item_definitions" WHERE id = $1`)).
+	mock.ExpectExec(`DELETE FROM "item_definitions" WHERE ".*"."id" = \$1`).
 		WithArgs(id.String()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
@@ -277,6 +281,7 @@ func TestCreateItemDefinition_DBError(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
 	userID := uuid.New()
 
 	categoryID := uuid.New()
@@ -369,6 +374,7 @@ func TestUpdateItemDefinition_DBError(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
 	userID := uuid.New()
 
 	id := uuid.New()
@@ -433,6 +439,7 @@ func TestDeleteItemDefinition_DBError(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
 	userID := uuid.New()
 
 	id := uuid.New()
@@ -441,7 +448,7 @@ func TestDeleteItemDefinition_DBError(t *testing.T) {
 		WithArgs(userID, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "is_admin"}).AddRow(userID, true))
 	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "item_definitions" WHERE id = $1`)).
+	mock.ExpectExec(`DELETE FROM "item_definitions" WHERE ".*"."id" = \$1`).
 		WithArgs(id.String()).
 		WillReturnError(gorm.ErrInvalidDB)
 	mock.ExpectRollback()
