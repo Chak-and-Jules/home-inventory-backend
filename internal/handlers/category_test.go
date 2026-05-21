@@ -195,7 +195,7 @@ func TestUpdateCategory(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "categories" SET`).
-			WithArgs("Updated Category", sqlmock.AnyArg(), "123e4567-e89b-12d3-a456-426614174000").
+			WithArgs("Updated Category", nil, sqlmock.AnyArg(), "123e4567-e89b-12d3-a456-426614174000").
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -253,7 +253,7 @@ func TestUpdateCategory(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "categories" SET`).
-			WithArgs("Updated Category", sqlmock.AnyArg(), "123e4567-e89b-12d3-a456-426614174000").
+			WithArgs("Updated Category", nil, sqlmock.AnyArg(), "123e4567-e89b-12d3-a456-426614174000").
 			WillReturnError(errors.New("db error"))
 		mock.ExpectRollback()
 
