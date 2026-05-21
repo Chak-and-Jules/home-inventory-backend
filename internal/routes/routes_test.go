@@ -3,14 +3,14 @@ package routes
 import (
 	"net/http"
 	"net/http/httptest"
-	"testing"
 	"os"
+	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"github.com/DATA-DOG/go-sqlmock"
 )
 
 func TestSetupRouter(t *testing.T) {
