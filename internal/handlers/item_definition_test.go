@@ -131,6 +131,7 @@ func TestCreateItemDefinition_Success(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
 
 	categoryID := uuid.New()
 	sizeUnitID := uuid.New()
@@ -198,6 +199,7 @@ func TestDeleteItemDefinition_Success(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
 
 	id := uuid.New()
 
@@ -250,6 +252,7 @@ func TestCreateItemDefinition_DBError(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
 
 	categoryID := uuid.New()
 	sizeUnitID := uuid.New()
@@ -327,6 +330,7 @@ func TestUpdateItemDefinition_DBError(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
 
 	id := uuid.New()
 	categoryID := uuid.New()
@@ -381,6 +385,7 @@ func TestDeleteItemDefinition_DBError(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	handler.cacheValid = false // reset cache
 
 	id := uuid.New()
 

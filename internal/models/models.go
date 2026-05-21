@@ -21,6 +21,12 @@ type Home struct {
 	UpdatedAt time.Time
 }
 
+const (
+	RoleOwner  = "owner"
+	RoleEditor = "editor"
+	RoleViewer = "viewer"
+)
+
 // UserHome defines the many-to-many relationship and roles for users and homes
 type UserHome struct {
 	UserID    uuid.UUID `gorm:"type:uuid;primaryKey"`

@@ -52,7 +52,7 @@ func (h *HomeHandler) CreateHome(c *gin.Context) {
 		userHome := models.UserHome{
 			UserID:    userID,
 			HomeID:    home.ID,
-			Role:      "owner",
+			Role:      models.RoleOwner,
 			IsDefault: false,
 		}
 		if err := tx.Create(&userHome).Error; err != nil {
@@ -87,7 +87,7 @@ func (h *HomeHandler) UpdateHome(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Home not found or access denied"})
 		return
 	}
-	if userHome.Role != "owner" && userHome.Role != "editor" {
+	if userHome.Role != models.RoleOwner && userHome.Role != models.RoleEditor {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions to update home"})
 		return
 	}
@@ -112,7 +112,7 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Home not found or access denied"})
 		return
 	}
-	if userHome.Role != "owner" {
+	if userHome.Role != models.RoleOwner {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only owners can delete homes"})
 		return
 	}
