@@ -3,8 +3,8 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"strings"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
