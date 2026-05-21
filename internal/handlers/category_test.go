@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -151,6 +152,27 @@ func TestGetCategories(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("cache hit", func(t *testing.T) {
+		handler.mu.Lock()
+		handler.cache = []models.Category{
+			{Name: "Cached Category"},
+		}
+		handler.cacheValid = true
+		handler.mu.Unlock()
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, _ := http.NewRequest(http.MethodGet, "/categories", nil)
+		c.Request = req
+
+		// No db mock expectation because it should hit the cache
+
+		handler.GetCategories(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "Cached Category")
 	})
 
 	t.Run("db error", func(t *testing.T) {
