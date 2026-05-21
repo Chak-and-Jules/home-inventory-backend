@@ -281,4 +281,179 @@ func TestItemDefinitionHandler(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
+	t.Run("DeleteItemDefinition auth failure", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, "/item-definitions/"+defID.String(), nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: defID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1`)).
+			WithArgs(defID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(defID.String(), homeID.String(), "Test Item"))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnError(errors.New("not found"))
+
+		handler.DeleteItemDefinition(c)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("UpdateItemDefinition not found", func(t *testing.T) {
+		reqBody := ItemDefinitionRequest{Name: "Updated Item", SizeUnitID: &sizeUnitID}
+		jsonData, _ := json.Marshal(reqBody)
+
+		req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+defID.String(), bytes.NewBuffer(jsonData))
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: defID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1`)).
+			WithArgs(defID.String(), 1).
+			WillReturnError(errors.New("db err"))
+
+		handler.UpdateItemDefinition(c)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("GetItemDefinitions DB error", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/item-definitions?home_id="+homeID.String(), nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID.String(), homeID.String(), "viewer"))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE home_id = $1`)).
+			WithArgs(homeID.String()).
+			WillReturnError(errors.New("db err"))
+
+		handler.GetItemDefinitions(c)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("DeleteItemDefinition auth failure", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, "/item-definitions/"+defID.String(), nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: defID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1`)).
+			WithArgs(defID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(defID.String(), homeID.String(), "Test Item"))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnError(errors.New("not found"))
+
+		handler.DeleteItemDefinition(c)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("UpdateItemDefinition not found", func(t *testing.T) {
+		reqBody := ItemDefinitionRequest{Name: "Updated Item", SizeUnitID: &sizeUnitID}
+		jsonData, _ := json.Marshal(reqBody)
+
+		req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+defID.String(), bytes.NewBuffer(jsonData))
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: defID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1`)).
+			WithArgs(defID.String(), 1).
+			WillReturnError(errors.New("db err"))
+
+		handler.UpdateItemDefinition(c)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("GetItemDefinitions DB error", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/item-definitions?home_id="+homeID.String(), nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID.String(), homeID.String(), "viewer"))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE home_id = $1`)).
+			WithArgs(homeID.String()).
+			WillReturnError(errors.New("db err"))
+
+		handler.GetItemDefinitions(c)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("CreateItemDefinition DB error", func(t *testing.T) {
+		reqBody := ItemDefinitionRequest{
+			Name: "Test Item",
+			Description: "Test Desc",
+			CategoryID: &catID,
+			SizeUnitID: &sizeUnitID,
+			IsExpirable: false,
+			ImageURL: "http://test.com/img.jpg",
+		}
+		jsonData, _ := json.Marshal(reqBody)
+
+		req, _ := http.NewRequest(http.MethodPost, "/item-definitions?home_id="+homeID.String(), bytes.NewBuffer(jsonData))
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID.String(), homeID.String(), "owner"))
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "item_definitions"`)).
+			WithArgs(homeID.String(), "Test Item", "Test Desc", catID.String(), sizeUnitID.String(), false, "http://test.com/img.jpg", sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnError(errors.New("db err"))
+		mock.ExpectRollback()
+
+		handler.CreateItemDefinition(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("DeleteItemDefinition DB error", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, "/item-definitions/"+defID.String(), nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: defID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1`)).
+			WithArgs(defID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(defID.String(), homeID.String(), "Test Item"))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2`)).
+			WithArgs(userID.String(), homeID.String(), 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID.String(), homeID.String(), "owner"))
+
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "item_definitions" WHERE "item_definitions"."id" = $1`)).
+			WithArgs(defID.String()).
+			WillReturnError(errors.New("db err"))
+		mock.ExpectRollback()
+
+		handler.DeleteItemDefinition(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
 }
