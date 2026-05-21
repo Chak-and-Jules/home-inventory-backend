@@ -54,7 +54,7 @@ func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, 
 	}
 
 	// Custom error messages based on the missing role
-	if len(allowedRoles) == 1 && allowedRoles[0] == "owner" {
+	if len(allowedRoles) == 1 && allowedRoles[0] == models.RoleOwner {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only owners can delete homes"})
 	} else {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions to update home"})
@@ -110,7 +110,7 @@ func (h *HomeHandler) UpdateHome(c *gin.Context) {
 		return
 	}
 
-	if !h.requireHomeRole(c, userID, homeID, "owner", "editor") {
+	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor) {
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 		return
 	}
 
-	if !h.requireHomeRole(c, userID, homeID, "owner") {
+	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner) {
 		return
 	}
 
