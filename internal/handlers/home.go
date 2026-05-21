@@ -34,6 +34,34 @@ func (h *HomeHandler) GetHomes(c *gin.Context) {
 	c.JSON(http.StatusOK, userHomes)
 }
 
+// requireHomeRole retrieves the user's home access record and checks if they have one of the allowed roles.
+// It handles sending the appropriate 404 or 403 error response.
+func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, allowedRoles ...string) bool {
+	var userHome models.UserHome
+	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Home not found or access denied"})
+		return false
+	}
+
+	if len(allowedRoles) == 0 {
+		return true
+	}
+
+	for _, role := range allowedRoles {
+		if userHome.Role == role {
+			return true
+		}
+	}
+
+	// Custom error messages based on the missing role
+	if len(allowedRoles) == 1 && allowedRoles[0] == "owner" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only owners can delete homes"})
+	} else {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions to update home"})
+	}
+	return false
+}
+
 func (h *HomeHandler) CreateHome(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
 	var req CreateHomeRequest
@@ -82,13 +110,7 @@ func (h *HomeHandler) UpdateHome(c *gin.Context) {
 		return
 	}
 
-	var userHome models.UserHome
-	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Home not found or access denied"})
-		return
-	}
-	if userHome.Role != models.RoleOwner && userHome.Role != models.RoleEditor {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions to update home"})
+	if !h.requireHomeRole(c, userID, homeID, "owner", "editor") {
 		return
 	}
 
@@ -107,13 +129,7 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 		return
 	}
 
-	var userHome models.UserHome
-	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Home not found or access denied"})
-		return
-	}
-	if userHome.Role != models.RoleOwner {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only owners can delete homes"})
+	if !h.requireHomeRole(c, userID, homeID, "owner") {
 		return
 	}
 
@@ -133,9 +149,7 @@ func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
 	}
 
 	// Verify user has access to this home
-	var userHome models.UserHome
-	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Home not found or access denied"})
+	if !h.requireHomeRole(c, userID, homeID) {
 		return
 	}
 
