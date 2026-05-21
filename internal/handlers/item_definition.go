@@ -118,7 +118,7 @@ func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.ItemDefinition{}, "id = ?", id).Error; err != nil {
+	if err := h.DB.Delete(&models.ItemDefinition{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete item definition (it might be in use)"})
 		return
 	}
