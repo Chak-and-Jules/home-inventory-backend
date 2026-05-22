@@ -41,6 +41,7 @@ func TestSetupRouter(t *testing.T) {
 	assert.True(t, paths["/api/v1/profiles/sync"])
 	assert.True(t, paths["/api/v1/categories"])
 	assert.True(t, paths["/api/v1/item-definitions"])
+	assert.True(t, paths["/api/v1/size-units"])
 	assert.True(t, paths["/api/v1/inventory"])
 
 	// Test a 404 response
