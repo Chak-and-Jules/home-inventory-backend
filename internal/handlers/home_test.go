@@ -99,7 +99,7 @@ func TestGetHomes(t *testing.T) {
 		var response map[string]string
 		err = json.Unmarshal(w.Body.Bytes(), &response)
 		require.NoError(t, err)
-		assert.Equal(t, "Failed to fetch homes", response["error"])
+		assert.Contains(t, response["error"], "Failed to fetch homes. ")
 	})
 }
 
