@@ -82,3 +82,8 @@ func getenv(t *testing.T, key string) string {
 	t.Helper()
 	return os.Getenv(key)
 }
+
+func TestSetupDatabase(t *testing.T) {
+	db, _ := setupDatabase("host=127.0.0.1 user=test password=test dbname=test port=0 sslmode=disable")
+	assert.NotNil(t, db)
+}

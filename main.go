@@ -27,15 +27,7 @@ func main() {
 	dsn := buildPostgresDSN()
 
 	// Connect to PostgreSQL via GORM
-	db, err := gorm.Open(postgres.New(postgres.Config{
-		DSN:                  dsn,
-		PreferSimpleProtocol: true, // disables implicit prepared statement usage
-	}), &gorm.Config{
-		NamingStrategy: schema.NamingStrategy{
-			TablePrefix:   "",
-			SingularTable: false,
-		},
-	})
+	db, err := setupDatabase(dsn)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -111,4 +103,16 @@ func serverPort() string {
 		return "8080"
 	}
 	return port
+}
+
+func setupDatabase(dsn string) (*gorm.DB, error) {
+	return gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true, // disables implicit prepared statement usage
+	}), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix:   "",
+			SingularTable: false,
+		},
+	})
 }
