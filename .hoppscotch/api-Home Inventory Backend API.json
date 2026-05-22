@@ -1,0 +1,144 @@
+{
+  "v": 12,
+  "name": "Home Inventory Backend API",
+  "folders": [
+    {
+      "v": 12,
+      "name": "Supabase Auth",
+      "folders": [],
+      "requests": [
+        {
+          "v": "17",
+          "id": "cmlrrbg0i04bw0tqvbwcc3fig",
+          "name": "Login",
+          "method": "POST",
+          "endpoint": "https://szvnonkyaxbvhgdsernn.supabase.co/auth/v1/token?grant_type=password",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "// 1. Parse the JSON response body\r\nvar jsonData = pm.response.json();\r\n\r\n// 2. Check if the 'access_token' property exists\r\nif (jsonData && jsonData.access_token) {\r\n    // 3. Set the value of 'access_token' to a variable named 'accessToken'\r\n    //    in the currently active Environment.\r\n    pm.environment.set(\"accessToken\", jsonData.access_token);\r\n    \r\n    // Optional: Log a success message to the Postman Console\r\n    console.log(\"Access Token set: \" + jsonData.access_token);\r\n} else {\r\n    // Optional: Log an error if the token wasn't found\r\n    console.error(\"Access token not found in response.\");\r\n}\r\n\r\n// Check if the 'refresh_token' property exists\r\nif (jsonData && jsonData.refresh_token) {\r\n    pm.environment.set(\"refreshToken\", jsonData.refresh_token);\r\n    console.log(\"Refresh Token set: \" + jsonData.refresh_token);\r\n} else {\r\n    console.error(\"Refresh token not found in response.\");\r\n}",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"email\": \"***\",\n  \"password\": \"***\"\n}\n"
+          },
+          "requestVariables": [],
+          "responses": {},
+          "description": null
+        },
+        {
+          "v": "17",
+          "id": "cmlrrbg0g04bv0tqvim40ecn4",
+          "name": "Refresh",
+          "method": "POST",
+          "endpoint": "https://szvnonkyaxbvhgdsernn.supabase.co/auth/v1/token?grant_type=refresh_token",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "// 1. Parse the JSON response body\r\nvar jsonData = pm.response.json();\r\n\r\n// 2. Check if the 'accessToken' property exists\r\nif (jsonData && jsonData.accessToken) {\r\n    // 3. Set the value of 'accessToken' to a variable named 'accessToken'\r\n    //    in the currently active Postman Environment.\r\n    pm.environment.set(\"accessToken\", jsonData.accessToken);\r\n    \r\n    // Optional: Log a success message to the Postman Console\r\n    console.log(\"Access Token set: \" + jsonData.accessToken);\r\n} else {\r\n    // Optional: Log an error if the token wasn't found\r\n    console.error(\"Access token not found in response.\");\r\n}\r\n\r\n// Check if the 'refreshToken' property exists\r\nif (jsonData && jsonData.refreshToken) {\r\n    pm.environment.set(\"refreshToken\", jsonData.refreshToken);\r\n    console.log(\"Refresh Token set: \" + jsonData.refreshToken);\r\n} else {\r\n    console.error(\"Refresh token not found in response.\");\r\n}",
+          "auth": {
+            "authType": "bearer",
+            "token": "<<refreshToken>>",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"refresh_token\": \"<<refreshToken>>\",\n}\n"
+          },
+          "requestVariables": [],
+          "responses": {},
+          "description": "Gets information about the authenticated user."
+        },
+        {
+          "v": "17",
+          "name": "Signup",
+          "method": "POST",
+          "endpoint": "https://szvnonkyaxbvhgdsernn.supabase.co/auth/v1/signup",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "// 1. Parse the JSON response body\r\nvar jsonData = pm.response.json();\r\n\r\n// 2. Check if the 'accessToken' property exists\r\nif (jsonData && jsonData.accessToken) {\r\n    // 3. Set the value of 'accessToken' to a variable named 'accessToken'\r\n    //    in the currently active Postman Environment.\r\n    pm.environment.set(\"accessToken\", jsonData.accessToken);\r\n    \r\n    // Optional: Log a success message to the Postman Console\r\n    console.log(\"Access Token set: \" + jsonData.accessToken);\r\n} else {\r\n    // Optional: Log an error if the token wasn't found\r\n    console.error(\"Access token not found in response.\");\r\n}\r\n\r\n// Check if the 'refreshToken' property exists\r\nif (jsonData && jsonData.refreshToken) {\r\n    pm.environment.set(\"refreshToken\", jsonData.refreshToken);\r\n    console.log(\"Refresh Token set: \" + jsonData.refreshToken);\r\n} else {\r\n    console.error(\"Refresh token not found in response.\");\r\n}",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"email\": \"***\",\n  \"password\": \"***\"\n}\n/*https://github.com/supabase/auth#endpoints*/\n"
+          },
+          "requestVariables": [],
+          "responses": {},
+          "description": null
+        }
+      ],
+      "auth": {
+        "authActive": true,
+        "authType": "none"
+      },
+      "headers": [
+        {
+          "description": "",
+          "value": "sb_publishable_mgevWs0g6LUH3iQseJyOzQ_wQiquImh",
+          "key": "apiKey",
+          "active": true
+        }
+      ],
+      "variables": [],
+      "description": "The `/me` endpoints let you manage information about the authenticated user.",
+      "preRequestScript": "",
+      "testScript": ""
+    },
+    {
+      "v": 12,
+      "name": "Home",
+      "folders": [],
+      "requests": [
+        {
+          "v": "17",
+          "id": "cmlrrbg0304bl0tqvo4xcky0g",
+          "name": "GetList",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/homes",
+          "params": [],
+          "headers": [],
+          "preRequestScript": "",
+          "testScript": "",
+          "auth": {
+            "authType": "inherit",
+            "authActive": true
+          },
+          "body": {
+            "contentType": null,
+            "body": null
+          },
+          "requestVariables": [],
+          "responses": {},
+          "description": null
+        }
+      ],
+      "auth": {
+        "authActive": true,
+        "authType": "inherit"
+      },
+      "headers": [],
+      "variables": [],
+      "description": null,
+      "preRequestScript": "",
+      "testScript": ""
+    }
+  ],
+  "requests": [],
+  "auth": {
+    "token": "<<accessToken>>",
+    "authActive": true,
+    "authType": "bearer"
+  },
+  "headers": [],
+  "variables": [],
+  "description": "This template contains a boilerplate for documentation that you can quickly customize and reuse.\n\n### How to use this template:\n\n- Replace the content given brackets (()) with your API's details.\n- Tips are formatted in `codespan` - feel free to read and remove them.\n    \n\n---\n\n`Start with a brief overview of what your API offers.`\n\nThe ((product name)) provides many API products, tools, and resources that enable you to ((add product value here)).\n\n`You can also list the APIs you offer, link to the relevant pages, or do both in this section.`\n\n## **Getting started guide**\n\n`List the steps or points required to start using your APIs. Make sure to cover everything required to reach success with your API as quickly as possible.`\n\nTo start using the ((add APIs here)), you need to -\n\n`The points given below are from The Postman API's documentation. You can reference it to write your own getting started guide.`\n\n- You must use a valid API Key to send requests to the API endpoints. You can get your API key from Postman's [integrations dashboard](https://go.postman.co/settings/me/api-keys).\n- The API has [rate and usage limits](https://learning.postman.com/docs/developer/postman-api/postman-api-rate-limits/).\n- The API only responds to HTTPS-secured communications. Any requests sent via HTTP return an HTTP 301 redirect to the corresponding HTTPS resources.\n- The API returns request responses in JSON format. When an API request returns an error, it is sent in the JSON response as an error key.\n    \n\n## Authentication\n\n`Add details on the authorization keys/tokens required, steps that cover how to get them, and the relevant error codes.`\n\nThe ((product name)) API uses ((add your API's authorization type)) for authentication.\n\n`The details given below are from the Postman API's documentation. You can reference it to write your own authentication section.`\n\nPostman uses API keys for authentication. You can generate a Postman API key in the [API keys](https://postman.postman.co/settings/me/api-keys) section of your Postman account settings.\n\nYou must include an API key in each request to the Postman API with the X-Api-Key request header.\n\n### Authentication error response\n\nIf an API key is missing, malformed, or invalid, you will receive an HTTP 401 Unauthorized response code.\n\n## Rate and usage limits\n\n`Use this section to cover your APIs' terms of use. Include API limits, constraints, and relevant error codes, so consumers understand the permitted API usage and practices.`\n\n`The example given below is from The Postman API's documentation. Use it as a reference to write your APIs' terms of use.`\n\nAPI access rate limits apply at a per-API key basis in unit time. The limit is 300 requests per minute. Also, depending on your plan, you may have usage limits. If you exceed either limit, your request will return an HTTP 429 Too Many Requests status code.\n\nEach API response returns the following set of headers to help you identify your use status:\n\n| Header | Description |\n| --- | --- |\n| `X-RateLimit-Limit` | The maximum number of requests that the consumer is permitted to make per minute. |\n| `X-RateLimit-Remaining` | The number of requests remaining in the current rate limit window. |\n| `X-RateLimit-Reset` | The time at which the current rate limit window resets in UTC epoch seconds. |\n\n### 503 response\n\nAn HTTP `503` response from our servers indicates there is an unexpected spike in API access traffic. The server is usually operational within the next five minutes. If the outage persists or you receive any other form of an HTTP `5XX` error, [contact support](https://support.postman.com/hc/en-us/requests/new/).\n\n### **Need some help?**\n\n`Add links that customers can refer to whenever they need help.`\n\nIn case you have questions, go through our tutorials ((link to your video or help documentation here)). Or visit our FAQ page ((link to the relevant page)).\n\nOr you can check out our community forum, there’s a good chance our community has an answer for you. Visit our developer forum ((link to developer forum)) to review topics, ask questions, and learn from others.\n\n`You can also document or add links to libraries, code examples, and other resources needed to make a request.`",
+  "preRequestScript": "",
+  "testScript": ""
+}

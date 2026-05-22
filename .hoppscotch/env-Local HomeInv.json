@@ -1,0 +1,25 @@
+{
+  "id": "f9f47ehhdu",
+  "v": 2,
+  "name": "Local HomeInv",
+  "variables": [
+    {
+      "key": "baseUrl",
+      "secret": false,
+      "initialValue": "http://localhost:8080/api/v1",
+      "currentValue": ""
+    },
+    {
+      "key": "accessToken",
+      "secret": false,
+      "initialValue": "",
+      "currentValue": "eyJhbGciOiJFUzI1NiIsImtpZCI6IjJmZWQ3ODI1LThmMjUtNGM5My04NzAzLTIyMWI1MjZhMTVhNSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3N6dm5vbmt5YXhidmhnZHNlcm5uLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI2NWZmNDUxNi02MThjLTQ0ODgtOWNkMy1jMDY2MTk3YTFkMGQiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzc5MzczNzg0LCJpYXQiOjE3NzkzNzAxODQsImVtYWlsIjoiY2FnZGFzbWVtYmVyQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJjYWdkYXNtZW1iZXJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiNjVmZjQ1MTYtNjE4Yy00NDg4LTljZDMtYzA2NjE5N2ExZDBkIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NzkzNzAxODR9XSwic2Vzc2lvbl9pZCI6ImYyZGFjZGJiLTMxODctNDQ5Yy05OTlhLWE3OThlZTMzMjJiZiIsImlzX2Fub255bW91cyI6ZmFsc2V9.HWj_eAj9k15e8s7HLMnf-3pXYkVj5778lziEXL5z7dihNiFAzLhyyiFLT9eDTKyLfUXZBKCnUOwW5bDb7iZiHw"
+    },
+    {
+      "key": "refreshToken",
+      "secret": false,
+      "initialValue": "",
+      "currentValue": "lgcfpszatogu"
+    }
+  ]
+}
