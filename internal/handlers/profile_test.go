@@ -141,6 +141,60 @@ func TestSyncProfile(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "Profile email does not match authenticated user")
 	})
 
+	t.Run("db error when checking home count", func(t *testing.T) {
+		handler, mock, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"profile":{"id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}}`
+		w, c := setupContext(t, body)
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
+			WithArgs(userID, email, false, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
+			WithArgs(userID).
+			WillReturnError(errors.New("db error counting"))
+
+		handler.SyncProfile(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "Failed to check homes:")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error when creating home inside transaction", func(t *testing.T) {
+		handler, mock, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"profile":{"id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}}`
+		w, c := setupContext(t, body)
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
+			WithArgs(userID, email, false, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
+			WithArgs(userID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(`INSERT INTO "homes" \("name","created_at","updated_at"\) VALUES \(\$1,\$2,\$3\) RETURNING "id"`).
+			WithArgs("My Home", sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnError(errors.New("insert error inside tx"))
+		mock.ExpectRollback()
+
+		handler.SyncProfile(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "Failed to create default home")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
 	t.Run("db error", func(t *testing.T) {
 		handler, mock, closeDB := setupTest(t)
 		defer closeDB()
