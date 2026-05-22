@@ -19,6 +19,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	profileHandler := &handlers.ProfileHandler{DB: db}
 	categoryHandler := &handlers.CategoryHandler{DB: db}
 	itemDefHandler := &handlers.ItemDefinitionHandler{DB: db}
+	sizeUnitHandler := &handlers.SizeUnitHandler{DB: db}
 	inventoryItemHandler := &handlers.InventoryItemHandler{DB: db}
 
 	// API v1 group
@@ -57,6 +58,12 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			itemDefs.POST("", itemDefHandler.CreateItemDefinition)
 			itemDefs.PUT("/:id", itemDefHandler.UpdateItemDefinition)
 			itemDefs.DELETE("/:id", itemDefHandler.DeleteItemDefinition)
+		}
+
+		// Size Units
+		sizeUnits := v1.Group("/size-units")
+		{
+			sizeUnits.GET("", sizeUnitHandler.GetSizeUnits)
 		}
 
 		// Inventory Items
