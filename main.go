@@ -27,7 +27,10 @@ func main() {
 	dsn := buildPostgresDSN()
 
 	// Connect to PostgreSQL via GORM
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true, // disables implicit prepared statement usage
+	}), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
 			TablePrefix:   "",
 			SingularTable: false,
