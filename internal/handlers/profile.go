@@ -53,8 +53,37 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 		Columns:   []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"updated_at"}),
 	}).Create(&profile).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sync profile" + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sync profile: " + err.Error()})
 		return
+	}
+
+	var homeCount int64
+	if err := h.DB.Model(&models.UserHome{}).Where("user_id = ?", authUserID).Count(&homeCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check homes: " + err.Error()})
+		return
+	}
+
+	if homeCount == 0 {
+		home := models.Home{Name: "My Home"}
+
+		err := h.DB.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(&home).Error; err != nil {
+				return err
+			}
+
+			userHome := models.UserHome{
+				UserID:    authUserID,
+				HomeID:    home.ID,
+				Role:      models.RoleOwner,
+				IsDefault: true,
+			}
+			return tx.Create(&userHome).Error
+		})
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create default home: " + err.Error()})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, profile)
