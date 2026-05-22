@@ -38,6 +38,7 @@ func TestSetupRouter(t *testing.T) {
 	}
 
 	assert.True(t, paths["/api/v1/homes"])
+	assert.True(t, paths["/api/v1/profiles/sync"])
 	assert.True(t, paths["/api/v1/categories"])
 	assert.True(t, paths["/api/v1/item-definitions"])
 	assert.True(t, paths["/api/v1/inventory"])

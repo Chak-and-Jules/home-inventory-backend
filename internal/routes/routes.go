@@ -16,6 +16,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 
 	// Initialize handlers
 	homeHandler := &handlers.HomeHandler{DB: db}
+	profileHandler := &handlers.ProfileHandler{DB: db}
 	categoryHandler := &handlers.CategoryHandler{DB: db}
 	itemDefHandler := &handlers.ItemDefinitionHandler{DB: db}
 	inventoryItemHandler := &handlers.InventoryItemHandler{DB: db}
@@ -24,6 +25,12 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.SupabaseAuthMiddleware())
 	{
+		// Profiles
+		profiles := v1.Group("/profiles")
+		{
+			profiles.POST("/sync", profileHandler.SyncProfile)
+		}
+
 		// Homes
 		homes := v1.Group("/homes")
 		{
