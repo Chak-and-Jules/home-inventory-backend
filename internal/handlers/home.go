@@ -27,7 +27,7 @@ func (h *HomeHandler) GetHomes(c *gin.Context) {
 
 	var userHomes []models.UserHome
 	if err := h.DB.Preload("Home").Where("user_id = ?", userID).Find(&userHomes).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch homes"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch homes. " + err.Error()})
 		return
 	}
 
@@ -39,7 +39,7 @@ func (h *HomeHandler) GetHomes(c *gin.Context) {
 func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, allowedRoles ...string) bool {
 	var userHome models.UserHome
 	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Home not found or access denied"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Home not found or access denied. " + err.Error()})
 		return false
 	}
 
@@ -90,7 +90,7 @@ func (h *HomeHandler) CreateHome(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create home"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create home. " + err.Error()})
 		return
 	}
 
@@ -115,7 +115,7 @@ func (h *HomeHandler) UpdateHome(c *gin.Context) {
 	}
 
 	if err := h.DB.Model(&models.Home{}).Where("id = ?", homeID).Update("name", req.Name).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update home"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update home. " + err.Error()})
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 	}
 
 	if err := h.DB.Delete(&models.Home{}, homeID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete home"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete home. " + err.Error()})
 		return
 	}
 
@@ -167,7 +167,7 @@ func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set default home"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set default home. " + err.Error()})
 		return
 	}
 
