@@ -59,7 +59,7 @@ func checkCORSHeaders(t *testing.T, w *httptest.ResponseRecorder) {
 
 	expectedHeaders := map[string]string{
 		"Access-Control-Allow-Origin":  "*",
-		"Access-Control-Allow-Headers": "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With",
+		"Access-Control-Allow-Headers": "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, apikey, x-client-info",
 		"Access-Control-Allow-Methods": "POST, OPTIONS, GET, PUT, PATCH, DELETE",
 	}
 
@@ -67,5 +67,29 @@ func checkCORSHeaders(t *testing.T, w *httptest.ResponseRecorder) {
 		if headers.Get(key) != expectedValue {
 			t.Errorf("Expected header %s to be '%s', got '%s'", key, expectedValue, headers.Get(key))
 		}
+	}
+}
+
+func TestCORSMiddlewareDynamicHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.Use(CORSMiddleware())
+	r.OPTIONS("/test", func(c *gin.Context) {
+		c.String(http.StatusOK, "should not be reached")
+	})
+
+	req, _ := http.NewRequest(http.MethodOptions, "/test", nil)
+	req.Header.Set("Access-Control-Request-Headers", "authorization, x-client-info, apikey, some-custom-header")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("Expected status %d, got %d", http.StatusNoContent, w.Code)
+	}
+
+	if w.Header().Get("Access-Control-Allow-Headers") != "authorization, x-client-info, apikey, some-custom-header" {
+		t.Errorf("Expected dynamic header, got %s", w.Header().Get("Access-Control-Allow-Headers"))
 	}
 }
