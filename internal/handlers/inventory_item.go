@@ -56,7 +56,7 @@ func (h *InventoryItemHandler) verifyHomeWriteAccess(c *gin.Context, homeID uuid
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDQuery(c, "home_id", "Invalid home_id")
+	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
 	if !ok {
 		return
 	}
@@ -75,7 +75,7 @@ func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
 }
 
 func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDQuery(c, "home_id", "Invalid home_id")
+	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
 	if !ok {
 		return
 	}
