@@ -25,11 +25,13 @@ func TestVerifyAdmin_MissingUserID(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	homeID := uuid.New()
 
 	router := gin.New()
 	router.POST("/item-definitions", handler.CreateItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", bytes.NewBufferString("{}"))
+	req.Header.Set("x-home-id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -46,6 +48,7 @@ func TestVerifyAdmin_InvalidUserIDType(t *testing.T) {
 	defer sqlDB.Close()
 
 	handler := &ItemDefinitionHandler{DB: db}
+	homeID := uuid.New()
 
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
@@ -55,6 +58,7 @@ func TestVerifyAdmin_InvalidUserIDType(t *testing.T) {
 	router.POST("/item-definitions", handler.CreateItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", bytes.NewBufferString("{}"))
+	req.Header.Set("x-home-id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -72,9 +76,10 @@ func TestVerifyAdmin_DBError(t *testing.T) {
 
 	handler := &ItemDefinitionHandler{DB: db}
 	userID := uuid.New()
+	homeID := uuid.New()
 
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "profiles" WHERE "profiles"."id" = $1 ORDER BY "profiles"."id" LIMIT $2`)).
-		WithArgs(userID, 1).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+		WithArgs(userID, homeID, 1).
 		WillReturnError(gorm.ErrInvalidDB)
 
 	router := gin.New()
@@ -82,6 +87,7 @@ func TestVerifyAdmin_DBError(t *testing.T) {
 	router.POST("/item-definitions", handler.CreateItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", bytes.NewBufferString("{}"))
+	req.Header.Set("x-home-id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"sync"
 
@@ -51,25 +52,38 @@ func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
 	c.JSON(http.StatusOK, defs)
 }
 
-func (h *ItemDefinitionHandler) verifyAdmin(c *gin.Context) bool {
+func (h *ItemDefinitionHandler) getUserHome(c *gin.Context, homeID uuid.UUID) (*models.UserHome, error) {
 	userID, exists := c.Get("userID")
 	if !exists {
-		return false
+		return nil, errors.New("missing user id")
 	}
 	uid, ok := userID.(uuid.UUID)
 	if !ok {
+		return nil, errors.New("invalid user id type")
+	}
+
+	var userHome models.UserHome
+	if err := h.DB.Where("user_id = ? AND home_id = ?", uid, homeID).First(&userHome).Error; err != nil {
+		return nil, err
+	}
+	return &userHome, nil
+}
+
+func (h *ItemDefinitionHandler) verifyHomeWriteAccess(c *gin.Context, homeID uuid.UUID) bool {
+	userHome, err := h.getUserHome(c, homeID)
+	if err != nil {
 		return false
 	}
-	var profile models.Profile
-	if err := h.DB.First(&profile, uid).Error; err != nil {
-		return false
-	}
-	return profile.IsAdmin
+	return userHome.Role == models.RoleOwner || userHome.Role == models.RoleEditor
 }
 
 func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
-	if !h.verifyAdmin(c) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required to create item definitions"})
+	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	if !ok {
+		return
+	}
+	if !h.verifyHomeWriteAccess(c, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
 
@@ -101,8 +115,12 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 }
 
 func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
-	if !h.verifyAdmin(c) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required to update item definitions"})
+	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	if !ok {
+		return
+	}
+	if !h.verifyHomeWriteAccess(c, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
 
@@ -139,8 +157,12 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 }
 
 func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
-	if !h.verifyAdmin(c) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin privileges required to delete item definitions"})
+	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	if !ok {
+		return
+	}
+	if !h.verifyHomeWriteAccess(c, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
 
