@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"os"
@@ -23,16 +24,21 @@ var jwtSecret string
 func SupabaseAuthMiddleware() gin.HandlerFunc {
 	supabaseUrl = os.Getenv("SUPABASE_URL")
 	if supabaseUrl == "" {
-		panic("SUPABASE_URL environment variable is not set")
+		log.Println("Warning: SUPABASE_URL environment variable is not set")
+	} else {
+		jwksURL = supabaseUrl + "/auth/v1/.well-known/jwks.json"
 	}
-
-	jwksURL = supabaseUrl + "/auth/v1/.well-known/jwks.json"
 	jwtSecret = os.Getenv("SUPABASE_JWT_SECRET")
 
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is missing"})
+			return
+		}
+
+		if supabaseUrl == "" {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "SUPABASE_URL is not configured"})
 			return
 		}
 

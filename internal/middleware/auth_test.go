@@ -360,3 +360,23 @@ func TestSupabaseAuthMiddleware_FailedParseClaims(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, w.Code)
 	}
 }
+
+func TestSupabaseAuthMiddleware_MissingSupabaseUrl(t *testing.T) {
+	gin.SetMode(gin.ReleaseMode)
+	os.Unsetenv("SUPABASE_URL")
+
+	r := gin.New()
+	r.Use(SupabaseAuthMiddleware())
+	r.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer valid_token_format")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
+	}
+}
