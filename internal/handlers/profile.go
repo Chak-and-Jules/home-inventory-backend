@@ -57,13 +57,13 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 		return
 	}
 
-	var homeCount int64
-	if err := h.DB.Model(&models.UserHome{}).Where("user_id = ?", authUserID).Count(&homeCount).Error; err != nil {
+	var exists int
+	if err := h.DB.Model(&models.UserHome{}).Select("1").Where("user_id = ?", authUserID).Limit(1).Find(&exists).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check homes: " + err.Error()})
 		return
 	}
 
-	if homeCount == 0 {
+	if exists == 0 {
 		home := models.Home{Name: "My Home"}
 
 		err := h.DB.Transaction(func(tx *gorm.DB) error {
