@@ -346,7 +346,7 @@ func TestCreateInventoryItem(t *testing.T) {
 		handler.CreateInventoryItem(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Contains(t, w.Body.String(), "Failed to fetch inventory items")
+		assert.Contains(t, w.Body.String(), "Failed to create inventory item")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
