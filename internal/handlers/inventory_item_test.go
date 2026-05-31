@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -40,7 +41,7 @@ func TestVerifyHomeAccess(t *testing.T) {
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
 
-		access := handler.verifyHomeAccess(c, homeID)
+		access := utils.VerifyHomeAccess(c, handler.DB, homeID)
 		assert.True(t, access)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -54,7 +55,7 @@ func TestVerifyHomeAccess(t *testing.T) {
 			WithArgs(userID, homeID, 1).
 			WillReturnError(errors.New("not found"))
 
-		access := handler.verifyHomeAccess(c, homeID)
+		access := utils.VerifyHomeAccess(c, handler.DB, homeID)
 		assert.False(t, access)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -74,7 +75,7 @@ func TestVerifyHomeWriteAccess(t *testing.T) {
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
-		access := handler.verifyHomeWriteAccess(c, homeID)
+		access := utils.VerifyHomeWriteAccess(c, handler.DB, homeID)
 		assert.True(t, access)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -88,7 +89,7 @@ func TestVerifyHomeWriteAccess(t *testing.T) {
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
 
-		access := handler.verifyHomeWriteAccess(c, homeID)
+		access := utils.VerifyHomeWriteAccess(c, handler.DB, homeID)
 		assert.True(t, access)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -102,7 +103,7 @@ func TestVerifyHomeWriteAccess(t *testing.T) {
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
 
-		access := handler.verifyHomeWriteAccess(c, homeID)
+		access := utils.VerifyHomeWriteAccess(c, handler.DB, homeID)
 		assert.False(t, access)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -116,7 +117,7 @@ func TestVerifyHomeWriteAccess(t *testing.T) {
 			WithArgs(userID, homeID, 1).
 			WillReturnError(errors.New("not found"))
 
-		access := handler.verifyHomeWriteAccess(c, homeID)
+		access := utils.VerifyHomeWriteAccess(c, handler.DB, homeID)
 		assert.False(t, access)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})

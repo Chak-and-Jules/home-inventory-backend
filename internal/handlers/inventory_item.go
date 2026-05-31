@@ -30,38 +30,13 @@ type UpdateQuantityRequest struct {
 	Quantity float64 `json:"quantity" binding:"required,gte=0"`
 }
 
-// getUserHome retrieves the user's home access record
-func (h *InventoryItemHandler) getUserHome(c *gin.Context, homeID uuid.UUID) (*models.UserHome, error) {
-	userID := c.MustGet("userID").(uuid.UUID)
-	var userHome models.UserHome
-	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
-		return nil, err
-	}
-	return &userHome, nil
-}
-
-// verifyHomeAccess checks if the user has access to the home
-func (h *InventoryItemHandler) verifyHomeAccess(c *gin.Context, homeID uuid.UUID) bool {
-	_, err := h.getUserHome(c, homeID)
-	return err == nil
-}
-
-// verifyHomeWriteAccess checks if the user has owner or editor access to the home
-func (h *InventoryItemHandler) verifyHomeWriteAccess(c *gin.Context, homeID uuid.UUID) bool {
-	userHome, err := h.getUserHome(c, homeID)
-	if err != nil {
-		return false
-	}
-	return userHome.Role == models.RoleOwner || userHome.Role == models.RoleEditor
-}
-
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
 	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
 	if !ok {
 		return
 	}
 
-	if !h.verifyHomeAccess(c, homeID) {
+	if !utils.VerifyHomeAccess(c, h.DB, homeID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this home"})
 		return
 	}
@@ -80,7 +55,7 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 		return
 	}
 
-	if !h.verifyHomeWriteAccess(c, homeID) {
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
@@ -119,7 +94,7 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 		return
 	}
 
-	if !h.verifyHomeWriteAccess(c, item.HomeID) {
+	if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
@@ -155,7 +130,7 @@ func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) {
 		return
 	}
 
-	if !h.verifyHomeWriteAccess(c, item.HomeID) {
+	if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
@@ -186,7 +161,7 @@ func (h *InventoryItemHandler) DeleteInventoryItem(c *gin.Context) {
 		return
 	}
 
-	if !h.verifyHomeWriteAccess(c, item.HomeID) {
+	if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}

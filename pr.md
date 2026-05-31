@@ -1,21 +1,16 @@
-⚡ Implement in-memory caching for item definition retrieval
+# 🧹 [code health improvement] extract duplicated getUserHome and verifyHomeWriteAccess into shared utility functions
 
-💡 **What:**
-Added a simple thread-safe in-memory cache to `ItemDefinitionHandler`. The cache stores the `[]models.ItemDefinition` retrieved from the database and uses a `sync.RWMutex` to manage concurrent reads and cache invalidation. The cache is invalidated (`cacheValid = false`) on any Create, Update, or Delete operation.
+**🎯 What:**
+Extracted the `getUserHome`, `verifyHomeAccess`, and `verifyHomeWriteAccess` methods that were duplicated across `internal/handlers/item_definition.go` and `internal/handlers/inventory_item.go` into a centralized `internal/utils/auth_helpers.go` file. Updated handlers and test files to use these new utility functions.
 
-🎯 **Why:**
-The `GetItemDefinitions` endpoint was previously fetching all item definitions from the database on every request. Item definitions act as blueprint metadata, which are read frequently but updated rarely. Caching them in memory drastically reduces database load and speeds up API response times.
+**💡 Why:**
+Removing duplication makes the codebase DRYer (Don't Repeat Yourself), improving maintainability. This shared utility now provides a single source of truth for checking home permissions, making future changes to access control logic easier and reducing the risk of inconsistent behavior.
 
-📊 **Measured Improvement:**
-A benchmark was created (`BenchmarkGetItemDefinitions`) measuring performance before and after caching.
+**✅ Verification:**
+- `go fmt ./...` and `go vet ./...` executed cleanly.
+- `go build ./...` compiled without issues.
+- `go test ./...` passed all tests successfully.
+- Verified that all unit tests specifically covering these handler permissions continue to assert correctly with the updated utility functions.
 
-**Baseline (Before Caching):**
-* ~1,333,809 ns/op
-* ~437 allocs/op (50,507 B/op)
-
-**After Caching:**
-* ~22,508 ns/op
-* ~88 allocs/op (7,144 B/op)
-
-**Improvement:**
-This resulted in an ~59x performance improvement (speed) and significantly fewer allocations for cache hits.
+**✨ Result:**
+Reduced redundant code by extracting it into a common utility package without modifying underlying business logic, creating a cleaner and more maintainable `handlers` module.
