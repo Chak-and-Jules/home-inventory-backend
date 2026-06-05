@@ -204,7 +204,7 @@ func TestGetInventoryItems(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("fetch error", func(t *testing.T) {
+	t.Run("GetInventoryItems DB Error", func(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		req, err := http.NewRequest(http.MethodGet, "/inventory", nil)
 		require.NoError(t, err)
@@ -226,6 +226,7 @@ func TestGetInventoryItems(t *testing.T) {
 		handler.GetInventoryItems(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "Failed to fetch inventory items")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
@@ -345,6 +346,7 @@ func TestCreateInventoryItem(t *testing.T) {
 		handler.CreateInventoryItem(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "Failed to create inventory item")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
