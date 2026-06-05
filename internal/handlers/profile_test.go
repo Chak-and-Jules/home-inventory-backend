@@ -62,9 +62,9 @@ func TestSyncProfile(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
-		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
-			WithArgs(userID).
-			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+		mock.ExpectQuery(`SELECT 1 FROM "user_homes" WHERE user_id = \$1 LIMIT \$2`).
+			WithArgs(userID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"1"}))
 
 		mock.ExpectBegin()
 		mock.ExpectQuery(`INSERT INTO "homes" \("name","created_at","updated_at"\) VALUES \(\$1,\$2,\$3\) RETURNING "id"`).
@@ -94,9 +94,9 @@ func TestSyncProfile(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
-		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
-			WithArgs(userID).
-			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+		mock.ExpectQuery(`SELECT 1 FROM "user_homes" WHERE user_id = \$1 LIMIT \$2`).
+			WithArgs(userID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow(1))
 
 		handler.SyncProfile(c)
 
@@ -154,8 +154,8 @@ func TestSyncProfile(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
-		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
-			WithArgs(userID).
+		mock.ExpectQuery(`SELECT 1 FROM "user_homes" WHERE user_id = \$1 LIMIT \$2`).
+			WithArgs(userID, 1).
 			WillReturnError(errors.New("db error counting"))
 
 		handler.SyncProfile(c)
@@ -178,9 +178,9 @@ func TestSyncProfile(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
-		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
-			WithArgs(userID).
-			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+		mock.ExpectQuery(`SELECT 1 FROM "user_homes" WHERE user_id = \$1 LIMIT \$2`).
+			WithArgs(userID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"1"}))
 
 		mock.ExpectBegin()
 		mock.ExpectQuery(`INSERT INTO "homes" \("name","created_at","updated_at"\) VALUES \(\$1,\$2,\$3\) RETURNING "id"`).
