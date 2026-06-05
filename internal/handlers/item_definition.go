@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
 	"sync"
 
@@ -52,37 +51,12 @@ func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
 	c.JSON(http.StatusOK, defs)
 }
 
-func (h *ItemDefinitionHandler) getUserHome(c *gin.Context, homeID uuid.UUID) (*models.UserHome, error) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		return nil, errors.New("missing user id")
-	}
-	uid, ok := userID.(uuid.UUID)
-	if !ok {
-		return nil, errors.New("invalid user id type")
-	}
-
-	var userHome models.UserHome
-	if err := h.DB.Where("user_id = ? AND home_id = ?", uid, homeID).First(&userHome).Error; err != nil {
-		return nil, err
-	}
-	return &userHome, nil
-}
-
-func (h *ItemDefinitionHandler) verifyHomeWriteAccess(c *gin.Context, homeID uuid.UUID) bool {
-	userHome, err := h.getUserHome(c, homeID)
-	if err != nil {
-		return false
-	}
-	return userHome.Role == models.RoleOwner || userHome.Role == models.RoleEditor
-}
-
 func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
 	if !ok {
 		return
 	}
-	if !h.verifyHomeWriteAccess(c, homeID) {
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
@@ -119,7 +93,7 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if !h.verifyHomeWriteAccess(c, homeID) {
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
@@ -161,7 +135,7 @@ func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if !h.verifyHomeWriteAccess(c, homeID) {
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
