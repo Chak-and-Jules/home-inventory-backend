@@ -27,7 +27,7 @@ func GetUserHome(c *gin.Context, db *gorm.DB, homeID uuid.UUID) (*models.UserHom
 	return &userHome, nil
 }
 
-// VerifyHomeAccess checks if the user has any access to the home
+// VerifyHomeAccess checks if the user has access to the home
 func VerifyHomeAccess(c *gin.Context, db *gorm.DB, homeID uuid.UUID) bool {
 	_, err := GetUserHome(c, db, homeID)
 	return err == nil
