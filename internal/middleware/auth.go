@@ -6,11 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/big"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -21,24 +21,28 @@ var supabaseUrl string
 var jwksURL string
 var jwtSecret string
 
+var (
+	jwksCache     = make(map[string]*ecdsa.PublicKey)
+	jwksCacheLock sync.RWMutex
+)
+
 func SupabaseAuthMiddleware() gin.HandlerFunc {
 	supabaseUrl = os.Getenv("SUPABASE_URL")
 	if supabaseUrl == "" {
-		log.Println("Warning: SUPABASE_URL environment variable is not set")
-	} else {
-		jwksURL = supabaseUrl + "/auth/v1/.well-known/jwks.json"
+		// Don't panic in library code or tests; return a middleware that
+		// responds with 500 so callers (tests/servers) can handle it.
+		return func(c *gin.Context) {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "SUPABASE_URL is not configured"})
+		}
 	}
+
+	jwksURL = supabaseUrl + "/auth/v1/.well-known/jwks.json"
 	jwtSecret = os.Getenv("SUPABASE_JWT_SECRET")
 
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is missing"})
-			return
-		}
-
-		if supabaseUrl == "" {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "SUPABASE_URL is not configured"})
 			return
 		}
 
@@ -105,6 +109,19 @@ func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) {
 			return []byte(jwtSecret), nil
 		}
 
+		kid, ok := token.Header["kid"].(string)
+		if !ok {
+			return nil, fmt.Errorf("kid not found in token header")
+		}
+
+		// Check cache first
+		jwksCacheLock.RLock()
+		if pubKey, exists := jwksCache[kid]; exists {
+			jwksCacheLock.RUnlock()
+			return pubKey, nil
+		}
+		jwksCacheLock.RUnlock()
+
 		// Fetch JWKS from Supabase for ECDSA verification
 		resp, err := http.Get(jwksURL)
 		if err != nil {
@@ -122,11 +139,6 @@ func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) {
 			return nil, fmt.Errorf("invalid JWKS format")
 		}
 
-		kid, ok := token.Header["kid"].(string)
-		if !ok {
-			return nil, fmt.Errorf("kid not found in token header")
-		}
-
 		for _, key := range keys {
 			keyMap := key.(map[string]interface{})
 			if keyMap["kid"] == kid {
@@ -134,6 +146,12 @@ func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) {
 				if err != nil {
 					return nil, err
 				}
+
+				// Update cache
+				jwksCacheLock.Lock()
+				jwksCache[kid] = pubKey
+				jwksCacheLock.Unlock()
+
 				return pubKey, nil
 			}
 		}
