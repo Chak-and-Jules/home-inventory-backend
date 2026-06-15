@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 	"time"
+	"os/exec"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -86,4 +87,20 @@ func getenv(t *testing.T, key string) string {
 func TestSetupDatabase(t *testing.T) {
 	db, _ := setupDatabase("host=127.0.0.1 user=test password=test dbname=test port=0 sslmode=disable")
 	assert.NotNil(t, db)
+}
+
+// TestMainCrash verifies that main() crashes gracefully if database connection fails
+func TestMainCrash(t *testing.T) {
+	if os.Getenv("CRASH_TEST") == "1" {
+		main()
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestMainCrash")
+	cmd.Env = append(os.Environ(), "CRASH_TEST=1", "DB_HOST=invalid_host")
+	err := cmd.Run()
+	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
+		return
+	}
+	t.Fatalf("process ran with err %v, want exit status 1", err)
 }
