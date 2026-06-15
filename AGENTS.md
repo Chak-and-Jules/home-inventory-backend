@@ -12,3 +12,9 @@ Before committing any code or marking a task as complete, you must run the follo
 4.  **Testing**: Run `go test ./...` to ensure all tests pass.
 
 Ensure that any changes you make do not break existing tests and that you write tests for any new functionality.
+
+## Git Workflow
+
+- Every code change must be pushed to the remote `https://github.com/Chak-and-Jules/home-inventory-backend` repository.
+- Changes should be pushed to a new branch created using `main` as the base branch.
+- Once pushed, a new Pull Request (PR) must be created to merge the new branch into the `main` branch.
