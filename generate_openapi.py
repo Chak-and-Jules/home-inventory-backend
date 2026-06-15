@@ -1,0 +1,583 @@
+import json
+
+openapi = {
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Home Inventory Backend API",
+        "version": "1.0.0",
+        "description": "API for Home Inventory System"
+    },
+    "servers": [
+        {
+            "url": "/api/v1",
+            "description": "API v1"
+        }
+    ],
+    "components": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": "Supabase JWT Token"
+            }
+        },
+        "parameters": {
+            "HomeIdHeader": {
+                "in": "header",
+                "name": "X-Home-Id",
+                "required": True,
+                "schema": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "description": "ID of the home for multi-tenant isolation"
+            }
+        },
+        "schemas": {
+            "Profile": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "format": "uuid"},
+                    "email": {"type": "string", "format": "email"},
+                    "IsAdmin": {"type": "boolean"},
+                    "CreatedAt": {"type": "string", "format": "date-time"},
+                    "UpdatedAt": {"type": "string", "format": "date-time"}
+                }
+            },
+            "Home": {
+                "type": "object",
+                "properties": {
+                    "ID": {"type": "string", "format": "uuid"},
+                    "Name": {"type": "string"},
+                    "CreatedAt": {"type": "string", "format": "date-time"},
+                    "UpdatedAt": {"type": "string", "format": "date-time"}
+                }
+            },
+            "UserHome": {
+                "type": "object",
+                "properties": {
+                    "UserID": {"type": "string", "format": "uuid"},
+                    "HomeID": {"type": "string", "format": "uuid"},
+                    "Role": {"type": "string"},
+                    "IsDefault": {"type": "boolean"},
+                    "CreatedAt": {"type": "string", "format": "date-time"},
+                    "UpdatedAt": {"type": "string", "format": "date-time"},
+                    "User": {"$ref": "#/components/schemas/Profile"},
+                    "Home": {"$ref": "#/components/schemas/Home"}
+                }
+            },
+            "SizeUnit": {
+                "type": "object",
+                "properties": {
+                    "ID": {"type": "string", "format": "uuid"},
+                    "Name": {"type": "string"},
+                    "CreatedAt": {"type": "string", "format": "date-time"},
+                    "UpdatedAt": {"type": "string", "format": "date-time"}
+                }
+            },
+            "Category": {
+                "type": "object",
+                "properties": {
+                    "ID": {"type": "string", "format": "uuid"},
+                    "HomeID": {"type": "string", "format": "uuid"},
+                    "Name": {"type": "string"},
+                    "ParentID": {"type": "string", "format": "uuid", "nullable": True},
+                    "CreatedAt": {"type": "string", "format": "date-time"},
+                    "UpdatedAt": {"type": "string", "format": "date-time"},
+                    "Home": {"$ref": "#/components/schemas/Home"},
+                    "Parent": {"$ref": "#/components/schemas/Category"}
+                }
+            },
+            "ItemDefinition": {
+                "type": "object",
+                "properties": {
+                    "ID": {"type": "string", "format": "uuid"},
+                    "HomeID": {"type": "string", "format": "uuid"},
+                    "Name": {"type": "string"},
+                    "Description": {"type": "string"},
+                    "CategoryID": {"type": "string", "format": "uuid", "nullable": True},
+                    "SizeUnitID": {"type": "string", "format": "uuid", "nullable": True},
+                    "IsExpirable": {"type": "boolean"},
+                    "ImageURL": {"type": "string"},
+                    "CreatedAt": {"type": "string", "format": "date-time"},
+                    "UpdatedAt": {"type": "string", "format": "date-time"},
+                    "Home": {"$ref": "#/components/schemas/Home"},
+                    "Category": {"$ref": "#/components/schemas/Category"},
+                    "SizeUnit": {"$ref": "#/components/schemas/SizeUnit"}
+                }
+            },
+            "InventoryItem": {
+                "type": "object",
+                "properties": {
+                    "ID": {"type": "string", "format": "uuid"},
+                    "HomeID": {"type": "string", "format": "uuid"},
+                    "ItemDefinitionID": {"type": "string", "format": "uuid"},
+                    "Quantity": {"type": "number"},
+                    "ExpirationDate": {"type": "string", "format": "date-time", "nullable": True},
+                    "CreatedAt": {"type": "string", "format": "date-time"},
+                    "UpdatedAt": {"type": "string", "format": "date-time"},
+                    "Home": {"$ref": "#/components/schemas/Home"},
+                    "ItemDefinition": {"$ref": "#/components/schemas/ItemDefinition"}
+                }
+            },
+            "ProfileSyncRequest": {
+                "type": "object",
+                "required": ["profile"],
+                "properties": {
+                    "profile": {
+                        "type": "object",
+                        "required": ["id", "email"],
+                        "properties": {
+                            "id": {"type": "string", "format": "uuid"},
+                            "email": {"type": "string", "format": "email"}
+                        }
+                    }
+                }
+            },
+            "CreateHomeRequest": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string"}
+                }
+            },
+            "UpdateHomeRequest": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string"}
+                }
+            },
+            "CategoryRequest": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "parent_id": {"type": "string", "format": "uuid", "nullable": True}
+                }
+            },
+            "ItemDefinitionRequest": {
+                "type": "object",
+                "required": ["name", "size_unit_id"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "category_id": {"type": "string", "format": "uuid", "nullable": True},
+                    "size_unit_id": {"type": "string", "format": "uuid"},
+                    "is_expirable": {"type": "boolean"},
+                    "image_url": {"type": "string"}
+                }
+            },
+            "CreateInventoryItemRequest": {
+                "type": "object",
+                "required": ["item_definition_id", "quantity"],
+                "properties": {
+                    "item_definition_id": {"type": "string", "format": "uuid"},
+                    "quantity": {"type": "number", "minimum": 0},
+                    "expiration_date": {"type": "string", "format": "date-time", "nullable": True}
+                }
+            },
+            "UpdateInventoryItemRequest": {
+                "type": "object",
+                "required": ["quantity"],
+                "properties": {
+                    "quantity": {"type": "number", "minimum": 0},
+                    "expiration_date": {"type": "string", "format": "date-time", "nullable": True}
+                }
+            },
+            "UpdateQuantityRequest": {
+                "type": "object",
+                "required": ["quantity"],
+                "properties": {
+                    "quantity": {"type": "number", "minimum": 0}
+                }
+            }
+        }
+    },
+    "security": [
+        {"BearerAuth": []}
+    ],
+    "paths": {
+        "/profiles/sync": {
+            "post": {
+                "summary": "Sync profile",
+                "tags": ["Profiles"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/ProfileSyncRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/Profile"}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/homes": {
+            "get": {
+                "summary": "Get all homes for user",
+                "tags": ["Homes"],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {"$ref": "#/components/schemas/UserHome"}
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "summary": "Create a new home",
+                "tags": ["Homes"],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/CreateHomeRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/Home"}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/homes/{id}": {
+            "put": {
+                "summary": "Update home",
+                "tags": ["Homes"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/UpdateHomeRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            },
+            "delete": {
+                "summary": "Delete home",
+                "tags": ["Homes"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            }
+        },
+        "/homes/{id}/default": {
+            "post": {
+                "summary": "Set home as default",
+                "tags": ["Homes"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            }
+        },
+        "/categories": {
+            "get": {
+                "summary": "Get categories for home",
+                "tags": ["Categories"],
+                "parameters": [
+                    {"$ref": "#/components/parameters/HomeIdHeader"}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {"$ref": "#/components/schemas/Category"}
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "summary": "Create category",
+                "tags": ["Categories"],
+                "parameters": [
+                    {"$ref": "#/components/parameters/HomeIdHeader"}
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/CategoryRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/Category"}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/categories/{id}": {
+            "put": {
+                "summary": "Update category",
+                "tags": ["Categories"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/CategoryRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            },
+            "delete": {
+                "summary": "Delete category",
+                "tags": ["Categories"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            }
+        },
+        "/item-definitions": {
+            "get": {
+                "summary": "Get item definitions for home",
+                "tags": ["Item Definitions"],
+                "parameters": [
+                    {"$ref": "#/components/parameters/HomeIdHeader"}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {"$ref": "#/components/schemas/ItemDefinition"}
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "summary": "Create item definition",
+                "tags": ["Item Definitions"],
+                "parameters": [
+                    {"$ref": "#/components/parameters/HomeIdHeader"}
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/ItemDefinitionRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/ItemDefinition"}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/item-definitions/{id}": {
+            "put": {
+                "summary": "Update item definition",
+                "tags": ["Item Definitions"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/ItemDefinitionRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            },
+            "delete": {
+                "summary": "Delete item definition",
+                "tags": ["Item Definitions"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            }
+        },
+        "/size-units": {
+            "get": {
+                "summary": "Get size units",
+                "tags": ["Size Units"],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {"$ref": "#/components/schemas/SizeUnit"}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory": {
+            "get": {
+                "summary": "Get inventory items",
+                "tags": ["Inventory Items"],
+                "parameters": [
+                    {"$ref": "#/components/parameters/HomeIdHeader"}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {"$ref": "#/components/schemas/InventoryItem"}
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "summary": "Create inventory item",
+                "tags": ["Inventory Items"],
+                "parameters": [
+                    {"$ref": "#/components/parameters/HomeIdHeader"}
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/CreateInventoryItemRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/InventoryItem"}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory/{id}": {
+            "put": {
+                "summary": "Update inventory item",
+                "tags": ["Inventory Items"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/UpdateInventoryItemRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            },
+            "delete": {
+                "summary": "Delete inventory item",
+                "tags": ["Inventory Items"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            }
+        },
+        "/inventory/{id}/quantity": {
+            "patch": {
+                "summary": "Update inventory item quantity",
+                "tags": ["Inventory Items"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/UpdateQuantityRequest"}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {"description": "Success"}
+                }
+            }
+        }
+    }
+}
+
+with open("openapi.json", "w") as f:
+    json.dump(openapi, f, indent=2)
