@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -135,10 +134,6 @@ func TestGetCategories(t *testing.T) {
 	handler := &CategoryHandler{DB: gormDB}
 
 	t.Run("success", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
-
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		req, _ := http.NewRequest(http.MethodGet, "/categories", nil)
@@ -155,13 +150,6 @@ func TestGetCategories(t *testing.T) {
 	})
 
 	t.Run("cache hit", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cache = []models.Category{
-			{Name: "Cached Category"},
-		}
-		handler.cacheValid = true
-		handler.mu.Unlock()
-
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		req, _ := http.NewRequest(http.MethodGet, "/categories", nil)
@@ -176,10 +164,6 @@ func TestGetCategories(t *testing.T) {
 	})
 
 	t.Run("db error", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
-
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		req, _ := http.NewRequest(http.MethodGet, "/categories", nil)
