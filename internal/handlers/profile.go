@@ -53,13 +53,13 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 		Columns:   []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"updated_at"}),
 	}).Create(&profile).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sync profile: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sync profile"})
 		return
 	}
 
 	var exists int
 	if err := h.DB.Model(&models.UserHome{}).Select("1").Where("user_id = ?", authUserID).Limit(1).Find(&exists).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check homes: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check homes"})
 		return
 	}
 
@@ -81,7 +81,7 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 		})
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create default home: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create default home"})
 			return
 		}
 	}
