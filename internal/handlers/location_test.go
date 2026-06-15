@@ -92,6 +92,31 @@ func TestGetLocations(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("db error", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		req, err := http.NewRequest(http.MethodGet, "/locations", nil)
+		require.NoError(t, err)
+		req.Header.Set("x-home-id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		mock.ExpectQuery(`SELECT \* FROM "locations" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnError(errors.New("db error"))
+
+		handler.GetLocations(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestCreateLocation(t *testing.T) {
@@ -146,6 +171,72 @@ func TestCreateLocation(t *testing.T) {
 		handler.CreateLocation(c)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("missing home_id", func(t *testing.T) {
+		handler, _ := setupLocationTest(t)
+		reqBody := `{"name": "Pantry"}`
+		req, err := http.NewRequest(http.MethodPost, "/locations", strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		handler.CreateLocation(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("write access denied", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		reqBody := `{"name": "Pantry"}`
+		req, err := http.NewRequest(http.MethodPost, "/locations", strings.NewReader(reqBody))
+		require.NoError(t, err)
+		req.Header.Set("x-home-id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
+
+		handler.CreateLocation(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		reqBody := `{"name": "Pantry"}`
+		req, err := http.NewRequest(http.MethodPost, "/locations", strings.NewReader(reqBody))
+		require.NoError(t, err)
+		req.Header.Set("x-home-id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(`INSERT INTO "locations" \("home_id","name","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4\) RETURNING "id"`).
+			WithArgs(homeID, "Pantry", sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnError(errors.New("db error"))
+		mock.ExpectRollback()
+
+		handler.CreateLocation(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
@@ -204,6 +295,112 @@ func TestUpdateLocation(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
+
+	t.Run("location not found", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		reqBody := `{"name": "Updated Pantry"}`
+		req, err := http.NewRequest(http.MethodPut, "/locations/"+locationID.String(), strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: locationID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "locations" WHERE "locations"\."id" = \$1 ORDER BY "locations"\."id" LIMIT \$2`).
+			WithArgs(locationID, 1).
+			WillReturnError(errors.New("not found"))
+
+		handler.UpdateLocation(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("write access denied", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		reqBody := `{"name": "Updated Pantry"}`
+		req, err := http.NewRequest(http.MethodPut, "/locations/"+locationID.String(), strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: locationID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "locations" WHERE "locations"\."id" = \$1 ORDER BY "locations"\."id" LIMIT \$2`).
+			WithArgs(locationID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(locationID, homeID, "Pantry"))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
+
+		handler.UpdateLocation(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("invalid payload", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		reqBody := `{}` // Missing required name field
+		req, err := http.NewRequest(http.MethodPut, "/locations/"+locationID.String(), strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: locationID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "locations" WHERE "locations"\."id" = \$1 ORDER BY "locations"\."id" LIMIT \$2`).
+			WithArgs(locationID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(locationID, homeID, "Pantry"))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+
+		handler.UpdateLocation(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		reqBody := `{"name": "Updated Pantry"}`
+		req, err := http.NewRequest(http.MethodPut, "/locations/"+locationID.String(), strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: locationID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "locations" WHERE "locations"\."id" = \$1 ORDER BY "locations"\."id" LIMIT \$2`).
+			WithArgs(locationID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(locationID, homeID, "Pantry"))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`UPDATE "locations" SET .*`).
+			WithArgs("Updated Pantry", sqlmock.AnyArg(), locationID).
+			WillReturnError(errors.New("db error"))
+		mock.ExpectRollback()
+
+		handler.UpdateLocation(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestDeleteLocation(t *testing.T) {
@@ -257,5 +454,82 @@ func TestDeleteLocation(t *testing.T) {
 		handler.DeleteLocation(c)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("location not found", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		req, err := http.NewRequest(http.MethodDelete, "/locations/"+locationID.String(), nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: locationID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "locations" WHERE "locations"\."id" = \$1 ORDER BY "locations"\."id" LIMIT \$2`).
+			WithArgs(locationID, 1).
+			WillReturnError(errors.New("not found"))
+
+		handler.DeleteLocation(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("access denied", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		req, err := http.NewRequest(http.MethodDelete, "/locations/"+locationID.String(), nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: locationID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "locations" WHERE "locations"\."id" = \$1 ORDER BY "locations"\."id" LIMIT \$2`).
+			WithArgs(locationID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(locationID, homeID))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleViewer))
+
+		handler.DeleteLocation(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error", func(t *testing.T) {
+		handler, mock := setupLocationTest(t)
+		req, err := http.NewRequest(http.MethodDelete, "/locations/"+locationID.String(), nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: locationID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "locations" WHERE "locations"\."id" = \$1 ORDER BY "locations"\."id" LIMIT \$2`).
+			WithArgs(locationID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(locationID, homeID))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`DELETE FROM "locations" WHERE ".*"."id" = \$1`).
+			WithArgs(locationID).
+			WillReturnError(errors.New("db error"))
+		mock.ExpectRollback()
+
+		handler.DeleteLocation(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
