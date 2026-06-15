@@ -25,37 +25,42 @@ func InitLogger() {
 			adapter.SetDataset(axiomDataset),
 		)
 		if err != nil {
-			log.Fatalf("Failed to initialize Axiom logger adapter: %v", err)
+			log.Printf("Failed to initialize Axiom logger adapter: %v, falling back to standard console logging", err)
+			core = getFallbackCore()
+		} else {
+			// Also log to console in production for standard output tracking
+			consoleEncoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
+			consoleCore := zapcore.NewCore(
+				consoleEncoder,
+				zapcore.Lock(os.Stdout),
+				zapcore.InfoLevel,
+			)
+
+			// Combine both cores
+			core = zapcore.NewTee(consoleCore, axiomCore)
 		}
-
-		// Also log to console in production for standard output tracking
-		consoleEncoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
-		consoleCore := zapcore.NewCore(
-			consoleEncoder,
-			zapcore.Lock(os.Stdout),
-			zapcore.InfoLevel,
-		)
-
-		// Combine both cores
-		core = zapcore.NewTee(consoleCore, axiomCore)
 	} else {
-		// Fallback to standard console logging if Axiom isn't configured
-		config := zap.NewProductionConfig()
-		if os.Getenv("APP_ENV") == "local" || os.Getenv("APP_ENV") == "" {
-			config = zap.NewDevelopmentConfig()
-		}
-
-		coreLogger, err := config.Build()
-		if err != nil {
-			log.Fatalf("Failed to build fallback zap logger: %v", err)
-		}
-		core = coreLogger.Core()
+		core = getFallbackCore()
 	}
 
 	Log = zap.New(core, zap.AddCaller())
 
 	// Replace global zap logger
 	zap.ReplaceGlobals(Log)
+}
+
+func getFallbackCore() zapcore.Core {
+	// Fallback to standard console logging if Axiom isn't configured
+	config := zap.NewProductionConfig()
+	if os.Getenv("APP_ENV") == "local" || os.Getenv("APP_ENV") == "" {
+		config = zap.NewDevelopmentConfig()
+	}
+
+	coreLogger, err := config.Build()
+	if err != nil {
+		log.Fatalf("Failed to build fallback zap logger: %v", err)
+	}
+	return coreLogger.Core()
 }
 
 func Sync() {
