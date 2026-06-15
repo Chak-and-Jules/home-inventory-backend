@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"sync"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
@@ -12,10 +11,7 @@ import (
 )
 
 type ItemDefinitionHandler struct {
-	DB         *gorm.DB
-	mu         sync.RWMutex
-	cache      []models.ItemDefinition
-	cacheValid bool
+	DB *gorm.DB
 }
 
 type ItemDefinitionRequest struct {
@@ -28,25 +24,21 @@ type ItemDefinitionRequest struct {
 }
 
 func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
-	h.mu.RLock()
-	if h.cacheValid {
-		defs := h.cache
-		h.mu.RUnlock()
-		c.JSON(http.StatusOK, defs)
+	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	if !ok {
 		return
 	}
-	h.mu.RUnlock()
+
+	if !utils.VerifyHomeAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this home"})
+		return
+	}
 
 	var defs []models.ItemDefinition
-	if err := h.DB.Preload("Category").Preload("SizeUnit").Find(&defs).Error; err != nil {
+	if err := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID).Find(&defs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch item definitions"})
 		return
 	}
-
-	h.mu.Lock()
-	h.cache = defs
-	h.cacheValid = true
-	h.mu.Unlock()
 
 	c.JSON(http.StatusOK, defs)
 }
@@ -56,6 +48,7 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 	if !ok {
 		return
 	}
+
 	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
@@ -68,6 +61,7 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 	}
 
 	def := models.ItemDefinition{
+		HomeID:      homeID,
 		Name:        req.Name,
 		Description: req.Description,
 		CategoryID:  req.CategoryID,
@@ -81,25 +75,23 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 		return
 	}
 
-	h.mu.Lock()
-	h.cacheValid = false
-	h.mu.Unlock()
-
 	c.JSON(http.StatusCreated, def)
 }
 
 func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	id, ok := utils.ParseUUIDParam(c, "id", "Invalid item definition ID")
 	if !ok {
-		return
-	}
-	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
 
-	id, ok := utils.ParseUUIDParam(c, "id", "Invalid item definition ID")
-	if !ok {
+	var itemDef models.ItemDefinition
+	if err := h.DB.First(&itemDef, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Item definition not found"})
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, itemDef.HomeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
 
@@ -118,30 +110,28 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 		"image_url":    req.ImageURL,
 	}
 
-	if err := h.DB.Model(&models.ItemDefinition{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+	if err := h.DB.Model(&itemDef).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item definition"})
 		return
 	}
-
-	h.mu.Lock()
-	h.cacheValid = false
-	h.mu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Item definition updated successfully"})
 }
 
 func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	id, ok := utils.ParseUUIDParam(c, "id", "Invalid item definition ID")
 	if !ok {
-		return
-	}
-	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
 
-	id, ok := utils.ParseUUIDParam(c, "id", "Invalid item definition ID")
-	if !ok {
+	var itemDef models.ItemDefinition
+	if err := h.DB.First(&itemDef, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Item definition not found"})
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, itemDef.HomeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
 		return
 	}
 
@@ -149,10 +139,6 @@ func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete item definition (it might be in use)"})
 		return
 	}
-
-	h.mu.Lock()
-	h.cacheValid = false
-	h.mu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Item definition deleted successfully"})
 }

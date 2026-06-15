@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"sync"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
@@ -12,10 +11,7 @@ import (
 )
 
 type CategoryHandler struct {
-	DB         *gorm.DB
-	mu         sync.RWMutex
-	cache      []models.Category
-	cacheValid bool
+	DB *gorm.DB
 }
 
 type CategoryRequest struct {
@@ -24,30 +20,36 @@ type CategoryRequest struct {
 }
 
 func (h *CategoryHandler) GetCategories(c *gin.Context) {
-	h.mu.RLock()
-	if h.cacheValid {
-		categories := h.cache
-		h.mu.RUnlock()
-		c.JSON(http.StatusOK, categories)
+	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	if !ok {
 		return
 	}
-	h.mu.RUnlock()
+
+	if !utils.VerifyHomeAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this home"})
+		return
+	}
 
 	var categories []models.Category
-	if err := h.DB.Preload("Parent").Find(&categories).Error; err != nil {
+	if err := h.DB.Preload("Parent").Where("home_id = ?", homeID).Find(&categories).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch categories"})
 		return
 	}
-
-	h.mu.Lock()
-	h.cache = categories
-	h.cacheValid = true
-	h.mu.Unlock()
 
 	c.JSON(http.StatusOK, categories)
 }
 
 func (h *CategoryHandler) CreateCategory(c *gin.Context) {
+	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	if !ok {
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		return
+	}
+
 	var req CategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -55,6 +57,7 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 	}
 
 	category := models.Category{
+		HomeID:   homeID,
 		Name:     req.Name,
 		ParentID: req.ParentID,
 	}
@@ -63,10 +66,6 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create category"})
 		return
 	}
-
-	h.mu.Lock()
-	h.cacheValid = false
-	h.mu.Unlock()
 
 	c.JSON(http.StatusCreated, category)
 }
@@ -77,23 +76,30 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 		return
 	}
 
+	var category models.Category
+	if err := h.DB.First(&category, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, category.HomeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		return
+	}
+
 	var req CategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.DB.Model(&models.Category{}).Where("id = ?", id).Updates(map[string]interface{}{
+	if err := h.DB.Model(&category).Updates(map[string]interface{}{
 		"name":      req.Name,
 		"parent_id": req.ParentID,
 	}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update category"})
 		return
 	}
-
-	h.mu.Lock()
-	h.cacheValid = false
-	h.mu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Category updated successfully"})
 }
@@ -104,14 +110,21 @@ func (h *CategoryHandler) DeleteCategory(c *gin.Context) {
 		return
 	}
 
+	var category models.Category
+	if err := h.DB.First(&category, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, category.HomeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		return
+	}
+
 	if err := h.DB.Delete(&models.Category{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete category"})
 		return
 	}
-
-	h.mu.Lock()
-	h.cacheValid = false
-	h.mu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Category deleted successfully"})
 }
