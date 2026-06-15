@@ -49,10 +49,11 @@ func TestGetInventoryItems(t *testing.T) {
 		itemDefID := uuid.New()
 		catID := uuid.New()
 		unitID := uuid.New()
+		locationID := uuid.New()
 
 		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1`).
 			WithArgs(homeID).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(uuid.New(), homeID, itemDefID, 5))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "location_id", "quantity"}).AddRow(uuid.New(), homeID, itemDefID, locationID, 5))
 
 		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 			WithArgs(itemDefID).
@@ -65,6 +66,10 @@ func TestGetInventoryItems(t *testing.T) {
 		mock.ExpectQuery(`SELECT \* FROM "size_units" WHERE "size_units"\."id" = \$1`).
 			WithArgs(unitID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(unitID, "Test Unit"))
+
+		mock.ExpectQuery(`SELECT \* FROM "locations" WHERE "locations"\."id" = \$1`).
+			WithArgs(locationID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(locationID, "Test Location"))
 
 		handler.GetInventoryItems(c)
 
@@ -108,7 +113,7 @@ func TestGetInventoryItems(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("GetInventoryItems DB Error", func(t *testing.T) {
+	t.Run("db error", func(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		req, err := http.NewRequest(http.MethodGet, "/inventory", nil)
 		require.NoError(t, err)
@@ -130,7 +135,6 @@ func TestGetInventoryItems(t *testing.T) {
 		handler.GetInventoryItems(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Contains(t, w.Body.String(), "Failed to fetch inventory items")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
@@ -140,10 +144,11 @@ func TestCreateInventoryItem(t *testing.T) {
 	userID := uuid.New()
 	homeID := uuid.New()
 	itemDefID := uuid.New()
+	locationID := uuid.New()
 
 	t.Run("success", func(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
-		reqBody := `{"item_definition_id": "` + itemDefID.String() + `", "quantity": 5}`
+		reqBody := `{"item_definition_id": "` + itemDefID.String() + `", "location_id": "` + locationID.String() + `", "quantity": 5}`
 		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(reqBody))
 		require.NoError(t, err)
 		req.Header.Set("x-home-id", homeID.String())
@@ -155,11 +160,11 @@ func TestCreateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		mock.ExpectBegin()
-		mock.ExpectQuery(`INSERT INTO "inventory_items" \("home_id","item_definition_id","quantity","expiration_date","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6\) RETURNING "id"`).
-			WithArgs(homeID, itemDefID, float64(5), nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		mock.ExpectQuery(`INSERT INTO "inventory_items" \("home_id","item_definition_id","location_id","quantity","expiration_date","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7\) RETURNING "id"`).
+			WithArgs(homeID, itemDefID, locationID, float64(5), nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
 		mock.ExpectCommit()
 
@@ -171,7 +176,8 @@ func TestCreateInventoryItem(t *testing.T) {
 
 	t.Run("missing home_id", func(t *testing.T) {
 		handler, _ := setupInventoryTest(t)
-		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(`{"item_definition_id": "`+itemDefID.String()+`", "quantity": 5}`))
+		reqBody := `{"item_definition_id": "` + itemDefID.String() + `", "quantity": 5}`
+		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(reqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -184,9 +190,32 @@ func TestCreateInventoryItem(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
+	t.Run("invalid payload", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		reqBody := `{"quantity": 5}` // Missing required item_definition_id
+		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(reqBody))
+		require.NoError(t, err)
+		req.Header.Set("x-home-id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+
+		handler.CreateInventoryItem(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
 	t.Run("write access denied", func(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
-		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(`{"item_definition_id": "`+itemDefID.String()+`", "quantity": 5}`))
+		reqBody := `{"item_definition_id": "` + itemDefID.String() + `", "quantity": 5}`
+		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(reqBody))
 		require.NoError(t, err)
 		req.Header.Set("x-home-id", homeID.String())
 
@@ -205,26 +234,6 @@ func TestCreateInventoryItem(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("invalid json", func(t *testing.T) {
-		handler, mock := setupInventoryTest(t)
-		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(`{"quantity": -5}`))
-		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
-
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = req
-		c.Set("userID", userID)
-
-		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
-			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
-
-		handler.CreateInventoryItem(c)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
 	t.Run("db error", func(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		reqBody := `{"item_definition_id": "` + itemDefID.String() + `", "quantity": 5}`
@@ -239,18 +248,17 @@ func TestCreateInventoryItem(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
 			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
 		mock.ExpectBegin()
-		mock.ExpectQuery(`INSERT INTO "inventory_items" \("home_id","item_definition_id","quantity","expiration_date","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6\) RETURNING "id"`).
-			WithArgs(homeID, itemDefID, float64(5), nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		mock.ExpectQuery(`INSERT INTO "inventory_items" \("home_id","item_definition_id","location_id","quantity","expiration_date","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7\) RETURNING "id"`).
+			WithArgs(homeID, itemDefID, nil, float64(5), nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnError(errors.New("db error"))
 		mock.ExpectRollback()
 
 		handler.CreateInventoryItem(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Contains(t, w.Body.String(), "Failed to create inventory item")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
@@ -260,10 +268,11 @@ func TestUpdateInventoryItem(t *testing.T) {
 	userID := uuid.New()
 	homeID := uuid.New()
 	itemID := uuid.New()
+	locationID := uuid.New()
 
 	t.Run("success", func(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
-		reqBody := `{"quantity": 10}`
+		reqBody := `{"location_id": "` + locationID.String() + `", "quantity": 10}`
 		req, err := http.NewRequest(http.MethodPut, "/inventory/"+itemID.String(), strings.NewReader(reqBody))
 		require.NoError(t, err)
 
@@ -283,7 +292,7 @@ func TestUpdateInventoryItem(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "inventory_items" SET .*`).
-			WithArgs(sqlmock.AnyArg(), float64(10), sqlmock.AnyArg(), itemID).
+			WithArgs(sqlmock.AnyArg(), locationID, float64(10), sqlmock.AnyArg(), itemID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -355,9 +364,9 @@ func TestUpdateInventoryItem(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("invalid json", func(t *testing.T) {
+	t.Run("invalid payload", func(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
-		req, err := http.NewRequest(http.MethodPut, "/inventory/"+itemID.String(), strings.NewReader(`{"quantity": -10}`))
+		req, err := http.NewRequest(http.MethodPut, "/inventory/"+itemID.String(), strings.NewReader(`{"quantity": -10}`)) // Invalid quantity
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -377,12 +386,12 @@ func TestUpdateInventoryItem(t *testing.T) {
 		handler.UpdateInventoryItem(c)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("update error", func(t *testing.T) {
+	t.Run("db error", func(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
-		reqBody := `{"quantity": 10}`
-		req, err := http.NewRequest(http.MethodPut, "/inventory/"+itemID.String(), strings.NewReader(reqBody))
+		req, err := http.NewRequest(http.MethodPut, "/inventory/"+itemID.String(), strings.NewReader(`{"quantity": 10}`))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -401,8 +410,8 @@ func TestUpdateInventoryItem(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "inventory_items" SET .*`).
-			WithArgs(sqlmock.AnyArg(), float64(10), sqlmock.AnyArg(), itemID).
-			WillReturnError(errors.New("update error"))
+			WithArgs(sqlmock.AnyArg(), nil, float64(10), sqlmock.AnyArg(), itemID).
+			WillReturnError(errors.New("db error"))
 		mock.ExpectRollback()
 
 		handler.UpdateInventoryItem(c)

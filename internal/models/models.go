@@ -65,6 +65,18 @@ type Category struct {
 	Parent *Category `gorm:"foreignKey:ParentID;constraint:OnDelete:CASCADE"`
 }
 
+// Location represents a storage area within a home
+type Location struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	HomeID    uuid.UUID `gorm:"type:uuid;not null;index"`
+	Name      string    `gorm:"type:varchar(255);not null"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+
+	// Relations
+	Home Home `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
+}
+
 // ItemDefinition represents the blueprint of an item
 type ItemDefinition struct {
 	ID          uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
@@ -89,6 +101,7 @@ type InventoryItem struct {
 	ID               uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	HomeID           uuid.UUID  `gorm:"type:uuid;not null;index"`
 	ItemDefinitionID uuid.UUID  `gorm:"type:uuid;not null;index"`
+	LocationID       *uuid.UUID `gorm:"type:uuid;index"`
 	Quantity         float64    `gorm:"type:numeric;not null;default:0"`
 	ExpirationDate   *time.Time `gorm:"type:timestamp with time zone"`
 	CreatedAt        time.Time
@@ -97,4 +110,5 @@ type InventoryItem struct {
 	// Relations
 	Home           Home           `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
 	ItemDefinition ItemDefinition `gorm:"foreignKey:ItemDefinitionID;constraint:OnDelete:RESTRICT"`
+	Location       Location       `gorm:"foreignKey:LocationID;constraint:OnDelete:SET NULL"`
 }

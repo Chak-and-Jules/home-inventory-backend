@@ -17,11 +17,13 @@ type InventoryItemHandler struct {
 
 type CreateInventoryItemRequest struct {
 	ItemDefinitionID uuid.UUID  `json:"item_definition_id" binding:"required"`
+	LocationID       *uuid.UUID `json:"location_id"`
 	Quantity         float64    `json:"quantity" binding:"required,gte=0"`
 	ExpirationDate   *time.Time `json:"expiration_date"`
 }
 
 type UpdateInventoryItemRequest struct {
+	LocationID     *uuid.UUID `json:"location_id"`
 	Quantity       float64    `json:"quantity" binding:"required,gte=0"`
 	ExpirationDate *time.Time `json:"expiration_date"`
 }
@@ -42,7 +44,7 @@ func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
 	}
 
 	var items []models.InventoryItem
-	if err := h.DB.Preload("ItemDefinition.Category").Preload("ItemDefinition.SizeUnit").Where("home_id = ?", homeID).Find(&items).Error; err != nil {
+	if err := h.DB.Preload("ItemDefinition.Category").Preload("ItemDefinition.SizeUnit").Preload("Location").Where("home_id = ?", homeID).Find(&items).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch inventory items"})
 		return
 	}
@@ -69,6 +71,7 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 	item := models.InventoryItem{
 		HomeID:           homeID,
 		ItemDefinitionID: req.ItemDefinitionID,
+		LocationID:       req.LocationID,
 		Quantity:         req.Quantity,
 		ExpirationDate:   req.ExpirationDate,
 	}
@@ -106,6 +109,7 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{
+		"location_id":     req.LocationID,
 		"quantity":        req.Quantity,
 		"expiration_date": req.ExpirationDate,
 	}

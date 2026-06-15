@@ -18,6 +18,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	homeHandler := &handlers.HomeHandler{DB: db}
 	profileHandler := &handlers.ProfileHandler{DB: db}
 	categoryHandler := &handlers.CategoryHandler{DB: db}
+	locationHandler := &handlers.LocationHandler{DB: db}
 	itemDefHandler := &handlers.ItemDefinitionHandler{DB: db}
 	sizeUnitHandler := &handlers.SizeUnitHandler{DB: db}
 	inventoryItemHandler := &handlers.InventoryItemHandler{DB: db}
@@ -49,6 +50,15 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			categories.POST("", categoryHandler.CreateCategory)
 			categories.PUT("/:id", categoryHandler.UpdateCategory)
 			categories.DELETE("/:id", categoryHandler.DeleteCategory)
+		}
+
+		// Locations
+		locations := v1.Group("/locations")
+		{
+			locations.GET("", locationHandler.GetLocations)
+			locations.POST("", locationHandler.CreateLocation)
+			locations.PUT("/:id", locationHandler.UpdateLocation)
+			locations.DELETE("/:id", locationHandler.DeleteLocation)
 		}
 
 		// Item Definitions
