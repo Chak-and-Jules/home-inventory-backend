@@ -523,9 +523,6 @@ func TestSetDefaultHome(t *testing.T) {
 
 func TestCreateHome(t *testing.T) {
 	logger.InitLogger()
-	logger.InitLogger()
-	logger.InitLogger()
-	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 
