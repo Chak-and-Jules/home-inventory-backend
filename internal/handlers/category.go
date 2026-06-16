@@ -57,6 +57,23 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 		return
 	}
 
+	// Check for unique name in the same hierarchy level
+	var count int64
+	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND name = ?", homeID, req.Name)
+	if req.ParentID == nil {
+		query = query.Where("parent_id IS NULL")
+	} else {
+		query = query.Where("parent_id = ?", req.ParentID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to validate category uniqueness")})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category with this name already exists at this level")})
+		return
+	}
+
 	category := models.Category{
 		HomeID:   homeID,
 		Name:     req.Name,
@@ -91,6 +108,23 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 	var req CategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check for unique name in the same hierarchy level
+	var count int64
+	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND name = ? AND id != ?", category.HomeID, req.Name, id)
+	if req.ParentID == nil {
+		query = query.Where("parent_id IS NULL")
+	} else {
+		query = query.Where("parent_id = ?", req.ParentID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to validate category uniqueness")})
+		return
+	}
+	if count > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category with this name already exists at this level")})
 		return
 	}
 

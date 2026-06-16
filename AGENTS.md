@@ -16,6 +16,7 @@ Ensure that any changes you make do not break existing tests and that you write 
 ## Additional Checks
 
 - Whenever there is any change in the codebase that changes the api contract, the `openapi.json` file should also be updated and included in the commit.
+- Whenever a new hardcoded string is added or an existing one is changed; if that string is being sent to the client, then it has to be reflected in the `i18n.go` file accordingly. And the usage should be through `TranslateDB` function.
 
 ## Git Workflow
 

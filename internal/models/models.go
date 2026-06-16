@@ -68,9 +68,9 @@ type SizeUnit struct {
 // Category represents an optional 2-level category hierarchy
 type Category struct {
 	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	HomeID    uuid.UUID  `gorm:"type:uuid;not null;index"`
-	Name      string     `gorm:"type:varchar(255);not null"`
-	ParentID  *uuid.UUID `gorm:"type:uuid;index"`
+	HomeID    uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_category_home_name_parent"`
+	Name      string     `gorm:"type:varchar(255);not null;uniqueIndex:idx_category_home_name_parent"`
+	ParentID  *uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_category_home_name_parent"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
