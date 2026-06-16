@@ -1,9 +1,9 @@
 package logger
 
 import (
+	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestInitLogger_FallbackLocal(t *testing.T) {

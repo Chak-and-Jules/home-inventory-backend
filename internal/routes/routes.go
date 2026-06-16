@@ -34,6 +34,8 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 		// Profiles
 		profiles := v1.Group("/profiles")
 		{
+			profiles.GET("", profileHandler.GetProfile)
+			profiles.PUT("", profileHandler.UpdateProfile)
 			profiles.POST("/sync", profileHandler.SyncProfile)
 		}
 

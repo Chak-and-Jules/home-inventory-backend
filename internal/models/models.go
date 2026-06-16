@@ -8,9 +8,23 @@ import (
 
 // Profile represents a user profile
 type Profile struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey"`
-	Email     string    `gorm:"type:varchar(255);uniqueIndex"`
-	IsAdmin   bool      `gorm:"default:false"`
+	ID          uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	Email       string     `gorm:"type:varchar(255);uniqueIndex"`
+	IsAdmin     bool       `gorm:"default:false"`
+	WebTheme    *string    `gorm:"type:varchar(50)"`
+	MobileTheme *string    `gorm:"type:varchar(50)"`
+	LanguageID  *uuid.UUID `gorm:"type:uuid;index"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+
+	// Relations
+	Language *Language `gorm:"foreignKey:LanguageID;constraint:OnDelete:SET NULL"`
+}
+
+// Language represents a language preference
+type Language struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Name      string    `gorm:"type:varchar(255);unique;not null"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
