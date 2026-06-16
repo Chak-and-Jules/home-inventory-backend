@@ -20,6 +20,7 @@ import (
 var supabaseUrl string
 var jwksURL string
 var jwtSecret string
+var jwtSecretBytes []byte // ⚡ Bolt: Cached byte slice to avoid per-request memory allocation during HMAC verification
 
 var (
 	jwksCache     = make(map[string]*ecdsa.PublicKey)
@@ -38,6 +39,7 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 
 	jwksURL = supabaseUrl + "/auth/v1/.well-known/jwks.json"
 	jwtSecret = os.Getenv("SUPABASE_JWT_SECRET")
+	jwtSecretBytes = []byte(jwtSecret) // Cache byte slice
 
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -52,7 +54,8 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := authHeader[7:]
-		if strings.Contains(tokenString, " ") {
+		// ⚡ Bolt: Use IndexByte instead of Contains string since we're just checking for a space character
+		if strings.IndexByte(tokenString, ' ') != -1 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
 			return
 		}
@@ -106,7 +109,7 @@ func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) {
 			if jwtSecret == "" {
 				return nil, fmt.Errorf("JWT secret is not configured")
 			}
-			return []byte(jwtSecret), nil
+			return jwtSecretBytes, nil // ⚡ Bolt: Return cached bytes to avoid allocation
 		}
 
 		kid, ok := token.Header["kid"].(string)
