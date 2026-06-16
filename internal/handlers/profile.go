@@ -93,3 +93,60 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 
 	c.JSON(http.StatusOK, profile)
 }
+
+func (h *ProfileHandler) GetProfile(c *gin.Context) {
+	userID := c.MustGet("userID").(uuid.UUID)
+
+	var profile models.Profile
+	if err := h.DB.Select("web_theme", "mobile_theme", "language_id").Where("id = ?", userID).First(&profile).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+			return
+		}
+		logger.Log.Error("Failed to fetch profile", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch profile"})
+		return
+	}
+
+	response := gin.H{
+		"web_theme":    profile.WebTheme,
+		"mobile_theme": profile.MobileTheme,
+		"language_id":  profile.LanguageID,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
+	userID := c.MustGet("userID").(uuid.UUID)
+
+	var payload map[string]interface{}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	updates := make(map[string]interface{})
+	if webTheme, ok := payload["web_theme"]; ok {
+		updates["web_theme"] = webTheme
+	}
+	if mobileTheme, ok := payload["mobile_theme"]; ok {
+		updates["mobile_theme"] = mobileTheme
+	}
+	if languageID, ok := payload["language_id"]; ok {
+		updates["language_id"] = languageID
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusOK, gin.H{"message": "No valid fields to update"})
+		return
+	}
+
+	if err := h.DB.Model(&models.Profile{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
+		logger.Log.Error("Failed to update profile", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Profile updated successfully"})
+}

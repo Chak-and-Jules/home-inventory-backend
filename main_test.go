@@ -2,9 +2,9 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"testing"
 	"time"
-	"os/exec"
 
 	"github.com/stretchr/testify/assert"
 )
