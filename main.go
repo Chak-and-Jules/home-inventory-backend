@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"time"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/routes"
 	"github.com/joho/godotenv"
@@ -15,13 +15,15 @@ import (
 )
 
 func main() {
+	logger.InitLogger()
+	defer logger.Sync()
 	// Load environment variables from .env file
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found. Using OS environment variables.")
+		logger.Log.Info("No .env file found. Using OS environment variables.")
 	}
 
 	appEnv := initAppEnv()
-	log.Printf("Starting application in %s environment\n", appEnv)
+	logger.Log.Sugar().Infof("Starting application in %s environment", appEnv)
 
 	// Database Connection String
 	dsn := buildPostgresDSN()
@@ -29,13 +31,13 @@ func main() {
 	// Connect to PostgreSQL via GORM
 	db, err := setupDatabase(dsn)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Log.Sugar().Fatalf("Failed to connect to database: %v", err)
 	}
 
 	// Get generic database object sql.DB to configure connection pool
 	sqlDB, err := db.DB()
 	if err != nil {
-		log.Fatalf("Failed to get generic database object: %v", err)
+		logger.Log.Sugar().Fatalf("Failed to get generic database object: %v", err)
 	}
 
 	// Configure connection pool
@@ -43,7 +45,7 @@ func main() {
 
 	// Auto-migrate models (creates/updates tables based on struct definitions)
 
-	log.Println("Running AutoMigrate...")
+	logger.Log.Info("Running AutoMigrate...")
 	err = db.AutoMigrate(
 		&models.Profile{},
 		&models.Home{},
@@ -54,7 +56,7 @@ func main() {
 		&models.InventoryItem{},
 	)
 	if err != nil {
-		log.Println("AutoMigrate warning:", err)
+		logger.Log.Sugar().Warnf("AutoMigrate warning: %v", err)
 	}
 
 	// Setup Gin Router
@@ -62,9 +64,9 @@ func main() {
 
 	port := serverPort()
 
-	log.Printf("Starting server on port %s...\n", port)
+	logger.Log.Sugar().Infof("Starting server on port %s...", port)
 	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		logger.Log.Sugar().Fatalf("Failed to start server: %v", err)
 	}
 }
 
