@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
@@ -30,7 +31,7 @@ func (h *HomeHandler) GetHomes(c *gin.Context) {
 	var userHomes []models.UserHome
 	if err := h.DB.Preload("Home").Where("user_id = ?", userID).Find(&userHomes).Error; err != nil {
 		logger.Log.Error("Failed to fetch homes", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch homes"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch homes")})
 		return
 	}
 
@@ -43,7 +44,7 @@ func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, 
 	var userHome models.UserHome
 	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
 		logger.Log.Warn("Home not found or access denied", zap.Error(err))
-		c.JSON(http.StatusNotFound, gin.H{"error": "Home not found or access denied"})
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Home not found or access denied")})
 		return false
 	}
 
@@ -59,9 +60,9 @@ func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, 
 
 	// Custom error messages based on the missing role
 	if len(allowedRoles) == 1 && allowedRoles[0] == models.RoleOwner {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Only owners can delete homes"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Only owners can delete homes")})
 	} else {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions to update home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient permissions to update home")})
 	}
 	return false
 }
@@ -95,7 +96,7 @@ func (h *HomeHandler) CreateHome(c *gin.Context) {
 
 	if err != nil {
 		logger.Log.Error("Failed to create home", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create home"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create home")})
 		return
 	}
 
@@ -104,7 +105,7 @@ func (h *HomeHandler) CreateHome(c *gin.Context) {
 
 func (h *HomeHandler) UpdateHome(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
-	homeID, ok := utils.ParseUUIDParam(c, "id", "Invalid home ID")
+	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
 	}
@@ -121,16 +122,16 @@ func (h *HomeHandler) UpdateHome(c *gin.Context) {
 
 	if err := h.DB.Model(&models.Home{}).Where("id = ?", homeID).Update("name", req.Name).Error; err != nil {
 		logger.Log.Error("Failed to update home", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update home"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update home")})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Home updated successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Home updated successfully")})
 }
 
 func (h *HomeHandler) DeleteHome(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
-	homeID, ok := utils.ParseUUIDParam(c, "id", "Invalid home ID")
+	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
 	}
@@ -141,16 +142,16 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 
 	if err := h.DB.Delete(&models.Home{}, homeID).Error; err != nil {
 		logger.Log.Error("Failed to delete home", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete home"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete home")})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Home deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Home deleted successfully")})
 }
 
 func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
-	homeID, ok := utils.ParseUUIDParam(c, "id", "Invalid home ID")
+	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
 	}
@@ -175,9 +176,9 @@ func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
 
 	if err != nil {
 		logger.Log.Error("Failed to set default home", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set default home"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to set default home")})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Default home updated successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Default home updated successfully")})
 }

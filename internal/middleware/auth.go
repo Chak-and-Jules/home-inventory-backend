@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -33,7 +34,7 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 		// Don't panic in library code or tests; return a middleware that
 		// responds with 500 so callers (tests/servers) can handle it.
 		return func(c *gin.Context) {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "SUPABASE_URL is not configured"})
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(nil, c, "SUPABASE_URL is not configured")})
 		}
 	}
 
@@ -44,24 +45,24 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is missing"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Authorization header is missing")})
 			return
 		}
 
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid authorization header format")})
 			return
 		}
 
 		tokenString := authHeader[7:]
 		// ⚡ Bolt: Use IndexByte instead of Contains string since we're just checking for a space character
 		if strings.IndexByte(tokenString, ' ') != -1 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid authorization header format")})
 			return
 		}
 
 		if jwtSecret == "" {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "JWT secret is not configured"})
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(nil, c, "JWT secret is not configured")})
 			return
 		}
 
@@ -73,25 +74,25 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 		}
 
 		if claims == nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Failed to parse token claims"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Failed to parse token claims")})
 			return
 		}
 
 		sub, ok := (*claims)["sub"].(string)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Subject missing from token claims"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Subject missing from token claims")})
 			return
 		}
 
 		userID, err := uuid.Parse(sub)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user ID in token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid user ID in token")})
 			return
 		}
 
 		email, ok := (*claims)["email"].(string)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Email missing from token claims"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Email missing from token claims")})
 			return
 		}
 

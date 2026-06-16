@@ -1,12 +1,14 @@
 package utils
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseUUIDParam(t *testing.T) {
@@ -15,54 +17,53 @@ func TestParseUUIDParam(t *testing.T) {
 	tests := []struct {
 		name         string
 		paramValue   string
-		expectStatus int
-		expectValid  bool
+		expectedID   uuid.UUID
+		expectedBool bool
+		expectedCode int
+		expectedErr  string
 	}{
 		{
 			name:         "Valid UUID",
 			paramValue:   "123e4567-e89b-12d3-a456-426614174000",
-			expectStatus: http.StatusOK,
-			expectValid:  true,
+			expectedID:   uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
+			expectedBool: true,
+			expectedCode: http.StatusOK,
 		},
 		{
 			name:         "Invalid UUID",
 			paramValue:   "invalid-uuid",
-			expectStatus: http.StatusBadRequest,
-			expectValid:  false,
+			expectedID:   uuid.Nil,
+			expectedBool: false,
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "Invalid ID",
 		},
 		{
-			name:         "Empty string",
+			name:         "Empty UUID",
 			paramValue:   "",
-			expectStatus: http.StatusBadRequest,
-			expectValid:  false,
+			expectedID:   uuid.Nil,
+			expectedBool: false,
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "Invalid ID",
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Params = gin.Params{gin.Param{Key: "id", Value: tc.paramValue}}
+			c.Params = []gin.Param{{Key: "id", Value: tt.paramValue}}
 
-			id, ok := ParseUUIDParam(c, "id", "Invalid ID")
+			id, ok := ParseUUIDParam(c, nil, "id", "Invalid ID")
 
-			if tc.expectValid {
-				if !ok {
-					t.Errorf("Expected valid UUID but got invalid")
-				}
-				if id.String() != tc.paramValue {
-					t.Errorf("Expected ID %s, got %s", tc.paramValue, id.String())
-				}
-			} else {
-				if ok {
-					t.Errorf("Expected invalid UUID but got valid")
-				}
-				if id != uuid.Nil {
-					t.Errorf("Expected Nil UUID, got %v", id)
-				}
-				if w.Code != tc.expectStatus {
-					t.Errorf("Expected status %d, got %d", tc.expectStatus, w.Code)
-				}
+			assert.Equal(t, tt.expectedID, id)
+			assert.Equal(t, tt.expectedBool, ok)
+
+			if !ok {
+				assert.Equal(t, tt.expectedCode, w.Code)
+				var response map[string]string
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedErr, response["error"])
 			}
 		})
 	}
@@ -74,58 +75,119 @@ func TestParseUUIDQuery(t *testing.T) {
 	tests := []struct {
 		name         string
 		queryValue   string
-		expectStatus int
-		expectValid  bool
+		expectedID   uuid.UUID
+		expectedBool bool
+		expectedCode int
+		expectedErr  string
 	}{
 		{
 			name:         "Valid UUID",
 			queryValue:   "123e4567-e89b-12d3-a456-426614174000",
-			expectStatus: http.StatusOK,
-			expectValid:  true,
+			expectedID:   uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
+			expectedBool: true,
+			expectedCode: http.StatusOK,
 		},
 		{
 			name:         "Invalid UUID",
 			queryValue:   "invalid-uuid",
-			expectStatus: http.StatusBadRequest,
-			expectValid:  false,
+			expectedID:   uuid.Nil,
+			expectedBool: false,
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "Invalid ID",
 		},
 		{
-			name:         "Empty value",
+			name:         "Missing Query Parameter",
 			queryValue:   "",
-			expectStatus: http.StatusBadRequest,
-			expectValid:  false,
+			expectedID:   uuid.Nil,
+			expectedBool: false,
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "id query parameter is required",
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			if tc.queryValue == "" {
-				c.Request, _ = http.NewRequest(http.MethodGet, "/", nil)
-			} else {
-				c.Request, _ = http.NewRequest(http.MethodGet, "/?id="+tc.queryValue, nil)
+			req, _ := http.NewRequest(http.MethodGet, "/test?id="+tt.queryValue, nil)
+			if tt.queryValue == "" {
+				req, _ = http.NewRequest(http.MethodGet, "/test", nil)
 			}
+			c.Request = req
 
-			id, ok := ParseUUIDQuery(c, "id", "Invalid ID")
+			id, ok := ParseUUIDQuery(c, nil, "id", "Invalid ID")
 
-			if tc.expectValid {
-				if !ok {
-					t.Errorf("Expected valid UUID but got invalid")
-				}
-				if id.String() != tc.queryValue {
-					t.Errorf("Expected ID %s, got %s", tc.queryValue, id.String())
-				}
-			} else {
-				if ok {
-					t.Errorf("Expected invalid UUID but got valid")
-				}
-				if id != uuid.Nil {
-					t.Errorf("Expected Nil UUID, got %v", id)
-				}
-				if w.Code != tc.expectStatus {
-					t.Errorf("Expected status %d, got %d", tc.expectStatus, w.Code)
-				}
+			assert.Equal(t, tt.expectedID, id)
+			assert.Equal(t, tt.expectedBool, ok)
+
+			if !ok {
+				assert.Equal(t, tt.expectedCode, w.Code)
+				var response map[string]string
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedErr, response["error"])
+			}
+		})
+	}
+}
+
+func TestParseUUIDHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name         string
+		headerValue  string
+		expectedID   uuid.UUID
+		expectedBool bool
+		expectedCode int
+		expectedErr  string
+	}{
+		{
+			name:         "Valid UUID",
+			headerValue:  "123e4567-e89b-12d3-a456-426614174000",
+			expectedID:   uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
+			expectedBool: true,
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:         "Invalid UUID",
+			headerValue:  "invalid-uuid",
+			expectedID:   uuid.Nil,
+			expectedBool: false,
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "Invalid ID",
+		},
+		{
+			name:         "Missing Header",
+			headerValue:  "",
+			expectedID:   uuid.Nil,
+			expectedBool: false,
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "x-home-id header is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			req, _ := http.NewRequest(http.MethodGet, "/", nil)
+			if tt.headerValue != "" {
+				req.Header.Set("x-home-id", tt.headerValue)
+			}
+			c.Request = req
+
+			id, ok := ParseUUIDHeader(c, nil, "x-home-id", "Invalid ID")
+
+			assert.Equal(t, tt.expectedID, id)
+			assert.Equal(t, tt.expectedBool, ok)
+
+			if !ok {
+				assert.Equal(t, tt.expectedCode, w.Code)
+				var response map[string]string
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedErr, response["error"])
 			}
 		})
 	}

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -31,32 +32,32 @@ type UpdateQuantityRequest struct {
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "x-home-id", "Invalid home_id")
 	if !ok {
 		return
 	}
 
 	if !utils.VerifyHomeAccess(c, h.DB, homeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
 		return
 	}
 
 	var items []models.InventoryItem
 	if err := h.DB.Preload("ItemDefinition.Category").Preload("ItemDefinition.SizeUnit").Where("home_id = ?", homeID).Find(&items).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch inventory items"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
 		return
 	}
 	c.JSON(http.StatusOK, items)
 }
 
 func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "x-home-id", "Invalid home_id")
 	if !ok {
 		return
 	}
 
 	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
 		return
 	}
 
@@ -74,7 +75,7 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 	}
 
 	if err := h.DB.Create(&item).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create inventory item"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create inventory item")})
 		return
 	}
 
@@ -82,7 +83,7 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 }
 
 func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
-	id, ok := utils.ParseUUIDParam(c, "id", "Invalid inventory item ID")
+	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid inventory item ID")
 	if !ok {
 		return
 	}
@@ -90,12 +91,12 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 	// First find the item to check its home_id
 	var item models.InventoryItem
 	if err := h.DB.First(&item, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Inventory item not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
 		return
 	}
 
 	if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
 		return
 	}
 
@@ -111,27 +112,27 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 	}
 
 	if err := h.DB.Model(&item).Updates(updates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update inventory item"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update inventory item")})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Inventory item updated successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Inventory item updated successfully")})
 }
 
 func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) {
-	id, ok := utils.ParseUUIDParam(c, "id", "Invalid inventory item ID")
+	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid inventory item ID")
 	if !ok {
 		return
 	}
 
 	var item models.InventoryItem
 	if err := h.DB.First(&item, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Inventory item not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
 		return
 	}
 
 	if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
 		return
 	}
 
@@ -142,34 +143,34 @@ func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) {
 	}
 
 	if err := h.DB.Model(&item).Update("quantity", req.Quantity).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update quantity"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update quantity")})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Quantity updated successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Quantity updated successfully")})
 }
 
 func (h *InventoryItemHandler) DeleteInventoryItem(c *gin.Context) {
-	id, ok := utils.ParseUUIDParam(c, "id", "Invalid inventory item ID")
+	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid inventory item ID")
 	if !ok {
 		return
 	}
 
 	var item models.InventoryItem
 	if err := h.DB.First(&item, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Inventory item not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
 		return
 	}
 
 	if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
 		return
 	}
 
 	if err := h.DB.Delete(&models.InventoryItem{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete inventory item"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete inventory item")})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Inventory item deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Inventory item deleted successfully")})
 }
