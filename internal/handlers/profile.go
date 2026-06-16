@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/gin-gonic/gin"
@@ -37,12 +38,12 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 	}
 
 	if req.User.ID != authUserID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Profile user ID does not match authenticated user"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Profile user ID does not match authenticated user")})
 		return
 	}
 
 	if !strings.EqualFold(req.User.Email, authEmail) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Profile email does not match authenticated user"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Profile email does not match authenticated user")})
 		return
 	}
 
@@ -56,14 +57,14 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 		DoUpdates: clause.AssignmentColumns([]string{"updated_at"}),
 	}).Create(&profile).Error; err != nil {
 		logger.Log.Error("Failed to sync profile", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sync profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to sync profile")})
 		return
 	}
 
 	var exists int
 	if err := h.DB.Model(&models.UserHome{}).Select("1").Where("user_id = ?", authUserID).Limit(1).Find(&exists).Error; err != nil {
 		logger.Log.Error("Failed to check homes", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check homes"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to check homes")})
 		return
 	}
 
@@ -86,7 +87,7 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 
 		if err != nil {
 			logger.Log.Error("Failed to create default home", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create default home"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create default home")})
 			return
 		}
 	}
@@ -100,11 +101,11 @@ func (h *ProfileHandler) GetProfile(c *gin.Context) {
 	var profile models.Profile
 	if err := h.DB.Select("web_theme", "mobile_theme", "language_id").Where("id = ?", userID).First(&profile).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Profile not found")})
 			return
 		}
 		logger.Log.Error("Failed to fetch profile", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch profile")})
 		return
 	}
 
@@ -138,15 +139,19 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	if len(updates) == 0 {
-		c.JSON(http.StatusOK, gin.H{"message": "No valid fields to update"})
+		c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "No valid fields to update")})
 		return
 	}
 
 	if err := h.DB.Model(&models.Profile{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
 		logger.Log.Error("Failed to update profile", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update profile")})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Profile updated successfully"})
+	if _, ok := payload["language_id"]; ok {
+		i18n.InvalidateUserLanguageCache(userID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Profile updated successfully")})
 }

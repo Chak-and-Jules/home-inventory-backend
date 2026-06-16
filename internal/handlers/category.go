@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -20,19 +21,19 @@ type CategoryRequest struct {
 }
 
 func (h *CategoryHandler) GetCategories(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "x-home-id", "Invalid home_id")
 	if !ok {
 		return
 	}
 
 	if !utils.VerifyHomeAccess(c, h.DB, homeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
 		return
 	}
 
 	var categories []models.Category
 	if err := h.DB.Preload("Parent").Where("home_id = ?", homeID).Find(&categories).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch categories"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch categories")})
 		return
 	}
 
@@ -40,13 +41,13 @@ func (h *CategoryHandler) GetCategories(c *gin.Context) {
 }
 
 func (h *CategoryHandler) CreateCategory(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDHeader(c, "x-home-id", "Invalid home_id")
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "x-home-id", "Invalid home_id")
 	if !ok {
 		return
 	}
 
 	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
 		return
 	}
 
@@ -63,7 +64,7 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 	}
 
 	if err := h.DB.Create(&category).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create category"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create category")})
 		return
 	}
 
@@ -71,19 +72,19 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 }
 
 func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
-	id, ok := utils.ParseUUIDParam(c, "id", "Invalid category ID")
+	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid category ID")
 	if !ok {
 		return
 	}
 
 	var category models.Category
 	if err := h.DB.First(&category, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Category not found")})
 		return
 	}
 
 	if !utils.VerifyHomeWriteAccess(c, h.DB, category.HomeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
 		return
 	}
 
@@ -97,34 +98,34 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 		"name":      req.Name,
 		"parent_id": req.ParentID,
 	}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update category"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update category")})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Category updated successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Category updated successfully")})
 }
 
 func (h *CategoryHandler) DeleteCategory(c *gin.Context) {
-	id, ok := utils.ParseUUIDParam(c, "id", "Invalid category ID")
+	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid category ID")
 	if !ok {
 		return
 	}
 
 	var category models.Category
 	if err := h.DB.First(&category, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Category not found")})
 		return
 	}
 
 	if !utils.VerifyHomeWriteAccess(c, h.DB, category.HomeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Write access denied to this home"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
 		return
 	}
 
 	if err := h.DB.Delete(&models.Category{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete category"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete category")})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Category deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Category deleted successfully")})
 }
