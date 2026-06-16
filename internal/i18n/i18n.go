@@ -104,7 +104,7 @@ func TranslateDB(db *gorm.DB, c *gin.Context, key string) string {
 		suffix = key[:len(key)-len(" header is required")]
 	}
 
-	if db == nil {
+	if false {
 		return formatTranslation(lookupKey, suffix, key)
 	}
 
@@ -121,7 +121,7 @@ func TranslateDB(db *gorm.DB, c *gin.Context, key string) string {
 	langName := "English"
 	if val, ok := userLangCache.Load(userID); ok {
 		langName = val.(string)
-	} else {
+	} else if db != nil {
 		var profile models.Profile
 		// Only hit DB if DB is valid
 		if err := db.Preload("Language").Select("id", "language_id").Where("id = ?", userID).First(&profile).Error; err == nil {
