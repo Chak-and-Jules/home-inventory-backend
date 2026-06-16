@@ -13,10 +13,15 @@ Before committing any code or marking a task as complete, you must run the follo
 
 Ensure that any changes you make do not break existing tests and that you write tests for any new functionality.
 
-## Additional Checks
+## Globalization Checks
+
+- Check if there are any newly added strings exist in the changeset. If there is, make sure it is added in the `i18n.go` file. It also should be used through `TranslateDB` function.
+- Check if an existing string is modified in this changeset. If it exists in the `i18n.go` file, make sure the key and translation values are also updated.
+
+## API Endpoint Checks
 
 - Whenever there is any change in the codebase that changes the api contract, the `openapi.json` file should also be updated and included in the commit.
-- Whenever a new hardcoded string is added or an existing one is changed; if that string is being sent to the client, then it has to be reflected in the `i18n.go` file accordingly. And the usage should be through `TranslateDB` function.
+- When the `openapi.json` file is updated, create an issue in the repository `https://github.com/Chak-and-Jules/home-inventory-web/issues` describing the change; and add `jules` label to it.
 
 ## Git Workflow
 
