@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
@@ -46,6 +47,7 @@ func expectCategoryByID(mock sqlmock.Sqlmock, categoryID, homeID uuid.UUID) {
 }
 
 func TestCreateCategory(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -144,6 +146,7 @@ func TestCreateCategory(t *testing.T) {
 }
 
 func TestGetCategories(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -216,6 +219,7 @@ func TestGetCategories(t *testing.T) {
 }
 
 func TestUpdateCategory(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -312,6 +316,7 @@ func TestUpdateCategory(t *testing.T) {
 }
 
 func TestDeleteCategory(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
