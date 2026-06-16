@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,7 @@ import (
 )
 
 func TestSetupRouter(t *testing.T) {
+	logger.InitLogger()
 	// Set required environment variables for middleware
 	os.Setenv("SUPABASE_URL", "http://localhost")
 	defer os.Unsetenv("SUPABASE_URL")

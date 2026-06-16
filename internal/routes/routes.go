@@ -2,13 +2,18 @@ package routes
 
 import (
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/handlers"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/middleware"
+	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"time"
 )
 
 func SetupRouter(db *gorm.DB) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	r.Use(ginzap.Ginzap(logger.Log, time.RFC3339, true))
+	r.Use(ginzap.RecoveryWithZap(logger.Log, true))
 
 	r.Use(middleware.CORSMiddleware())
 
