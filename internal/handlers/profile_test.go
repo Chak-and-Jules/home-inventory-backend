@@ -163,7 +163,7 @@ func TestSyncProfile(t *testing.T) {
 		handler.SyncProfile(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Contains(t, w.Body.String(), "Failed to check homes:")
+		assert.Contains(t, w.Body.String(), "Failed to check homes")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
