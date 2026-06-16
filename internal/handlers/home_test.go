@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
@@ -21,6 +22,7 @@ import (
 )
 
 func TestGetHomes(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 
 	// Setup mock DB
@@ -520,6 +522,7 @@ func TestSetDefaultHome(t *testing.T) {
 }
 
 func TestCreateHome(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 

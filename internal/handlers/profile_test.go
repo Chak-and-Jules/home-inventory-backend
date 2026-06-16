@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,7 @@ import (
 )
 
 func TestSyncProfile(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 
 	userID := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
@@ -161,7 +163,7 @@ func TestSyncProfile(t *testing.T) {
 		handler.SyncProfile(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Contains(t, w.Body.String(), "Failed to check homes:")
+		assert.Contains(t, w.Body.String(), "Failed to check homes")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 

@@ -16,6 +16,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 )
 
@@ -27,6 +28,7 @@ func authMiddleware(userID uuid.UUID) gin.HandlerFunc {
 }
 
 func setupTestDB() (*gorm.DB, sqlmock.Sqlmock, error) {
+	logger.InitLogger()
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		return nil, nil, err

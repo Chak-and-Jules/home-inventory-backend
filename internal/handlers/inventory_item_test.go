@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
@@ -27,6 +28,7 @@ func setupInventoryTest(t *testing.T) (*InventoryItemHandler, sqlmock.Sqlmock) {
 }
 
 func TestGetInventoryItems(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -136,6 +138,7 @@ func TestGetInventoryItems(t *testing.T) {
 }
 
 func TestCreateInventoryItem(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -256,6 +259,7 @@ func TestCreateInventoryItem(t *testing.T) {
 }
 
 func TestUpdateInventoryItem(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -413,6 +417,7 @@ func TestUpdateInventoryItem(t *testing.T) {
 }
 
 func TestUpdateInventoryItemQuantity(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -570,6 +575,7 @@ func TestUpdateInventoryItemQuantity(t *testing.T) {
 }
 
 func TestDeleteInventoryItem(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
