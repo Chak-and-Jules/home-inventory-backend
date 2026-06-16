@@ -56,6 +56,10 @@ func TestCreateCategory(t *testing.T) {
 		handler, mock := setupCategoryTest(t)
 		expectCategoryAccess(mock, userID, homeID, models.RoleOwner)
 
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "categories" WHERE \(home_id = \$1 AND name = \$2\) AND parent_id IS NULL`).
+			WithArgs(homeID, "Test Category").
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
 		mock.ExpectBegin()
 		mock.ExpectQuery(`INSERT INTO "categories" \("home_id","name","parent_id","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5\) RETURNING "id"`).
 			WithArgs(homeID, "Test Category", nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
@@ -75,6 +79,30 @@ func TestCreateCategory(t *testing.T) {
 		handler.CreateCategory(c)
 
 		assert.Equal(t, http.StatusCreated, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("conflict", func(t *testing.T) {
+		handler, mock := setupCategoryTest(t)
+		expectCategoryAccess(mock, userID, homeID, models.RoleOwner)
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "categories" WHERE \(home_id = \$1 AND name = \$2\) AND parent_id IS NULL`).
+			WithArgs(homeID, "Test Category").
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+		req, err := http.NewRequest(http.MethodPost, "/categories", strings.NewReader(`{"name":"Test Category"}`))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-home-id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		handler.CreateCategory(c)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -121,6 +149,10 @@ func TestCreateCategory(t *testing.T) {
 	t.Run("db error", func(t *testing.T) {
 		handler, mock := setupCategoryTest(t)
 		expectCategoryAccess(mock, userID, homeID, models.RoleEditor)
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "categories" WHERE \(home_id = \$1 AND name = \$2\) AND parent_id IS NULL`).
+			WithArgs(homeID, "Test Category").
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
 		mock.ExpectBegin()
 		mock.ExpectQuery(`INSERT INTO "categories" \("home_id","name","parent_id","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5\) RETURNING "id"`).
@@ -230,6 +262,10 @@ func TestUpdateCategory(t *testing.T) {
 		expectCategoryByID(mock, categoryID, homeID)
 		expectCategoryAccess(mock, userID, homeID, models.RoleEditor)
 
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "categories" WHERE \(home_id = \$1 AND name = \$2 AND id != \$3\) AND parent_id IS NULL`).
+			WithArgs(homeID, "Updated Category", categoryID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "categories" SET .*`).
 			WithArgs("Updated Category", nil, sqlmock.AnyArg(), categoryID).
@@ -248,6 +284,30 @@ func TestUpdateCategory(t *testing.T) {
 		handler.UpdateCategory(c)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("conflict", func(t *testing.T) {
+		handler, mock := setupCategoryTest(t)
+		expectCategoryByID(mock, categoryID, homeID)
+		expectCategoryAccess(mock, userID, homeID, models.RoleEditor)
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "categories" WHERE \(home_id = \$1 AND name = \$2 AND id != \$3\) AND parent_id IS NULL`).
+			WithArgs(homeID, "Updated Category", categoryID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, err := http.NewRequest(http.MethodPut, "/categories/"+categoryID.String(), strings.NewReader(`{"name":"Updated Category"}`))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: categoryID.String()}}
+		c.Set("userID", userID)
+
+		handler.UpdateCategory(c)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -292,6 +352,10 @@ func TestUpdateCategory(t *testing.T) {
 		handler, mock := setupCategoryTest(t)
 		expectCategoryByID(mock, categoryID, homeID)
 		expectCategoryAccess(mock, userID, homeID, models.RoleOwner)
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "categories" WHERE \(home_id = \$1 AND name = \$2 AND id != \$3\) AND parent_id IS NULL`).
+			WithArgs(homeID, "Updated Category", categoryID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "categories" SET .*`).
