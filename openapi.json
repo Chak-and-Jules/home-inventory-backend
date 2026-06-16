@@ -193,7 +193,27 @@
           "Name": {
             "type": "string"
           },
-          "SizeUnit": {
+          "Language": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SizeUnit": {
             "$ref": "#/components/schemas/SizeUnit"
           },
           "SizeUnitID": {
@@ -321,6 +341,26 @@
         "required": [
           "profile"
         ],
+        "type": "object"
+      },
+      "Language": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "SizeUnit": {
@@ -1017,6 +1057,29 @@
         "summary": "Sync profile",
         "tags": [
           "Profiles"
+        ]
+      }
+    },
+    "/languages": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Language"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Get languages",
+        "tags": [
+          "Languages"
         ]
       }
     },
