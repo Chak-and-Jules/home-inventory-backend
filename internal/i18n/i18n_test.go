@@ -82,9 +82,9 @@ func TestTranslateDB(t *testing.T) {
 			WithArgs(userID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "language_id"}).AddRow(userID, langID))
 
-        mock.ExpectQuery(`SELECT \* FROM "languages" WHERE "languages"."id" = \$1`).
-            WithArgs(langID).
-            WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(langID, "Türkçe"))
+		mock.ExpectQuery(`SELECT \* FROM "languages" WHERE "languages"."id" = \$1`).
+			WithArgs(langID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(langID, "Türkçe"))
 
 		res := TranslateDB(gormDB, c, "Access denied to this home")
 		assert.Equal(t, "Bu eve erişim reddedildi", res)
@@ -110,7 +110,7 @@ func TestTranslateDB(t *testing.T) {
 		assert.Equal(t, "x-home-id başlığı gereklidir", res)
 	})
 
-    t.Run("missing translation in turkish", func(t *testing.T) {
+	t.Run("missing translation in turkish", func(t *testing.T) {
 		c, _ := gin.CreateTestContext(nil)
 		userID := uuid.New()
 		c.Set("userID", userID)

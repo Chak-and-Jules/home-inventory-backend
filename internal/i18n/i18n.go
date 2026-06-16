@@ -104,10 +104,6 @@ func TranslateDB(db *gorm.DB, c *gin.Context, key string) string {
 		suffix = key[:len(key)-len(" header is required")]
 	}
 
-	if false {
-		return formatTranslation(lookupKey, suffix, key)
-	}
-
 	userIDVal, exists := c.Get("userID")
 	if !exists {
 		return formatTranslation(lookupKey, suffix, key)
