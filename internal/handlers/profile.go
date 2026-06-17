@@ -33,7 +33,7 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 
 	var req ProfileSyncRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 
@@ -123,7 +123,7 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 
 	var payload map[string]interface{}
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 

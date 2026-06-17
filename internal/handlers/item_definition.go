@@ -57,7 +57,7 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 
 	var req ItemDefinitionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 
@@ -98,7 +98,7 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 
 	var req ItemDefinitionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 

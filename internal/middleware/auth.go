@@ -69,7 +69,7 @@ func SupabaseAuthMiddleware() gin.HandlerFunc {
 		claims, err := FetchAndVerifyToken(tokenString)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid token")})
 			return
 		}
 
