@@ -62,6 +62,8 @@ var Translations = map[string]map[string]string{
 		"Invalid inventory item ID":                              "Geçersiz envanter öğesi ID",
 		"Invalid item definition ID":                             "Geçersiz öğe tanımı ID",
 		"Invalid user ID in token":                               "Token içinde geçersiz kullanıcı ID'si",
+		"Invalid request payload":                                "Geçersiz istek yükü",
+		"Invalid token":                                          "Geçersiz belirteç",
 		"Inventory item deleted successfully":                    "Envanter öğesi başarıyla silindi",
 		"Inventory item not found":                               "Envanter öğesi bulunamadı",
 		"Inventory item updated successfully":                    "Envanter öğesi başarıyla güncellendi",

@@ -63,7 +63,7 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 
 	var req CreateInventoryItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 
 	var req UpdateInventoryItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 
@@ -138,7 +138,7 @@ func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) {
 
 	var req UpdateQuantityRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 

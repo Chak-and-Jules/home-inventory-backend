@@ -71,7 +71,7 @@ func (h *HomeHandler) CreateHome(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
 	var req CreateHomeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *HomeHandler) UpdateHome(c *gin.Context) {
 
 	var req UpdateHomeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 
