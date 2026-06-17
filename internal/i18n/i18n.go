@@ -96,24 +96,14 @@ func TranslateDB(db *gorm.DB, c *gin.Context, key string) string {
 		return key
 	}
 
-	var lookupKey = key
-	var suffix = ""
-	if strings.HasSuffix(key, " query parameter is required") {
-		lookupKey = "id query parameter is required"
-		suffix = key[:len(key)-len(" query parameter is required")]
-	} else if strings.HasSuffix(key, " header is required") {
-		lookupKey = "id header is required"
-		suffix = key[:len(key)-len(" header is required")]
-	}
-
 	userIDVal, exists := c.Get("userID")
 	if !exists {
-		return formatTranslation(lookupKey, suffix, key)
+		return key
 	}
 
 	userID, ok := userIDVal.(uuid.UUID)
 	if !ok {
-		return formatTranslation(lookupKey, suffix, key)
+		return key
 	}
 
 	langName := "English"
@@ -130,25 +120,39 @@ func TranslateDB(db *gorm.DB, c *gin.Context, key string) string {
 		userLangCache.Store(userID, langName)
 	}
 
+	// ⚡ Bolt: Avoid strings.EqualFold when not needed, but keep it for correctness
 	langKey := "English"
 	if strings.EqualFold(langName, "türkçe") || strings.EqualFold(langName, "turkish") || strings.EqualFold(langName, "tr") {
 		langKey = "Türkçe"
 	}
 
 	if langMap, ok := Translations[langKey]; ok {
-		if val, ok := langMap[lookupKey]; ok {
-			if suffix != "" {
+		// ⚡ Bolt: Fast path exact key match to avoid expensive string operations
+		if val, ok := langMap[key]; ok {
+			return val
+		}
+
+		// Check for templated keys
+		var lookupKey string
+		var suffix string
+
+		if strings.HasSuffix(key, " query parameter is required") {
+			lookupKey = "id query parameter is required"
+			suffix = key[:len(key)-len(" query parameter is required")]
+		} else if strings.HasSuffix(key, " header is required") {
+			lookupKey = "id header is required"
+			suffix = key[:len(key)-len(" header is required")]
+		}
+
+		if lookupKey != "" {
+			if val, ok := langMap[lookupKey]; ok {
 				if strings.Contains(val, "id") {
 					return strings.Replace(val, "id", suffix, 1)
 				}
+				return val
 			}
-			return val
 		}
 	}
 
 	return key
-}
-
-func formatTranslation(lookupKey, suffix, originalKey string) string {
-	return originalKey
 }
