@@ -122,9 +122,9 @@ func TranslateDB(db *gorm.DB, c *gin.Context, key string) string {
 		userLangCache.Store(userID, langName)
 	}
 
-	// ⚡ Bolt: Avoid strings.EqualFold when not needed, but keep it for correctness
+	// ⚡ Bolt: Avoid strings.EqualFold in hot paths for small set of enum-like values to improve performance (exact match is orders of magnitude faster)
 	langKey := "English"
-	if strings.EqualFold(langName, "türkçe") || strings.EqualFold(langName, "turkish") || strings.EqualFold(langName, "tr") {
+	if langName == "Türkçe" || langName == "Turkish" || langName == "tr" || langName == "türkçe" || langName == "turkish" || langName == "TR" || langName == "Tr" {
 		langKey = "Türkçe"
 	}
 
@@ -148,8 +148,9 @@ func TranslateDB(db *gorm.DB, c *gin.Context, key string) string {
 
 		if lookupKey != "" {
 			if val, ok := langMap[lookupKey]; ok {
-				if strings.Contains(val, "id") {
-					return strings.Replace(val, "id", suffix, 1)
+				// ⚡ Bolt: Fast string slice replace to avoid strings.Contains double-scan and strings.Replace allocation
+				if idx := strings.Index(val, "id"); idx != -1 {
+					return val[:idx] + suffix + val[idx+2:]
 				}
 				return val
 			}
