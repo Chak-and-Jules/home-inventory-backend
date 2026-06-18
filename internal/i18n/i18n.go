@@ -18,6 +18,7 @@ var Translations = map[string]map[string]string{
 		"A category with this name already exists at this level": "Bu düzeyde aynı isme sahip bir kategori zaten mevcut",
 		"Access denied to this home":                             "Bu eve erişim reddedildi",
 		"Authorization header is missing":                        "Yetkilendirme başlığı eksik",
+		"Too many requests":                                      "Çok fazla istek",
 		"Category deleted successfully":                          "Kategori başarıyla silindi",
 		"Category not found":                                     "Kategori bulunamadı",
 		"Category updated successfully":                          "Kategori başarıyla güncellendi",
