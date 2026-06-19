@@ -7,3 +7,8 @@
 **Vulnerability:** API endpoints were completely unprotected from high-volume requests, risking brute-force attacks and abuse.
 **Learning:** Adding `golang.org/x/time/rate` alongside a thread-safe map effectively provides IP-based rate limiting. However, storing limiters per IP in an unbounded map creates a minor memory leak/OOM risk over long periods if not periodically cleaned up.
 **Prevention:** Implement an IP-based rate limiter to protect all endpoints, but consider adding an eviction strategy (e.g., a background cleanup goroutine or utilizing an LRU cache) to handle long-running memory usage securely.
+
+## 2026-06-19 - Missing Timeout on External HTTP Request
+**Vulnerability:** External HTTP GET request (`http.Get`) to fetch Supabase JWKS inside the token parsing loop didn't specify a timeout.
+**Learning:** This is a DoS risk because the default HTTP client has no timeout. If the external endpoint hangs or responds extremely slowly, it ties up a goroutine. Under load, this could exhaust available goroutines and crash the service or degrade performance.
+**Prevention:** Always use a custom `http.Client` with a strict `Timeout` when making outbound HTTP requests, especially those on hot paths like authentication middleware.
