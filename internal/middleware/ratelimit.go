@@ -11,29 +11,27 @@ import (
 )
 
 type rateLimiter struct {
-	limiters map[string]*rate.Limiter
-	mu       sync.Mutex
+	limiters sync.Map
 	rate     rate.Limit
 	burst    int
 }
 
 var limiter = &rateLimiter{
-	limiters: make(map[string]*rate.Limiter),
+	limiters: sync.Map{},
 	rate:     rate.Every(1 * time.Minute / 300), // 300 requests per minute
 	burst:    300,
 }
 
 func (l *rateLimiter) getLimiter(ip string) *rate.Limiter {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	lim, exists := l.limiters[ip]
+	lim, exists := l.limiters.Load(ip)
 	if !exists {
-		lim = rate.NewLimiter(l.rate, l.burst)
-		l.limiters[ip] = lim
+		// ⚡ Bolt: Use lock-free sync.Map for highly concurrent IP rate limiting,
+		// replacing a global sync.Mutex which bottlenecks all requests.
+		newLimiter := rate.NewLimiter(l.rate, l.burst)
+		lim, _ = l.limiters.LoadOrStore(ip, newLimiter)
 	}
 
-	return lim
+	return lim.(*rate.Limiter)
 }
 
 // RateLimitMiddleware applies IP-based rate limiting
