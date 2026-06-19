@@ -80,12 +80,11 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 		languages := v1.Group("/languages")
 		{
 			languages.GET("", languageHandler.GetLanguages)
-		}
-
-		// Inventory Items
+		} // Inventory Items
 		inventory := v1.Group("/inventory")
 		{
 			inventory.GET("", inventoryItemHandler.GetInventoryItems)
+			inventory.GET("/almost-finished", inventoryItemHandler.GetAlmostFinishedItems)
 			inventory.POST("", inventoryItemHandler.CreateInventoryItem)
 			inventory.PUT("/:id", inventoryItemHandler.UpdateInventoryItem)
 			inventory.PATCH("/:id/quantity", inventoryItemHandler.UpdateInventoryItemQuantity)

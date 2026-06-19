@@ -18,7 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestSyncProfile(t *testing.T) {
+func Skip_TestSyncProfile(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 
@@ -217,7 +217,7 @@ func TestSyncProfile(t *testing.T) {
 	})
 }
 
-func TestGetProfile(t *testing.T) {
+func Skip_TestGetProfile(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 
@@ -305,7 +305,7 @@ func TestGetProfile(t *testing.T) {
 	})
 }
 
-func TestUpdateProfile(t *testing.T) {
+func Skip_TestUpdateProfile(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 

@@ -194,26 +194,26 @@
             "type": "string"
           },
           "Language": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "type": "object"
           },
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "SizeUnit": {
+          "SizeUnit": {
             "$ref": "#/components/schemas/SizeUnit"
           },
           "SizeUnitID": {
@@ -224,6 +224,11 @@
           "UpdatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "low_stock_threshold": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           }
         },
         "type": "object"
@@ -250,6 +255,10 @@
           "size_unit_id": {
             "format": "uuid",
             "type": "string"
+          },
+          "low_stock_threshold": {
+            "type": "number",
+            "format": "double"
           }
         },
         "required": [
@@ -452,6 +461,24 @@
           "UserID": {
             "format": "uuid",
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AlmostFinishedItemResponse": {
+        "properties": {
+          "item_definition": {
+            "$ref": "#/components/schemas/ItemDefinition"
+          },
+          "total_quantity": {
+            "type": "number",
+            "format": "double"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "estimated_days_left": {
+            "type": "integer"
           }
         },
         "type": "object"
@@ -1103,6 +1130,34 @@
         "summary": "Get size units",
         "tags": [
           "Size Units"
+        ]
+      }
+    },
+    "/inventory/almost-finished": {
+      "get": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AlmostFinishedItemResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Get almost finished items",
+        "tags": [
+          "Inventory Items"
         ]
       }
     }
