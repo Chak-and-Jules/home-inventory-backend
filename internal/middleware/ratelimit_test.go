@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,9 +16,11 @@ func TestRateLimitMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// Override limiter settings for testing
-	limiter.rate = rate.Every(1 * time.Minute / 2) // 2 requests per minute
-	limiter.burst = 2
-	limiter.limiters = make(map[string]*rate.Limiter) // Reset limiters
+	limiter = &rateLimiter{
+		limiters: sync.Map{},
+		rate:     rate.Every(1 * time.Minute / 2), // 2 requests per minute
+		burst:    2,
+	}
 
 	r := gin.New()
 	r.Use(RateLimitMiddleware())
