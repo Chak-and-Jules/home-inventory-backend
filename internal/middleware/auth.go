@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/gin-gonic/gin"
@@ -127,7 +128,10 @@ func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) {
 		jwksCacheLock.RUnlock()
 
 		// Fetch JWKS from Supabase for ECDSA verification
-		resp, err := http.Get(jwksURL)
+		client := &http.Client{
+			Timeout: 10 * time.Second,
+		}
+		resp, err := client.Get(jwksURL)
 		if err != nil {
 			return nil, fmt.Errorf("could not fetch JWKS: %v", err)
 		}
