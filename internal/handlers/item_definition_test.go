@@ -102,7 +102,7 @@ func TestGetItemDefinitions_Success(t *testing.T) {
 	router.GET("/item-definitions", handler.GetItemDefinitions)
 
 	req, _ := http.NewRequest(http.MethodGet, "/item-definitions", nil)
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -145,7 +145,7 @@ func TestGetItemDefinitions_Error(t *testing.T) {
 	router.GET("/item-definitions", handler.GetItemDefinitions)
 
 	req, _ := http.NewRequest(http.MethodGet, "/item-definitions", nil)
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -192,7 +192,7 @@ func TestCreateItemDefinition_Success(t *testing.T) {
 	reqBody := `{"name":"Test Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -234,7 +234,7 @@ func TestUpdateItemDefinition_Success(t *testing.T) {
 	reqBody := `{"name":"Updated Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
 	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+id.String(), strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -273,7 +273,7 @@ func TestDeleteItemDefinition_Success(t *testing.T) {
 	router.DELETE("/item-definitions/:id", handler.DeleteItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodDelete, "/item-definitions/"+id.String(), nil)
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -303,7 +303,7 @@ func TestCreateItemDefinition_InvalidJSON(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", strings.NewReader("invalid-json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -341,7 +341,7 @@ func TestCreateItemDefinition_DBError(t *testing.T) {
 	reqBody := `{"name":"Test Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -368,7 +368,7 @@ func TestUpdateItemDefinition_InvalidID(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/invalid-uuid", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -399,7 +399,7 @@ func TestUpdateItemDefinition_InvalidJSON(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+id.String(), strings.NewReader("invalid-json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -439,7 +439,7 @@ func TestUpdateItemDefinition_DBError(t *testing.T) {
 	reqBody := `{"name":"Updated Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
 	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+id.String(), strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -465,7 +465,7 @@ func TestDeleteItemDefinition_InvalidID(t *testing.T) {
 	router.DELETE("/item-definitions/:id", handler.DeleteItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodDelete, "/item-definitions/invalid-uuid", nil)
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -502,7 +502,7 @@ func TestDeleteItemDefinition_DBError(t *testing.T) {
 	router.DELETE("/item-definitions/:id", handler.DeleteItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodDelete, "/item-definitions/"+id.String(), nil)
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -532,7 +532,7 @@ func TestCreateItemDefinition_Forbidden(t *testing.T) {
 	router.POST("/item-definitions", handler.CreateItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", nil)
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -564,7 +564,7 @@ func TestUpdateItemDefinition_Forbidden(t *testing.T) {
 	router.PUT("/item-definitions/:id", handler.UpdateItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+id.String(), nil)
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -596,7 +596,7 @@ func TestDeleteItemDefinition_Forbidden(t *testing.T) {
 	router.DELETE("/item-definitions/:id", handler.DeleteItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodDelete, "/item-definitions/"+id.String(), nil)
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 

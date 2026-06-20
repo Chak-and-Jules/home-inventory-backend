@@ -37,7 +37,7 @@ func TestGetInventoryItems(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		req, err := http.NewRequest(http.MethodGet, "/inventory", nil)
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -93,7 +93,7 @@ func TestGetInventoryItems(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		req, err := http.NewRequest(http.MethodGet, "/inventory", nil)
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -114,7 +114,7 @@ func TestGetInventoryItems(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		req, err := http.NewRequest(http.MethodGet, "/inventory", nil)
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -149,7 +149,7 @@ func TestCreateInventoryItem(t *testing.T) {
 		reqBody := `{"item_definition_id": "` + itemDefID.String() + `", "quantity": 5}`
 		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(reqBody))
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -191,7 +191,7 @@ func TestCreateInventoryItem(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(`{"item_definition_id": "`+itemDefID.String()+`", "quantity": 5}`))
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -212,7 +212,7 @@ func TestCreateInventoryItem(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(`{"quantity": -5}`))
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -233,7 +233,7 @@ func TestCreateInventoryItem(t *testing.T) {
 		reqBody := `{"item_definition_id": "` + itemDefID.String() + `", "quantity": 5}`
 		req, err := http.NewRequest(http.MethodPost, "/inventory", strings.NewReader(reqBody))
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
