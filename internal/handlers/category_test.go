@@ -69,7 +69,7 @@ func TestCreateCategory(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, "/categories", strings.NewReader(`{"name":"Test Category"}`))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -100,7 +100,7 @@ func TestCreateCategory(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, "/categories", strings.NewReader(`{"name":"Test Category", "parent_id":"`+parentID.String()+`"}`))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -124,7 +124,7 @@ func TestCreateCategory(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, "/categories", strings.NewReader(`{"name":"Test Category"}`))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -147,7 +147,7 @@ func TestCreateCategory(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, "/categories", strings.NewReader(`{"name":"Test Category"}`))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -167,7 +167,7 @@ func TestCreateCategory(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, "/categories", strings.NewReader("invalid"))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -187,7 +187,7 @@ func TestCreateCategory(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, "/categories", strings.NewReader(`{}`))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -217,7 +217,7 @@ func TestCreateCategory(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, "/categories", strings.NewReader(`{"name":"Test Category"}`))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -250,7 +250,7 @@ func TestGetCategories(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		req, err := http.NewRequest(http.MethodGet, "/categories", nil)
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 		c.Request = req
 		c.Set("userID", userID)
 
@@ -271,7 +271,7 @@ func TestGetCategories(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		req, err := http.NewRequest(http.MethodGet, "/categories", nil)
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 		c.Request = req
 		c.Set("userID", userID)
 
@@ -293,7 +293,7 @@ func TestGetCategories(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		req, err := http.NewRequest(http.MethodGet, "/categories", nil)
 		require.NoError(t, err)
-		req.Header.Set("x-home-id", homeID.String())
+		req.Header.Set("X-Home-Id", homeID.String())
 		c.Request = req
 		c.Set("userID", userID)
 
