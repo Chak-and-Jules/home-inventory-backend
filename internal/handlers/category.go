@@ -21,7 +21,8 @@ type CategoryRequest struct {
 }
 
 func (h *CategoryHandler) GetCategories(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "x-home-id", "Invalid home_id")
+	// ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
 	if !ok {
 		return
 	}
@@ -41,7 +42,8 @@ func (h *CategoryHandler) GetCategories(c *gin.Context) {
 }
 
 func (h *CategoryHandler) CreateCategory(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "x-home-id", "Invalid home_id")
+	// ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
 	if !ok {
 		return
 	}

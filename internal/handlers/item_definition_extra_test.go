@@ -31,7 +31,7 @@ func TestVerifyAdmin_MissingUserID(t *testing.T) {
 	router.POST("/item-definitions", handler.CreateItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", bytes.NewBufferString("{}"))
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -58,7 +58,7 @@ func TestVerifyAdmin_InvalidUserIDType(t *testing.T) {
 	router.POST("/item-definitions", handler.CreateItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", bytes.NewBufferString("{}"))
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -87,7 +87,7 @@ func TestVerifyAdmin_DBError(t *testing.T) {
 	router.POST("/item-definitions", handler.CreateItemDefinition)
 
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", bytes.NewBufferString("{}"))
-	req.Header.Set("x-home-id", homeID.String())
+	req.Header.Set("X-Home-Id", homeID.String())
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 

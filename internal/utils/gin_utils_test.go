@@ -163,7 +163,7 @@ func TestParseUUIDHeader(t *testing.T) {
 			expectedID:   uuid.Nil,
 			expectedBool: false,
 			expectedCode: http.StatusBadRequest,
-			expectedErr:  "x-home-id header is required",
+			expectedErr:  "X-Home-Id header is required",
 		},
 	}
 
@@ -173,11 +173,11 @@ func TestParseUUIDHeader(t *testing.T) {
 			c, _ := gin.CreateTestContext(w)
 			req, _ := http.NewRequest(http.MethodGet, "/", nil)
 			if tt.headerValue != "" {
-				req.Header.Set("x-home-id", tt.headerValue)
+				req.Header.Set("X-Home-Id", tt.headerValue)
 			}
 			c.Request = req
 
-			id, ok := ParseUUIDHeader(c, nil, "x-home-id", "Invalid ID")
+			id, ok := ParseUUIDHeader(c, nil, "X-Home-Id", "Invalid ID")
 
 			assert.Equal(t, tt.expectedID, id)
 			assert.Equal(t, tt.expectedBool, ok)
