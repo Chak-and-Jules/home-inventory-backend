@@ -265,7 +265,7 @@ type AlmostFinishedItemResponse struct {
 }
 
 func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
-	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "x-home-id", "Invalid home_id")
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
 	if !ok {
 		return
 	}
@@ -288,12 +288,31 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 
 	twoWeeksFromNow := now.AddDate(0, 0, 14)
 
+	// ⚡ Bolt: Pre-fetch all inventory items for this home to avoid N+1 queries in the loop
+	var allItems []models.InventoryItem
+	if err := h.DB.Where("home_id = ?", homeID).Find(&allItems).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
+		return
+	}
+	itemsByDef := make(map[uuid.UUID][]models.InventoryItem)
+	for _, item := range allItems {
+		itemsByDef[item.ItemDefinitionID] = append(itemsByDef[item.ItemDefinitionID], item)
+	}
+
+	// ⚡ Bolt: Pre-fetch all relevant transactions for this home to avoid N+1 queries in the loop
+	var allTransactions []models.InventoryTransaction
+	if err := h.DB.Where("home_id = ? AND quantity_change < 0 AND created_at >= ?", homeID, sixMonthsAgo).Find(&allTransactions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory transactions")})
+		return
+	}
+	txsByDef := make(map[uuid.UUID][]models.InventoryTransaction)
+	for _, tx := range allTransactions {
+		txsByDef[tx.ItemDefinitionID] = append(txsByDef[tx.ItemDefinitionID], tx)
+	}
+
 	for _, def := range itemDefs {
 		// Calculate total quantity and check for expiring items
-		var items []models.InventoryItem
-		if err := h.DB.Where("item_definition_id = ?", def.ID).Find(&items).Error; err != nil {
-			continue
-		}
+		items := itemsByDef[def.ID]
 
 		var totalQuantity float64
 		hasExpiringSoon := false
@@ -331,10 +350,7 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 
 		// If no threshold, or threshold not met, and not expiring soon, calculate based on consumption
 		// Fetch consumption in the last 6 months (negative quantity changes)
-		var transactions []models.InventoryTransaction
-		if err := h.DB.Where("item_definition_id = ? AND quantity_change < 0 AND created_at >= ?", def.ID, sixMonthsAgo).Find(&transactions).Error; err != nil {
-			continue
-		}
+		transactions := txsByDef[def.ID]
 
 		var totalConsumed float64
 		var firstTxTime time.Time
