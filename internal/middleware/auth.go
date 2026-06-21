@@ -25,8 +25,7 @@ var jwtSecret string
 var jwtSecretBytes []byte // ⚡ Bolt: Cached byte slice to avoid per-request memory allocation during HMAC verification
 
 var (
-	jwksCache     = make(map[string]*ecdsa.PublicKey)
-	jwksCacheLock sync.RWMutex
+	jwksCache sync.Map // ⚡ Bolt: Replaced map+RWMutex with sync.Map for lock-free, concurrent reads of ECDSA public keys
 )
 
 func SupabaseAuthMiddleware() gin.HandlerFunc {
@@ -120,12 +119,9 @@ func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) {
 		}
 
 		// Check cache first
-		jwksCacheLock.RLock()
-		if pubKey, exists := jwksCache[kid]; exists {
-			jwksCacheLock.RUnlock()
-			return pubKey, nil
+		if pubKeyInterface, exists := jwksCache.Load(kid); exists {
+			return pubKeyInterface.(*ecdsa.PublicKey), nil
 		}
-		jwksCacheLock.RUnlock()
 
 		// Fetch JWKS from Supabase for ECDSA verification
 		client := &http.Client{
@@ -156,9 +152,7 @@ func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) {
 				}
 
 				// Update cache
-				jwksCacheLock.Lock()
-				jwksCache[kid] = pubKey
-				jwksCacheLock.Unlock()
+				jwksCache.Store(kid, pubKey)
 
 				return pubKey, nil
 			}
