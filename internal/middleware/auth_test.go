@@ -163,6 +163,12 @@ func TestSupabaseAuthMiddleware_ValidECDSAToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Clear cache before test
+	jwksCache.Range(func(key, value interface{}) bool {
+		jwksCache.Delete(key)
+		return true
+	})
+
 	req, _ := http.NewRequest("GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenString)
 	w := httptest.NewRecorder()

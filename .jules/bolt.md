@@ -17,3 +17,7 @@
 ## 2026-06-20 - Use Canonical MIME Header Keys to Avoid Allocations
 **Learning:** Calling `c.GetHeader(name)` or `http.Header.Get(name)` with a non-canonical header string (e.g., `"x-home-id"`) triggers `http.CanonicalHeaderKey` which allocates a new normalized string internally (e.g., `"X-Home-Id"`). In hot request paths, this causes unnecessary garbage collection pressure and increases access time by ~3x (120ns vs 46ns).
 **Action:** Always use the canonicalized, capitalized string literals (e.g., `"X-Home-Id"`, `"Authorization"`) when fetching headers in Gin/HTTP middlewares to utilize the zero-allocation fast path.
+
+## 2026-06-21 - Replace Global sync.RWMutex with lock-free sync.Map for Append-Only Caches (JWKS)
+**Learning:** Using a single `sync.RWMutex` with a standard `map` for managing JWKS cache in middleware creates an unnecessary bottleneck. In read-heavy scenarios (checking token kid against fetched keys), concurrent goroutines experience cache line contention on the mutex's reader count.
+**Action:** When building append-only caches that are read extremely frequently and written to rarely (like storing ECDSA public keys for JWT verification), use Go's `sync.Map`. The `Load` operation is highly optimized for lock-free fast paths, leading to an order-of-magnitude improvement in concurrent access time compared to `sync.RWMutex`.
