@@ -159,7 +159,7 @@ func TestGetItemDefinitions_Error(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func Skip_TestCreateItemDefinition_Success(t *testing.T) {
+func TestCreateItemDefinition_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, mock, err := setupTestDB()
 	assert.NoError(t, err)
@@ -181,7 +181,7 @@ func Skip_TestCreateItemDefinition_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role", "is_default", "created_at", "updated_at"}).AddRow(userID.String(), homeID.String(), models.RoleOwner, false, time.Now(), time.Now()))
 	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "item_definitions"`)).
-		WithArgs(homeID, "Test Item", "Test Desc", categoryID.String(), sizeUnitID.String(), false, "http://test.com/img.jpg", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(homeID, "Test Item", "Test Desc", categoryID.String(), sizeUnitID.String(), false, nil, "http://test.com/img.jpg", sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New().String()))
 	mock.ExpectCommit()
 
