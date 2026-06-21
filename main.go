@@ -48,12 +48,14 @@ func main() {
 	logger.Log.Info("Running AutoMigrate...")
 	err = db.AutoMigrate(
 		&models.Profile{},
+		&models.Language{},
 		&models.Home{},
 		&models.UserHome{},
 		&models.SizeUnit{},
 		&models.Category{},
 		&models.ItemDefinition{},
 		&models.InventoryItem{},
+		&models.InventoryTransaction{},
 	)
 	if err != nil {
 		logger.Log.Sugar().Warnf("AutoMigrate warning: %v", err)
