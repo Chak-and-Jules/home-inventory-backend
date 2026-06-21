@@ -21,7 +21,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func Skip_TestGetHomes(t *testing.T) {
+func TestGetHomes(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 
@@ -105,7 +105,7 @@ func Skip_TestGetHomes(t *testing.T) {
 	})
 }
 
-func Skip_TestUpdateHome(t *testing.T) {
+func TestUpdateHome(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -252,7 +252,7 @@ func Skip_TestUpdateHome(t *testing.T) {
 	})
 }
 
-func Skip_TestDeleteHome(t *testing.T) {
+func TestDeleteHome(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -379,7 +379,7 @@ func Skip_TestDeleteHome(t *testing.T) {
 	})
 }
 
-func Skip_TestSetDefaultHome(t *testing.T) {
+func TestSetDefaultHome(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	homeID := uuid.New()
@@ -521,7 +521,7 @@ func Skip_TestSetDefaultHome(t *testing.T) {
 	})
 }
 
-func Skip_TestCreateHome(t *testing.T) {
+func TestCreateHome(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()

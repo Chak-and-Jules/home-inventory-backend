@@ -25,7 +25,7 @@ func setupInventoryTest(t *testing.T) (*InventoryItemHandler, sqlmock.Sqlmock) {
 	return handler, mock
 }
 
-func Skip_TestGetInventoryItems(t *testing.T) {
+func TestGetInventoryItems(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()

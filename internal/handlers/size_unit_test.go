@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func Skip_TestGetSizeUnits(t *testing.T) {
+func TestGetSizeUnits(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db, mock, err := sqlmock.New()

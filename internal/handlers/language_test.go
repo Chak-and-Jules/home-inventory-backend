@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func Skip_TestGetLanguages(t *testing.T) {
+func TestGetLanguages(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db, mock, err := sqlmock.New()
