@@ -92,7 +92,7 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 				return err
 			}
 		}
-		return nil
+		return utils.UpdateShoppingListForDefinition(tx, homeID, item.ItemDefinitionID)
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create inventory item")})
 		return
@@ -149,7 +149,7 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 				return err
 			}
 		}
-		return nil
+		return utils.UpdateShoppingListForDefinition(tx, item.HomeID, item.ItemDefinitionID)
 	})
 
 	if err != nil {
@@ -202,7 +202,7 @@ func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) {
 				return err
 			}
 		}
-		return nil
+		return utils.UpdateShoppingListForDefinition(tx, item.HomeID, item.ItemDefinitionID)
 	})
 
 	if err != nil {
@@ -246,7 +246,7 @@ func (h *InventoryItemHandler) DeleteInventoryItem(c *gin.Context) {
 		if err := tx.Delete(&models.InventoryItem{}, id).Error; err != nil {
 			return err
 		}
-		return nil
+		return utils.UpdateShoppingListForDefinition(tx, item.HomeID, item.ItemDefinitionID)
 	})
 
 	if err != nil {
