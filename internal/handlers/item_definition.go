@@ -16,12 +16,15 @@ type ItemDefinitionHandler struct {
 }
 
 type ItemDefinitionRequest struct {
-	Name        string     `json:"name" binding:"required"`
-	Description string     `json:"description"`
-	CategoryID  *uuid.UUID `json:"category_id"`
-	SizeUnitID  *uuid.UUID `json:"size_unit_id" binding:"required"`
-	IsExpirable bool       `json:"is_expirable"`
-	ImageURL    string     `json:"image_url"`
+	Name              string     `json:"name" binding:"required"`
+	Description       string     `json:"description"`
+	CategoryID        *uuid.UUID `json:"category_id"`
+	SizeUnitID        *uuid.UUID `json:"size_unit_id" binding:"required"`
+	IsExpirable       bool       `json:"is_expirable"`
+	LowStockThreshold *float64   `json:"low_stock_threshold"`
+	TargetQuantity    *float64   `json:"target_quantity"`
+	Priority          string     `json:"priority"`
+	ImageURL          string     `json:"image_url"`
 }
 
 func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
@@ -64,16 +67,24 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 	}
 
 	def := models.ItemDefinition{
-		HomeID:      homeID,
-		Name:        req.Name,
-		Description: req.Description,
-		CategoryID:  req.CategoryID,
-		SizeUnitID:  req.SizeUnitID,
-		IsExpirable: req.IsExpirable,
-		ImageURL:    req.ImageURL,
+		HomeID:            homeID,
+		Name:              req.Name,
+		Description:       req.Description,
+		CategoryID:        req.CategoryID,
+		SizeUnitID:        req.SizeUnitID,
+		IsExpirable:       req.IsExpirable,
+		LowStockThreshold: req.LowStockThreshold,
+		TargetQuantity:    req.TargetQuantity,
+		Priority:          req.Priority,
+		ImageURL:          req.ImageURL,
 	}
 
-	if err := h.DB.Create(&def).Error; err != nil {
+	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&def).Error; err != nil {
+			return err
+		}
+		return utils.UpdateShoppingListForDefinition(tx, homeID, def.ID)
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create item definition")})
 		return
 	}
@@ -105,15 +116,23 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{
-		"name":         req.Name,
-		"description":  req.Description,
-		"category_id":  req.CategoryID,
-		"size_unit_id": req.SizeUnitID,
-		"is_expirable": req.IsExpirable,
-		"image_url":    req.ImageURL,
+		"name":                req.Name,
+		"description":         req.Description,
+		"category_id":         req.CategoryID,
+		"size_unit_id":        req.SizeUnitID,
+		"is_expirable":        req.IsExpirable,
+		"low_stock_threshold": req.LowStockThreshold,
+		"target_quantity":     req.TargetQuantity,
+		"priority":            req.Priority,
+		"image_url":           req.ImageURL,
 	}
 
-	if err := h.DB.Model(&itemDef).Updates(updates).Error; err != nil {
+	if err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&itemDef).Updates(updates).Error; err != nil {
+			return err
+		}
+		return utils.UpdateShoppingListForDefinition(tx, itemDef.HomeID, itemDef.ID)
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update item definition")})
 		return
 	}

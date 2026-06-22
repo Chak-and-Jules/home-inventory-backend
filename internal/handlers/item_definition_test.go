@@ -56,8 +56,14 @@ func expectItemDefinitionAccess(mock sqlmock.Sqlmock, userID, homeID uuid.UUID, 
 func expectItemDefinitionByID(mock sqlmock.Sqlmock, id, homeID uuid.UUID) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 		WithArgs(id, 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "description", "category_id", "size_unit_id", "is_expirable", "image_url", "created_at", "updated_at"}).
-			AddRow(id.String(), homeID.String(), "Test Item", "Test Desc", nil, nil, false, "http://test.com/img.jpg", time.Now(), time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "description", "category_id", "size_unit_id", "is_expirable", "low_stock_threshold", "target_quantity", "priority", "image_url", "created_at", "updated_at"}).
+			AddRow(id.String(), homeID.String(), "Test Item", "Test Desc", nil, nil, false, nil, nil, "medium", "http://test.com/img.jpg", time.Now(), time.Now()))
+}
+
+func expectProfileLookup(mock sqlmock.Sqlmock, userID uuid.UUID) {
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "id","language_id" FROM "profiles" WHERE id = $1 ORDER BY "profiles"."id" LIMIT $2`)).
+		WithArgs(userID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "language_id"}).AddRow(userID, nil))
 }
 
 func TestGetItemDefinitions_Success(t *testing.T) {
@@ -82,8 +88,8 @@ func TestGetItemDefinitions_Success(t *testing.T) {
 	// Mock the main query
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE home_id = $1`)).
 		WithArgs(homeID).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "description", "category_id", "size_unit_id", "is_expirable", "image_url", "created_at", "updated_at"}).
-			AddRow(id.String(), homeID.String(), "Test Item", "Test Desc", categoryID.String(), sizeUnitID.String(), false, "http://test.com/img.jpg", time.Now(), time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "description", "category_id", "size_unit_id", "is_expirable", "low_stock_threshold", "target_quantity", "priority", "image_url", "created_at", "updated_at"}).
+			AddRow(id.String(), homeID.String(), "Test Item", "Test Desc", categoryID.String(), sizeUnitID.String(), false, nil, nil, "medium", "http://test.com/img.jpg", time.Now(), time.Now()))
 
 	// Mock the preload query for Category
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "categories" WHERE "categories"."id" = $1`)).
@@ -140,6 +146,8 @@ func TestGetItemDefinitions_Error(t *testing.T) {
 		WithArgs(homeID).
 		WillReturnError(gorm.ErrInvalidDB)
 
+	expectProfileLookup(mock, userID)
+
 	router := gin.New()
 	router.Use(authMiddleware(userID))
 	router.GET("/item-definitions", handler.GetItemDefinitions)
@@ -181,15 +189,25 @@ func TestCreateItemDefinition_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role", "is_default", "created_at", "updated_at"}).AddRow(userID.String(), homeID.String(), models.RoleOwner, false, time.Now(), time.Now()))
 	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "item_definitions"`)).
-		WithArgs(homeID, "Test Item", "Test Desc", categoryID.String(), sizeUnitID.String(), false, nil, "http://test.com/img.jpg", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(homeID, "Test Item", "Test Desc", categoryID.String(), sizeUnitID.String(), false, nil, nil, "medium", "http://test.com/img.jpg", sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New().String()))
+
+	// UpdateShoppingListForDefinition calls
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
+		WithArgs(sqlmock.AnyArg(), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).AddRow(uuid.New(), homeID, "Test Item", nil))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
+		WithArgs(homeID, sqlmock.AnyArg(), true, false, 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+
 	mock.ExpectCommit()
 
 	router := gin.New()
 	router.Use(authMiddleware(userID))
 	router.POST("/item-definitions", handler.CreateItemDefinition)
 
-	reqBody := `{"name":"Test Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
+	reqBody := `{"name":"Test Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg","priority":"medium"}`
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Home-Id", homeID.String())
@@ -223,15 +241,25 @@ func TestUpdateItemDefinition_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role", "is_default", "created_at", "updated_at"}).AddRow(userID.String(), homeID.String(), models.RoleEditor, false, time.Now(), time.Now()))
 	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "item_definitions"`)).
-		WithArgs(categoryID.String(), "Test Desc", "http://test.com/img.jpg", false, "Updated Item", sizeUnitID.String(), sqlmock.AnyArg(), id.String()).
+		WithArgs(categoryID.String(), "Test Desc", "http://test.com/img.jpg", false, nil, "Updated Item", "medium", sizeUnitID.String(), nil, sqlmock.AnyArg(), id.String()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	// UpdateShoppingListForDefinition calls
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
+		WithArgs(id, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).AddRow(id, homeID, "Updated Item", nil))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
+		WithArgs(homeID, id, true, false, 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+
 	mock.ExpectCommit()
 
 	router := gin.New()
 	router.Use(authMiddleware(userID))
 	router.PUT("/item-definitions/:id", handler.UpdateItemDefinition)
 
-	reqBody := `{"name":"Updated Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
+	reqBody := `{"name":"Updated Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg","priority":"medium"}`
 	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+id.String(), strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Home-Id", homeID.String())
@@ -263,7 +291,7 @@ func TestDeleteItemDefinition_Success(t *testing.T) {
 		WithArgs(userID, homeID, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role", "is_default", "created_at", "updated_at"}).AddRow(userID.String(), homeID.String(), models.RoleOwner, false, time.Now(), time.Now()))
 	mock.ExpectBegin()
-	mock.ExpectExec(`DELETE FROM "item_definitions" WHERE ".*"."id" = \$1`).
+	mock.ExpectExec(`DELETE FROM "item_definitions" WHERE "item_definitions"."id" = \$1`).
 		WithArgs(id.String()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
@@ -297,6 +325,7 @@ func TestCreateItemDefinition_InvalidJSON(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
 		WithArgs(userID, homeID, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role", "is_default", "created_at", "updated_at"}).AddRow(userID.String(), homeID.String(), models.RoleOwner, false, time.Now(), time.Now()))
+
 	router := gin.New()
 	router.Use(authMiddleware(userID))
 	router.POST("/item-definitions", handler.CreateItemDefinition)
@@ -333,6 +362,8 @@ func TestCreateItemDefinition_DBError(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "item_definitions"`)).
 		WillReturnError(gorm.ErrInvalidDB)
 	mock.ExpectRollback()
+
+	expectProfileLookup(mock, userID)
 
 	router := gin.New()
 	router.Use(authMiddleware(userID))
@@ -432,6 +463,8 @@ func TestUpdateItemDefinition_DBError(t *testing.T) {
 		WillReturnError(gorm.ErrInvalidDB)
 	mock.ExpectRollback()
 
+	expectProfileLookup(mock, userID)
+
 	router := gin.New()
 	router.Use(authMiddleware(userID))
 	router.PUT("/item-definitions/:id", handler.UpdateItemDefinition)
@@ -496,6 +529,8 @@ func TestDeleteItemDefinition_DBError(t *testing.T) {
 		WithArgs(id.String()).
 		WillReturnError(gorm.ErrInvalidDB)
 	mock.ExpectRollback()
+
+	expectProfileLookup(mock, userID)
 
 	router := gin.New()
 	router.Use(authMiddleware(userID))
