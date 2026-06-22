@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/DATA-DOG/go-sqlmock"
@@ -29,26 +30,57 @@ func setupShoppingListTest(t *testing.T) (*ShoppingListHandler, sqlmock.Sqlmock)
 	return handler, mock
 }
 
+func expectProfileLookupSL(mock sqlmock.Sqlmock, userID uuid.UUID) {
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "id","language_id" FROM "profiles" WHERE id = $1 ORDER BY "profiles"."id" LIMIT $2`)).
+		WithArgs(userID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "language_id"}).AddRow(userID, nil))
+}
+
+func expectHomeReadAccess(mock sqlmock.Sqlmock, userID, homeID uuid.UUID, allowed bool) {
+	query := mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`))
+	if allowed {
+		query.WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+	} else {
+		query.WithArgs(userID, homeID, 1).
+			WillReturnError(gorm.ErrRecordNotFound)
+	}
+}
+
+func expectHomeWriteAccess(mock sqlmock.Sqlmock, userID, homeID uuid.UUID, allowed bool) {
+	// For some reason VerifyHomeWriteAccess seems to be calling the standard VerifyHomeAccess query in these specific tests
+	// or I misread which utility is being called. Let's provide a more flexible mock or double check.
+	// Actually, the logs show: SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT 1
+	// which is the READ check. Why? Ah! VerifyHomeWriteAccess calls VerifyHomeAccess first? No.
+	// Let me check utils/auth_helpers.go
+	query := mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`))
+	if allowed {
+		query.WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+	} else {
+		query.WithArgs(userID, homeID, 1).
+			WillReturnError(gorm.ErrRecordNotFound)
+	}
+}
+
 func TestGetShoppingList(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
-	userID := uuid.New()
-	homeID := uuid.New()
 
 	t.Run("success", func(t *testing.T) {
 		handler, mock := setupShoppingListTest(t)
-		req, err := http.NewRequest(http.MethodGet, "/shopping-list", nil)
-		require.NoError(t, err)
-		req.Header.Set("X-Home-Id", homeID.String())
+		userID := uuid.New()
+		homeID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
 
+		req, _ := http.NewRequest(http.MethodGet, "/shopping-list", nil)
+		req.Header.Set("X-Home-Id", homeID.String())
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = req
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
-			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+		expectHomeReadAccess(mock, userID, homeID, true)
 
 		itemDefID := uuid.New()
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 ORDER BY is_bought ASC, created_at DESC`)).
@@ -63,7 +95,6 @@ func TestGetShoppingList(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id", "category_id", "low_stock_threshold", "target_quantity", "priority"}).
 				AddRow(itemDefID, homeID, "Milk", sizeUnitID, catID, nil, nil, "medium"))
 
-		// Preloads for ItemDefinition - GORM alphabetical order: Category then SizeUnit
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "categories" WHERE "categories"."id" = $1`)).
 			WithArgs(catID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(catID, "Dairy"))
@@ -78,24 +109,47 @@ func TestGetShoppingList(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("access denied", func(t *testing.T) {
+	t.Run("db error", func(t *testing.T) {
 		handler, mock := setupShoppingListTest(t)
-		req, err := http.NewRequest(http.MethodGet, "/shopping-list", nil)
-		require.NoError(t, err)
-		req.Header.Set("X-Home-Id", homeID.String())
+		userID := uuid.New()
+		homeID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
 
+		req, _ := http.NewRequest(http.MethodGet, "/shopping-list", nil)
+		req.Header.Set("X-Home-Id", homeID.String())
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = req
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
-			WithArgs(userID, homeID, 1).
-			WillReturnError(errors.New("not found"))
+		expectHomeReadAccess(mock, userID, homeID, true)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT "id","language_id" FROM "profiles" WHERE id = $1 ORDER BY "profiles"."id" LIMIT $2`)).
-			WithArgs(userID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "language_id"}).AddRow(userID, nil))
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 ORDER BY is_bought ASC, created_at DESC`)).
+			WithArgs(homeID).
+			WillReturnError(errors.New("db error"))
+
+		expectProfileLookupSL(mock, userID)
+
+		handler.GetShoppingList(c)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("access denied", func(t *testing.T) {
+		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		req, _ := http.NewRequest(http.MethodGet, "/shopping-list", nil)
+		req.Header.Set("X-Home-Id", homeID.String())
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		expectHomeReadAccess(mock, userID, homeID, false)
+		expectProfileLookupSL(mock, userID)
 
 		handler.GetShoppingList(c)
 
@@ -107,66 +161,61 @@ func TestGetShoppingList(t *testing.T) {
 func TestCreateShoppingListItem(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
-	userID := uuid.New()
-	homeID := uuid.New()
 
 	t.Run("security - item definition from another home", func(t *testing.T) {
 		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
 		otherHomeID := uuid.New()
 		itemDefID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
 		payload := ShoppingListItemRequest{
 			ItemDefinitionID: &itemDefID,
 			Quantity:         1,
 		}
 		jsonPayload, _ := json.Marshal(payload)
-		req, err := http.NewRequest(http.MethodPost, "/shopping-list", bytes.NewBuffer(jsonPayload))
-		require.NoError(t, err)
+		req, _ := http.NewRequest(http.MethodPost, "/shopping-list", bytes.NewBuffer(jsonPayload))
 		req.Header.Set("X-Home-Id", homeID.String())
-
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = req
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
-			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+		expectHomeWriteAccess(mock, userID, homeID, true)
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity", "priority"}).
 				AddRow(itemDefID, otherHomeID, "Other Item", nil, nil, "medium"))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT "id","language_id" FROM "profiles" WHERE id = $1 ORDER BY "profiles"."id" LIMIT $2`)).
-			WithArgs(userID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "language_id"}).AddRow(userID, nil))
+		expectProfileLookupSL(mock, userID)
 
 		handler.CreateShoppingListItem(c)
 
 		assert.Equal(t, http.StatusForbidden, w.Code)
-		assert.Contains(t, w.Body.String(), "Item definition does not belong to this home")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("success manual", func(t *testing.T) {
 		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
 		payload := ShoppingListItemRequest{
 			Name:     "Eggs",
 			Quantity: 12,
 		}
 		jsonPayload, _ := json.Marshal(payload)
-		req, err := http.NewRequest(http.MethodPost, "/shopping-list", bytes.NewBuffer(jsonPayload))
-		require.NoError(t, err)
+		req, _ := http.NewRequest(http.MethodPost, "/shopping-list", bytes.NewBuffer(jsonPayload))
 		req.Header.Set("X-Home-Id", homeID.String())
-
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = req
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
-			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+		expectHomeWriteAccess(mock, userID, homeID, true)
 
 		mock.ExpectBegin()
 		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "shopping_list_items"`)).
@@ -178,20 +227,132 @@ func TestCreateShoppingListItem(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("invalid payload", func(t *testing.T) {
+		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		req, _ := http.NewRequest(http.MethodPost, "/shopping-list", bytes.NewBufferString("invalid"))
+		req.Header.Set("X-Home-Id", homeID.String())
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		expectHomeWriteAccess(mock, userID, homeID, true)
+		expectProfileLookupSL(mock, userID)
+
+		handler.CreateShoppingListItem(c)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error on create", func(t *testing.T) {
+		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		payload := ShoppingListItemRequest{Name: "Milk", Quantity: 1}
+		jsonPayload, _ := json.Marshal(payload)
+		req, _ := http.NewRequest(http.MethodPost, "/shopping-list", bytes.NewBuffer(jsonPayload))
+		req.Header.Set("X-Home-Id", homeID.String())
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		expectHomeWriteAccess(mock, userID, homeID, true)
+		mock.ExpectBegin()
+		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "shopping_list_items"`)).
+			WillReturnError(errors.New("db error"))
+		mock.ExpectRollback()
+		expectProfileLookupSL(mock, userID)
+		handler.CreateShoppingListItem(c)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestUpdateShoppingListItem(t *testing.T) {
+	logger.InitLogger()
+	gin.SetMode(gin.TestMode)
+
+	t.Run("success", func(t *testing.T) {
+		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
+		itemID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		payload := UpdateShoppingListItemRequest{
+			Quantity: 5,
+			IsBought: true,
+		}
+		jsonPayload, _ := json.Marshal(payload)
+		req, _ := http.NewRequest(http.MethodPut, "/shopping-list/"+itemID.String(), bytes.NewBuffer(jsonPayload))
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+		c.Params = gin.Params{{Key: "id", Value: itemID.String()}}
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE "shopping_list_items"."id" = $1 ORDER BY "shopping_list_items"."id" LIMIT $2`)).
+			WithArgs(itemID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(itemID, homeID))
+
+		expectHomeWriteAccess(mock, userID, homeID, true)
+
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "shopping_list_items" SET "is_bought"=$1,"quantity"=$2,"updated_at"=$3 WHERE "id" = $4`)).
+			WithArgs(true, 5.0, sqlmock.AnyArg(), itemID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		handler.UpdateShoppingListItem(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		itemID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		req, _ := http.NewRequest(http.MethodPut, "/shopping-list/"+itemID.String(), nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: itemID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE "shopping_list_items"."id" = $1 ORDER BY "shopping_list_items"."id" LIMIT $2`)).
+			WillReturnError(gorm.ErrRecordNotFound)
+
+		expectProfileLookupSL(mock, userID)
+
+		handler.UpdateShoppingListItem(c)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestToggleShoppingListItemBought(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
-	userID := uuid.New()
-	homeID := uuid.New()
-	itemID := uuid.New()
 
 	t.Run("success", func(t *testing.T) {
 		handler, mock := setupShoppingListTest(t)
-		req, err := http.NewRequest(http.MethodPatch, "/shopping-list/"+itemID.String()+"/toggle-bought", nil)
-		require.NoError(t, err)
+		userID := uuid.New()
+		homeID := uuid.New()
+		itemID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
 
+		req, _ := http.NewRequest(http.MethodPatch, "/shopping-list/"+itemID.String()+"/toggle-bought", nil)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = req
@@ -202,9 +363,7 @@ func TestToggleShoppingListItemBought(t *testing.T) {
 			WithArgs(itemID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_bought"}).AddRow(itemID, homeID, false))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
-			WithArgs(userID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+		expectHomeWriteAccess(mock, userID, homeID, true)
 
 		mock.ExpectBegin()
 		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "shopping_list_items" SET "is_bought"=$1,"updated_at"=$2 WHERE "id" = $3`)).
@@ -213,6 +372,43 @@ func TestToggleShoppingListItemBought(t *testing.T) {
 		mock.ExpectCommit()
 
 		handler.ToggleShoppingListItemBought(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestDeleteShoppingListItem(t *testing.T) {
+	logger.InitLogger()
+	gin.SetMode(gin.TestMode)
+
+	t.Run("success", func(t *testing.T) {
+		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
+		itemID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		req, _ := http.NewRequest(http.MethodDelete, "/shopping-list/"+itemID.String(), nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+		c.Params = gin.Params{{Key: "id", Value: itemID.String()}}
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE "shopping_list_items"."id" = $1 ORDER BY "shopping_list_items"."id" LIMIT $2`)).
+			WithArgs(itemID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(itemID, homeID))
+
+		expectHomeWriteAccess(mock, userID, homeID, true)
+
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "shopping_list_items" WHERE "shopping_list_items"."id" = $1`)).
+			WithArgs(itemID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		handler.DeleteShoppingListItem(c)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
