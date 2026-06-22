@@ -24,3 +24,6 @@
 ## 2026-06-22 - [N+1 Query Elimination in GetAlmostFinishedItems]
 **Learning:** Found an N+1 query problem in `GetAlmostFinishedItems` where it was doing multiple DB queries inside a loop over item definitions (one to fetch inventory items, another to fetch transactions). This would have degraded performance significantly for homes with many item definitions.
 **Action:** Used `Find` to pre-fetch all inventory items and transactions for the home into memory, mapped them by `ItemDefinitionID`, and did O(1) lookups in the loop. Always check for database queries happening inside a loop, especially for multi-tenant handlers fetching all records for a `home_id`.
+## 2024-06-22 - Offload Data Aggregations to the Database
+**Learning:** For features that require aggregating large sets of data, fetching all records into memory using `Find()` and iterating over them in Go creates massive N+1-like memory overhead.
+**Action:** Push data aggregations (like `SUM()`, `MIN()`, `MAX()`) into the database using GORM's `Select().Group()` clauses whenever possible, especially for tables expected to grow large (like transactions or logs).
