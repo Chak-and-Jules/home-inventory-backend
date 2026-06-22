@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/DATA-DOG/go-sqlmock"
@@ -152,3 +153,188 @@ func TestDeleteInventoryItem(t *testing.T) {
 }
 
 // TODO: Add full test cases for GetAlmostFinishedItems here to ensure good coverage.
+
+func TestGetAlmostFinishedItems(t *testing.T) {
+	logger.InitLogger()
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	homeID := uuid.New()
+	itemDefID := uuid.New()
+	catID := uuid.New()
+	unitID := uuid.New()
+
+	t.Run("success", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		req, err := http.NewRequest(http.MethodGet, "/inventory/almost-finished", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "category_id", "size_unit_id"}).AddRow(itemDefID, homeID, "Test Item", catID, unitID))
+
+		mock.ExpectQuery(`SELECT \* FROM "categories" WHERE "categories"\."id" = \$1`).
+			WithArgs(catID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(catID, "Test Category"))
+
+		mock.ExpectQuery(`SELECT \* FROM "size_units" WHERE "size_units"\."id" = \$1`).
+			WithArgs(unitID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(unitID, "Test Unit"))
+
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(uuid.New(), homeID, itemDefID, 5))
+
+		mock.ExpectQuery(`SELECT \* FROM "inventory_transactions" WHERE home_id = \$1 AND quantity_change < 0 AND created_at >= \$2`).
+			WithArgs(homeID, sqlmock.AnyArg()).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity_change", "created_at"}).AddRow(uuid.New(), homeID, itemDefID, -10.0, time.Now().Add(-time.Hour)))
+
+		handler.GetAlmostFinishedItems(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("missing header", func(t *testing.T) {
+		handler, _ := setupInventoryTest(t)
+		req, err := http.NewRequest(http.MethodGet, "/inventory/almost-finished", nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		handler.GetAlmostFinishedItems(c)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("access denied", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		req, err := http.NewRequest(http.MethodGet, "/inventory/almost-finished", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnError(errors.New("not found"))
+
+		handler.GetAlmostFinishedItems(c)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error fetching item definitions", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		req, err := http.NewRequest(http.MethodGet, "/inventory/almost-finished", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnError(errors.New("db error"))
+
+		handler.GetAlmostFinishedItems(c)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error fetching inventory items", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		req, err := http.NewRequest(http.MethodGet, "/inventory/almost-finished", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "category_id", "size_unit_id"}).AddRow(itemDefID, homeID, "Test Item", catID, unitID))
+
+		mock.ExpectQuery(`SELECT \* FROM "categories" WHERE "categories"\."id" = \$1`).
+			WithArgs(catID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(catID, "Test Category"))
+
+		mock.ExpectQuery(`SELECT \* FROM "size_units" WHERE "size_units"\."id" = \$1`).
+			WithArgs(unitID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(unitID, "Test Unit"))
+
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnError(errors.New("db error"))
+
+		handler.GetAlmostFinishedItems(c)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error fetching inventory transactions", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		req, err := http.NewRequest(http.MethodGet, "/inventory/almost-finished", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "category_id", "size_unit_id"}).AddRow(itemDefID, homeID, "Test Item", catID, unitID))
+
+		mock.ExpectQuery(`SELECT \* FROM "categories" WHERE "categories"\."id" = \$1`).
+			WithArgs(catID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(catID, "Test Category"))
+
+		mock.ExpectQuery(`SELECT \* FROM "size_units" WHERE "size_units"\."id" = \$1`).
+			WithArgs(unitID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(unitID, "Test Unit"))
+
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(uuid.New(), homeID, itemDefID, 5))
+
+		mock.ExpectQuery(`SELECT \* FROM "inventory_transactions" WHERE home_id = \$1 AND quantity_change < 0 AND created_at >= \$2`).
+			WithArgs(homeID, sqlmock.AnyArg()).
+			WillReturnError(errors.New("db error"))
+
+		handler.GetAlmostFinishedItems(c)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}

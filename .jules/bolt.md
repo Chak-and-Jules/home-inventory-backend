@@ -1,4 +1,3 @@
-
 ## 2026-06-16 - [Cache string allocations in hot middleware paths]
 **Learning:** `jwtSecretBytes = []byte(jwtSecret)` in `FetchAndVerifyToken` caused an allocation for every single authenticated request on the backend. This is an anti-pattern as secrets initialized from environment variables rarely change at runtime.
 **Action:** Always cache derived formats (like `[]byte`) of configuration/environment variables at app initialization time, instead of casting them per request in hot paths.
@@ -21,3 +20,7 @@
 ## 2026-06-21 - Replace Global sync.RWMutex with lock-free sync.Map for Append-Only Caches (JWKS)
 **Learning:** Using a single `sync.RWMutex` with a standard `map` for managing JWKS cache in middleware creates an unnecessary bottleneck. In read-heavy scenarios (checking token kid against fetched keys), concurrent goroutines experience cache line contention on the mutex's reader count.
 **Action:** When building append-only caches that are read extremely frequently and written to rarely (like storing ECDSA public keys for JWT verification), use Go's `sync.Map`. The `Load` operation is highly optimized for lock-free fast paths, leading to an order-of-magnitude improvement in concurrent access time compared to `sync.RWMutex`.
+
+## 2026-06-22 - [N+1 Query Elimination in GetAlmostFinishedItems]
+**Learning:** Found an N+1 query problem in `GetAlmostFinishedItems` where it was doing multiple DB queries inside a loop over item definitions (one to fetch inventory items, another to fetch transactions). This would have degraded performance significantly for homes with many item definitions.
+**Action:** Used `Find` to pre-fetch all inventory items and transactions for the home into memory, mapped them by `ItemDefinitionID`, and did O(1) lookups in the loop. Always check for database queries happening inside a loop, especially for multi-tenant handlers fetching all records for a `home_id`.
