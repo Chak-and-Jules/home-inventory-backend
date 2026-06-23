@@ -299,15 +299,26 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 		itemsByDef[item.ItemDefinitionID] = append(itemsByDef[item.ItemDefinitionID], item)
 	}
 
-	// ⚡ Bolt: Pre-fetch all relevant transactions for this home to avoid N+1 queries in the loop
-	var allTransactions []models.InventoryTransaction
-	if err := h.DB.Where("home_id = ? AND quantity_change < 0 AND created_at >= ?", homeID, sixMonthsAgo).Find(&allTransactions).Error; err != nil {
+	// ⚡ Bolt: Offload inventory transaction aggregations (SUM, MIN, MAX) to the database to reduce memory allocation,
+	// GC pressure, and CPU overhead from looping over thousands of individual records in Go space.
+	type ConsumptionStat struct {
+		ItemDefinitionID uuid.UUID
+		TotalConsumed    float64
+		FirstTxTime      time.Time
+		LastTxTime       time.Time
+	}
+	var consumptionStats []ConsumptionStat
+	if err := h.DB.Model(&models.InventoryTransaction{}).
+		Select("item_definition_id, SUM(-quantity_change) as total_consumed, MIN(created_at) as first_tx_time, MAX(created_at) as last_tx_time").
+		Where("home_id = ? AND quantity_change < 0 AND created_at >= ?", homeID, sixMonthsAgo).
+		Group("item_definition_id").
+		Find(&consumptionStats).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory transactions")})
 		return
 	}
-	txsByDef := make(map[uuid.UUID][]models.InventoryTransaction)
-	for _, tx := range allTransactions {
-		txsByDef[tx.ItemDefinitionID] = append(txsByDef[tx.ItemDefinitionID], tx)
+	statsByDef := make(map[uuid.UUID]ConsumptionStat)
+	for _, stat := range consumptionStats {
+		statsByDef[stat.ItemDefinitionID] = stat
 	}
 
 	for _, def := range itemDefs {
@@ -350,24 +361,13 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 
 		// If no threshold, or threshold not met, and not expiring soon, calculate based on consumption
 		// Fetch consumption in the last 6 months (negative quantity changes)
-		transactions := txsByDef[def.ID]
-
-		var totalConsumed float64
-		var firstTxTime time.Time
-		var lastTxTime time.Time
-
-		for i, tx := range transactions {
-			totalConsumed += -tx.QuantityChange // convert back to positive for math
-			if i == 0 || tx.CreatedAt.Before(firstTxTime) {
-				firstTxTime = tx.CreatedAt
-			}
-			if i == 0 || tx.CreatedAt.After(lastTxTime) {
-				lastTxTime = tx.CreatedAt
-			}
-		}
+		stat, hasStats := statsByDef[def.ID]
 
 		// Only calculate if we have meaningful consumption data
-		if totalConsumed > 0 && !firstTxTime.IsZero() && !lastTxTime.IsZero() {
+		if hasStats && stat.TotalConsumed > 0 && !stat.FirstTxTime.IsZero() && !stat.LastTxTime.IsZero() {
+			totalConsumed := stat.TotalConsumed
+			firstTxTime := stat.FirstTxTime
+
 			// Calculate days between first and last transaction, or fallback to days since first tx to now
 			daysDiff := now.Sub(firstTxTime).Hours() / 24
 

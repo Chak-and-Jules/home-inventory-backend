@@ -194,9 +194,9 @@ func TestGetAlmostFinishedItems(t *testing.T) {
 			WithArgs(homeID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(uuid.New(), homeID, itemDefID, 5))
 
-		mock.ExpectQuery(`SELECT \* FROM "inventory_transactions" WHERE home_id = \$1 AND quantity_change < 0 AND created_at >= \$2`).
+		mock.ExpectQuery(`SELECT item_definition_id, SUM\(-quantity_change\) as total_consumed, MIN\(created_at\) as first_tx_time, MAX\(created_at\) as last_tx_time FROM "inventory_transactions" WHERE home_id = \$1 AND quantity_change < 0 AND created_at >= \$2 GROUP BY "item_definition_id"`).
 			WithArgs(homeID, sqlmock.AnyArg()).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity_change", "created_at"}).AddRow(uuid.New(), homeID, itemDefID, -10.0, time.Now().Add(-time.Hour)))
+			WillReturnRows(sqlmock.NewRows([]string{"item_definition_id", "total_consumed", "first_tx_time", "last_tx_time"}).AddRow(itemDefID, 10.0, time.Now().Add(-time.Hour), time.Now().Add(-time.Hour)))
 
 		handler.GetAlmostFinishedItems(c)
 
@@ -329,7 +329,7 @@ func TestGetAlmostFinishedItems(t *testing.T) {
 			WithArgs(homeID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(uuid.New(), homeID, itemDefID, 5))
 
-		mock.ExpectQuery(`SELECT \* FROM "inventory_transactions" WHERE home_id = \$1 AND quantity_change < 0 AND created_at >= \$2`).
+		mock.ExpectQuery(`SELECT item_definition_id, SUM\(-quantity_change\) as total_consumed, MIN\(created_at\) as first_tx_time, MAX\(created_at\) as last_tx_time FROM "inventory_transactions" WHERE home_id = \$1 AND quantity_change < 0 AND created_at >= \$2 GROUP BY "item_definition_id"`).
 			WithArgs(homeID, sqlmock.AnyArg()).
 			WillReturnError(errors.New("db error"))
 
