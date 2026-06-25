@@ -28,9 +28,8 @@ func TestGetSizeUnits(t *testing.T) {
 	handler := &SizeUnitHandler{DB: gormDB}
 
 	t.Run("success", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
+		// Clear cache
+		handler = &SizeUnitHandler{DB: gormDB}
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -39,7 +38,7 @@ func TestGetSizeUnits(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "size_units"`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "created_at", "updated_at"}).
-				AddRow("123e4567-e89b-12d3-a456-426614174000", "kg", nil, nil))
+				AddRow("123e4567-e89b-12d3-a456-426614174001", "kg", nil, nil))
 
 		handler.GetSizeUnits(c)
 
@@ -48,10 +47,8 @@ func TestGetSizeUnits(t *testing.T) {
 	})
 
 	t.Run("cache hit", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cache = []models.SizeUnit{{Name: "Cached Unit"}}
-		handler.cacheValid = true
-		handler.mu.Unlock()
+		handler := &SizeUnitHandler{DB: gormDB}
+		handler.cache.Store([]models.SizeUnit{{Name: "Cached Unit"}})
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -65,9 +62,7 @@ func TestGetSizeUnits(t *testing.T) {
 	})
 
 	t.Run("db error", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
+		handler := &SizeUnitHandler{DB: gormDB}
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
