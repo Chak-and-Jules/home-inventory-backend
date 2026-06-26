@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"net/http"
-	"sync"
+	"sync/atomic"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
@@ -11,21 +11,15 @@ import (
 )
 
 type SizeUnitHandler struct {
-	DB         *gorm.DB
-	mu         sync.RWMutex
-	cache      []models.SizeUnit
-	cacheValid bool
+	DB    *gorm.DB
+	cache atomic.Value // ⚡ Bolt: Replaced sync.RWMutex with lock-free atomic.Value for read-heavy global cache
 }
 
 func (h *SizeUnitHandler) GetSizeUnits(c *gin.Context) {
-	h.mu.RLock()
-	if h.cacheValid {
-		units := h.cache
-		h.mu.RUnlock()
-		c.JSON(http.StatusOK, units)
+	if val := h.cache.Load(); val != nil {
+		c.JSON(http.StatusOK, val.([]models.SizeUnit))
 		return
 	}
-	h.mu.RUnlock()
 
 	var units []models.SizeUnit
 	if err := h.DB.Find(&units).Error; err != nil {
@@ -33,10 +27,7 @@ func (h *SizeUnitHandler) GetSizeUnits(c *gin.Context) {
 		return
 	}
 
-	h.mu.Lock()
-	h.cache = units
-	h.cacheValid = true
-	h.mu.Unlock()
+	h.cache.Store(units)
 
 	c.JSON(http.StatusOK, units)
 }

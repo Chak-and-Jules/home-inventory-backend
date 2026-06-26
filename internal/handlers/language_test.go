@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
@@ -28,9 +29,7 @@ func TestGetLanguages(t *testing.T) {
 	handler := &LanguageHandler{DB: gormDB}
 
 	t.Run("success", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
+		handler.cache = atomic.Value{}
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -48,10 +47,7 @@ func TestGetLanguages(t *testing.T) {
 	})
 
 	t.Run("cache hit", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cache = []models.Language{{Name: "Cached Language"}}
-		handler.cacheValid = true
-		handler.mu.Unlock()
+		handler.cache.Store([]models.Language{{Name: "Cached Language"}})
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -65,9 +61,7 @@ func TestGetLanguages(t *testing.T) {
 	})
 
 	t.Run("db error", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
+		handler.cache = atomic.Value{}
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)

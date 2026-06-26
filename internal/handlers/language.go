@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"net/http"
-	"sync"
+	"sync/atomic"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
@@ -11,21 +11,15 @@ import (
 )
 
 type LanguageHandler struct {
-	DB         *gorm.DB
-	mu         sync.RWMutex
-	cache      []models.Language
-	cacheValid bool
+	DB    *gorm.DB
+	cache atomic.Value // ⚡ Bolt: Replaced sync.RWMutex with lock-free atomic.Value for read-heavy global cache
 }
 
 func (h *LanguageHandler) GetLanguages(c *gin.Context) {
-	h.mu.RLock()
-	if h.cacheValid {
-		languages := h.cache
-		h.mu.RUnlock()
-		c.JSON(http.StatusOK, languages)
+	if val := h.cache.Load(); val != nil {
+		c.JSON(http.StatusOK, val.([]models.Language))
 		return
 	}
-	h.mu.RUnlock()
 
 	var languages []models.Language
 	if err := h.DB.Find(&languages).Error; err != nil {
@@ -33,10 +27,7 @@ func (h *LanguageHandler) GetLanguages(c *gin.Context) {
 		return
 	}
 
-	h.mu.Lock()
-	h.cache = languages
-	h.cacheValid = true
-	h.mu.Unlock()
+	h.cache.Store(languages)
 
 	c.JSON(http.StatusOK, languages)
 }

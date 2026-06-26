@@ -28,3 +28,7 @@
 ## 2026-06-23 - Offload Data Aggregations to the Database
 **Learning:** For features that require aggregating large sets of data, fetching all records into memory using `Find()` and iterating over them in Go creates massive N+1-like memory overhead.
 **Action:** Push data aggregations (like `SUM()`, `MIN()`, `MAX()`) into the database using GORM's `Select().Group()` clauses whenever possible, especially for tables expected to grow large (like transactions or logs).
+
+## 2026-06-26 - [Replace sync.RWMutex with sync/atomic.Value for Read-Heavy Caches]
+**Learning:** Using `sync.RWMutex` to protect simple slice caches (like `[]models.Language` and `[]models.SizeUnit`) introduces unnecessary reader contention and blocking when the cache is accessed frequently.
+**Action:** For globally shared, read-heavy caches that are completely replaced (not incrementally updated), use `sync/atomic.Value`. This allows lock-free, zero-blocking reads, eliminating cache-line contention and improving overall request throughput.
