@@ -28,9 +28,8 @@ func TestGetLanguages(t *testing.T) {
 	handler := &LanguageHandler{DB: gormDB}
 
 	t.Run("success", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
+		handler.cache.Store([]models.Language{}) // reset cache (well, storing empty or we can just create a new handler)
+		handler = &LanguageHandler{DB: gormDB}   // cleaner to just reset handler
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -48,10 +47,8 @@ func TestGetLanguages(t *testing.T) {
 	})
 
 	t.Run("cache hit", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cache = []models.Language{{Name: "Cached Language"}}
-		handler.cacheValid = true
-		handler.mu.Unlock()
+		handler = &LanguageHandler{DB: gormDB}
+		handler.cache.Store([]models.Language{{Name: "Cached Language"}})
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -65,9 +62,7 @@ func TestGetLanguages(t *testing.T) {
 	})
 
 	t.Run("db error", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
+		handler = &LanguageHandler{DB: gormDB}
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
