@@ -28,9 +28,7 @@ func TestGetSizeUnits(t *testing.T) {
 	handler := &SizeUnitHandler{DB: gormDB}
 
 	t.Run("success", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
+		handler = &SizeUnitHandler{DB: gormDB} // reset handler to clear cache
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -48,10 +46,8 @@ func TestGetSizeUnits(t *testing.T) {
 	})
 
 	t.Run("cache hit", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cache = []models.SizeUnit{{Name: "Cached Unit"}}
-		handler.cacheValid = true
-		handler.mu.Unlock()
+		handler = &SizeUnitHandler{DB: gormDB}
+		handler.cache.Store([]models.SizeUnit{{Name: "Cached Unit"}})
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -65,9 +61,7 @@ func TestGetSizeUnits(t *testing.T) {
 	})
 
 	t.Run("db error", func(t *testing.T) {
-		handler.mu.Lock()
-		handler.cacheValid = false
-		handler.mu.Unlock()
+		handler = &SizeUnitHandler{DB: gormDB} // reset handler
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
