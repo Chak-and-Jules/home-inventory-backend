@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"net/http"
-	"regexp"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 	"time"
 
@@ -53,7 +53,7 @@ func TestGetInventoryItems(t *testing.T) {
 		catID := uuid.New()
 		unitID := uuid.New()
 
-		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1`).
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1 ORDER BY created_at DESC`).
 			WithArgs(homeID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity", "expiration_date"}).AddRow(uuid.New(), homeID, itemDefID, 5, nil))
 
@@ -68,6 +68,29 @@ func TestGetInventoryItems(t *testing.T) {
 		mock.ExpectQuery(`SELECT \* FROM "size_units" WHERE "size_units"\."id" = \$1`).
 			WithArgs(unitID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(unitID, "Test Unit"))
+
+		handler.GetInventoryItems(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("filter and sort", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		req, _ := http.NewRequest(http.MethodGet, "/inventory?filter=expiring_soon&sort=expiry", nil)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes"`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "inventory_items" WHERE home_id = $1 AND (expiration_date > NOW() AND expiration_date <= $2) ORDER BY expiration_date ASC`)).
+			WithArgs(homeID, sqlmock.AnyArg()).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "quantity"}).AddRow(uuid.New(), homeID, 5.0))
 
 		handler.GetInventoryItems(c)
 
@@ -656,10 +679,6 @@ func TestGetAlmostFinishedItems(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Body.String(), "expiring_soon")
 		assert.Contains(t, w.Body.String(), "Expiring Soon Item")
-		// The expired item has 0 usable quantity, but if it has no threshold it might not show up unless we specifically handle 0 quantity items.
-		// In our current logic, it only shows up if it has a threshold or is expiring soon.
-		// Since it's ALREADY expired, it's not "expiring soon" (which is now < expiry_date < now+3d).
-		// And since it's expired, its totalQuantity is 0. If it has no threshold, it won't show up.
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -700,37 +719,6 @@ func TestGetAlmostFinishedItems(t *testing.T) {
 
 		handler.GetAlmostFinishedItems(c)
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-}
-
-func TestGetInventoryItems_FiltersAndSorts(t *testing.T) {
-	logger.InitLogger()
-	gin.SetMode(gin.TestMode)
-	userID := uuid.New()
-	homeID := uuid.New()
-
-	t.Run("filter and sort", func(t *testing.T) {
-		handler, mock := setupInventoryTest(t)
-		req, _ := http.NewRequest(http.MethodGet, "/inventory?filter=expiring_soon&sort=expiry", nil)
-		req.Header.Set("X-Home-Id", homeID.String())
-
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = req
-		c.Set("userID", userID)
-
-		mock.ExpectQuery(`SELECT \* FROM "user_homes"`).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
-
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "inventory_items" WHERE home_id = $1 AND (expiration_date > NOW() AND expiration_date <= $2) ORDER BY expiration_date ASC`)).
-			WithArgs(homeID, sqlmock.AnyArg()).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "quantity"}).AddRow(uuid.New(), homeID, 5.0))
-
-		handler.GetInventoryItems(c)
-
-		assert.Equal(t, http.StatusOK, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
