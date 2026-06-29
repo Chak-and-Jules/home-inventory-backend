@@ -36,7 +36,7 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WithArgs(homeID, itemDefID, true, false, 1).
 			WillReturnError(gorm.ErrRecordNotFound)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2`)).
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2 AND (expiry_date IS NULL OR expiry_date > NOW())`)).
 			WithArgs(homeID, itemDefID).
 			WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(2.0))
 
@@ -63,7 +63,7 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WithArgs(homeID, itemDefID, true, false, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id"}).AddRow(shoppingItemID, homeID, itemDefID))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2`)).
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2 AND (expiry_date IS NULL OR expiry_date > NOW())`)).
 			WithArgs(homeID, itemDefID).
 			WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(2.0))
 
@@ -90,7 +90,7 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WithArgs(homeID, itemDefID, true, false, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id"}).AddRow(shoppingItemID, homeID, itemDefID))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2`)).
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2 AND (expiry_date IS NULL OR expiry_date > NOW())`)).
 			WithArgs(homeID, itemDefID).
 			WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(10.0))
 
@@ -164,7 +164,7 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WithArgs(homeID, itemDefID, true, false, 1).
 			WillReturnError(gorm.ErrRecordNotFound)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2`)).
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2 AND (expiry_date IS NULL OR expiry_date > NOW())`)).
 			WithArgs(homeID, itemDefID).
 			WillReturnError(errors.New("db error"))
 
@@ -184,7 +184,7 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WithArgs(homeID, itemDefID, true, false, 1).
 			WillReturnError(gorm.ErrRecordNotFound)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2`)).
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT COALESCE(SUM(quantity), 0) FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2 AND (expiry_date IS NULL OR expiry_date > NOW())`)).
 			WithArgs(homeID, itemDefID).
 			WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(2.0))
 

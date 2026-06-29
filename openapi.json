@@ -77,7 +77,7 @@
       },
       "CreateInventoryItemRequest": {
         "properties": {
-          "expiration_date": {
+          "expiry_date": {
             "format": "date-time",
             "nullable": true,
             "type": "string"
@@ -123,7 +123,7 @@
             "format": "date-time",
             "type": "string"
           },
-          "ExpirationDate": {
+          "ExpiryDate": {
             "format": "date-time",
             "nullable": true,
             "type": "string"
@@ -420,7 +420,7 @@
       },
       "UpdateInventoryItemRequest": {
         "properties": {
-          "expiration_date": {
+          "expiry_date": {
             "format": "date-time",
             "nullable": true,
             "type": "string"

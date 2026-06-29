@@ -32,7 +32,7 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 
 	var totalQuantity float64
 	if err := tx.Model(&models.InventoryItem{}).
-		Where("home_id = ? AND item_definition_id = ?", homeID, itemDefID).
+		Where("home_id = ? AND item_definition_id = ? AND (expiry_date IS NULL OR expiry_date > NOW())", homeID, itemDefID).
 		Select("COALESCE(SUM(quantity), 0)").
 		Scan(&totalQuantity).Error; err != nil {
 		logger.Log.Error("Failed to calculate total quantity", zap.Error(err))
@@ -82,4 +82,27 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 		}
 		return err
 	}
+}
+
+// RefreshAllShoppingLists iterates over all item definitions and updates their shopping list status.
+// This is useful for catching items that have expired since the last update.
+func RefreshAllShoppingLists(db *gorm.DB) error {
+	var itemDefs []models.ItemDefinition
+	if err := db.Find(&itemDefs).Error; err != nil {
+		logger.Log.Error("Failed to fetch all item definitions for refresh", zap.Error(err))
+		return err
+	}
+
+	for _, def := range itemDefs {
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			return UpdateShoppingListForDefinition(tx, def.HomeID, def.ID)
+		}); err != nil {
+			logger.Log.Error("Failed to refresh shopping list for definition",
+				zap.String("item_definition_id", def.ID.String()),
+				zap.Error(err))
+			// Continue with others
+		}
+	}
+
+	return nil
 }

@@ -53,7 +53,7 @@ func TestGetInventoryItems(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1`).
 			WithArgs(homeID).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(uuid.New(), homeID, itemDefID, 5))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity", "expiry_date"}).AddRow(uuid.New(), homeID, itemDefID, 5, nil))
 
 		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 			WithArgs(itemDefID).
@@ -192,7 +192,7 @@ func TestGetAlmostFinishedItems(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1`).
 			WithArgs(homeID).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(uuid.New(), homeID, itemDefID, 5))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity", "expiry_date"}).AddRow(uuid.New(), homeID, itemDefID, 5, nil))
 
 		mock.ExpectQuery(`SELECT item_definition_id, SUM\(-quantity_change\) as total_consumed, MIN\(created_at\) as first_tx_time, MAX\(created_at\) as last_tx_time FROM "inventory_transactions" WHERE home_id = \$1 AND quantity_change < 0 AND created_at >= \$2 GROUP BY "item_definition_id"`).
 			WithArgs(homeID, sqlmock.AnyArg()).
@@ -298,6 +298,56 @@ func TestGetAlmostFinishedItems(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
+	t.Run("expired and expiring soon items", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		req, err := http.NewRequest(http.MethodGet, "/inventory/almost-finished", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		expiredItemDefID := uuid.New()
+		expiringSoonItemDefID := uuid.New()
+
+		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).
+				AddRow(expiredItemDefID, homeID, "Expired Item").
+				AddRow(expiringSoonItemDefID, homeID, "Expiring Soon Item"))
+
+		now := time.Now()
+		expiredDate := now.Add(-time.Hour)
+		expiringSoonDate := now.Add(24 * time.Hour)
+
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity", "expiry_date"}).
+				AddRow(uuid.New(), homeID, expiredItemDefID, 10, expiredDate).
+				AddRow(uuid.New(), homeID, expiringSoonItemDefID, 5, expiringSoonDate))
+
+		mock.ExpectQuery(`SELECT item_definition_id, SUM\(-quantity_change\) as total_consumed, MIN\(created_at\) as first_tx_time, MAX\(created_at\) as last_tx_time FROM "inventory_transactions" WHERE home_id = \$1 AND quantity_change < 0 AND created_at >= \$2 GROUP BY "item_definition_id"`).
+			WithArgs(homeID, sqlmock.AnyArg()).
+			WillReturnRows(sqlmock.NewRows([]string{"item_definition_id", "total_consumed", "first_tx_time", "last_tx_time"}))
+
+		handler.GetAlmostFinishedItems(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "expiring_soon")
+		assert.Contains(t, w.Body.String(), "Expiring Soon Item")
+		// The expired item has 0 usable quantity, but if it has no threshold it might not show up unless we specifically handle 0 quantity items.
+		// In our current logic, it only shows up if it has a threshold or is expiring soon.
+		// Since it's ALREADY expired, it's not "expiring soon" (which is now < expiry_date < now+3d).
+		// And since it's expired, its totalQuantity is 0. If it has no threshold, it won't show up.
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
 	t.Run("db error fetching inventory transactions", func(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		req, err := http.NewRequest(http.MethodGet, "/inventory/almost-finished", nil)
@@ -327,7 +377,7 @@ func TestGetAlmostFinishedItems(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1`).
 			WithArgs(homeID).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(uuid.New(), homeID, itemDefID, 5))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity", "expiry_date"}).AddRow(uuid.New(), homeID, itemDefID, 5, nil))
 
 		mock.ExpectQuery(`SELECT item_definition_id, SUM\(-quantity_change\) as total_consumed, MIN\(created_at\) as first_tx_time, MAX\(created_at\) as last_tx_time FROM "inventory_transactions" WHERE home_id = \$1 AND quantity_change < 0 AND created_at >= \$2 GROUP BY "item_definition_id"`).
 			WithArgs(homeID, sqlmock.AnyArg()).

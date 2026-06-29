@@ -8,6 +8,7 @@ import (
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/routes"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -54,11 +55,31 @@ func main() {
 	// Setup Gin Router
 	r := routes.SetupRouter(db)
 
+	// Start background task for daily shopping list refresh
+	go startDailyRefresh(db)
+
 	port := serverPort()
 
 	logger.Log.Sugar().Infof("Starting server on port %s...", port)
 	if err := r.Run(":" + port); err != nil {
 		logger.Log.Sugar().Fatalf("Failed to start server: %v", err)
+	}
+}
+
+func startDailyRefresh(db *gorm.DB) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	// Initial run
+	logger.Log.Info("Running initial shopping list refresh...")
+	utils.RefreshAllShoppingLists(db)
+
+	for {
+		select {
+		case <-ticker.C:
+			logger.Log.Info("Running daily shopping list refresh...")
+			utils.RefreshAllShoppingLists(db)
+		}
 	}
 }
 

@@ -19,12 +19,12 @@ type InventoryItemHandler struct {
 type CreateInventoryItemRequest struct {
 	ItemDefinitionID uuid.UUID  `json:"item_definition_id" binding:"required"`
 	Quantity         float64    `json:"quantity" binding:"required,gte=0"`
-	ExpirationDate   *time.Time `json:"expiration_date"`
+	ExpiryDate       *time.Time `json:"expiry_date"`
 }
 
 type UpdateInventoryItemRequest struct {
-	Quantity       float64    `json:"quantity" binding:"required,gte=0"`
-	ExpirationDate *time.Time `json:"expiration_date"`
+	Quantity   float64    `json:"quantity" binding:"required,gte=0"`
+	ExpiryDate *time.Time `json:"expiry_date"`
 }
 
 type UpdateQuantityRequest struct {
@@ -73,7 +73,7 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 		HomeID:           homeID,
 		ItemDefinitionID: req.ItemDefinitionID,
 		Quantity:         req.Quantity,
-		ExpirationDate:   req.ExpirationDate,
+		ExpiryDate:       req.ExpiryDate,
 	}
 
 	if err := h.DB.Transaction(func(tx *gorm.DB) error {
@@ -130,8 +130,8 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
 		updates := map[string]interface{}{
-			"quantity":        req.Quantity,
-			"expiration_date": req.ExpirationDate,
+			"quantity":    req.Quantity,
+			"expiry_date": req.ExpiryDate,
 		}
 
 		if err := tx.Model(&item).Updates(updates).Error; err != nil {
@@ -286,7 +286,7 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 	now := time.Now()
 	sixMonthsAgo := now.AddDate(0, -6, 0)
 
-	twoWeeksFromNow := now.AddDate(0, 0, 14)
+	threeDaysFromNow := now.AddDate(0, 0, 3)
 
 	// ⚡ Bolt: Pre-fetch all inventory items for this home to avoid N+1 queries in the loop
 	var allItems []models.InventoryItem
@@ -322,16 +322,21 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 	}
 
 	for _, def := range itemDefs {
-		// Calculate total quantity and check for expiring items
+		// Calculate total quantity (only unexpired items) and check for expiring items
 		items := itemsByDef[def.ID]
 
 		var totalQuantity float64
 		hasExpiringSoon := false
 
 		for _, item := range items {
+			// AC: Exclude expired stock from "usable" stock
+			if item.ExpiryDate != nil && item.ExpiryDate.Before(now) {
+				continue
+			}
+
 			totalQuantity += item.Quantity
-			if item.ExpirationDate != nil && item.Quantity > 0 {
-				if item.ExpirationDate.Before(twoWeeksFromNow) {
+			if item.ExpiryDate != nil && item.Quantity > 0 {
+				if item.ExpiryDate.Before(threeDaysFromNow) {
 					hasExpiringSoon = true
 				}
 			}
