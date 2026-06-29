@@ -195,7 +195,7 @@ func TestCreateInventoryItem(t *testing.T) {
 		// Mock UpdateShoppingListForDefinition inside transaction
 		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1 ORDER BY "item_definitions"\."id" LIMIT \$2`).
 			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).AddRow(itemDefID, homeID, "Test Item", nil))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).AddRow(itemDefID, homeID, "Milk", nil))
 
 		mock.ExpectQuery(`SELECT \* FROM "shopping_list_items" WHERE home_id = \$1 AND item_definition_id = \$2 AND is_auto_generated = \$3 AND is_bought = \$4 ORDER BY "shopping_list_items"\."id" LIMIT \$5`).
 			WithArgs(homeID, itemDefID, true, false, 1).
