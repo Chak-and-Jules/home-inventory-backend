@@ -67,7 +67,13 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 			}
 
 			// AC 2.5: Trigger notification
-			SendLowStockNotification(homeID, itemDef.Name, itemDef.Priority)
+			var home models.Home
+			if err := tx.First(&home, homeID).Error; err == nil {
+				SendLowStockNotification(homeID, home.Name, itemDef.Name, itemDef.Priority)
+			} else {
+				// Fallback if home not found for some reason
+				SendLowStockNotification(homeID, homeID.String(), itemDef.Name, itemDef.Priority)
+			}
 			return nil
 		} else if err == nil {
 			// Update existing
@@ -99,8 +105,17 @@ func RefreshAllShoppingLists(db *gorm.DB) error {
 				var expiringSoonItems []models.InventoryItem
 				if err := tx.Where("home_id = ? AND item_definition_id = ? AND expiration_date > NOW() AND expiration_date <= ?",
 					def.HomeID, def.ID, threeDaysFromNow).Find(&expiringSoonItems).Error; err == nil {
-					for _, item := range expiringSoonItems {
-						SendExpiryNotification(def.HomeID, def.Name, item.ExpirationDate.Format("2006-01-02"))
+					if len(expiringSoonItems) > 0 {
+						var home models.Home
+						if err := tx.First(&home, def.HomeID).Error; err == nil {
+							for _, item := range expiringSoonItems {
+								SendExpiryNotification(def.HomeID, home.Name, def.Name, item.ExpirationDate.Format("2006-01-02"))
+							}
+						} else {
+							for _, item := range expiringSoonItems {
+								SendExpiryNotification(def.HomeID, def.HomeID.String(), def.Name, item.ExpirationDate.Format("2006-01-02"))
+							}
+						}
 					}
 				}
 

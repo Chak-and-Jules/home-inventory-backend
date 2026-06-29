@@ -45,6 +45,11 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "shopping_list_items"`)).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "homes" WHERE "homes"."id" = $1 ORDER BY "homes"."id" LIMIT $2`)).
+			WithArgs(homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(homeID, "My Home"))
+
 		mock.ExpectCommit()
 
 		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
@@ -324,6 +329,10 @@ func TestRefreshAllShoppingLists(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "expiration_date"}).
 				AddRow(uuid.New(), homeID, itemDefID, expiryDate))
 
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "homes" WHERE "homes"."id" = $1 ORDER BY "homes"."id" LIMIT $2`)).
+			WithArgs(homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(homeID, "My Home"))
+
 		// Inside UpdateShoppingListForDefinition
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
@@ -359,6 +368,6 @@ func TestRefreshAllShoppingLists(t *testing.T) {
 func TestSendLowStockNotification(t *testing.T) {
 	logger.InitLogger()
 	homeID := uuid.New()
-	SendLowStockNotification(homeID, "Milk", "medium")
-	SendLowStockNotification(homeID, "Eggs", "high")
+	SendLowStockNotification(homeID, "My Home", "Milk", "medium")
+	SendLowStockNotification(homeID, "My Home", "Eggs", "high")
 }
