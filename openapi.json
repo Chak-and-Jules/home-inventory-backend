@@ -596,6 +596,24 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "type": "string",
+              "enum": ["expired", "expiring_soon"]
+            },
+            "description": "Filter items by status"
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "string",
+              "enum": ["expiry"]
+            },
+            "description": "Sort items by field"
           }
         ],
         "responses": {

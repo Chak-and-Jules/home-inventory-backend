@@ -45,18 +45,20 @@ func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
 
 	query := h.DB.Preload("ItemDefinition.Category").Preload("ItemDefinition.SizeUnit").Where("home_id = ?", homeID)
 
-	// AC: Filter/sort options
+	// Filter
 	filter := c.Query("filter")
-	if filter == "expiring_soon" {
-		threeDaysFromNow := time.Now().AddDate(0, 0, 3)
-		query = query.Where("expiration_date > NOW() AND expiration_date <= ?", threeDaysFromNow)
-	} else if filter == "expired" {
-		query = query.Where("expiration_date <= NOW()")
+	now := time.Now()
+	if filter == "expired" {
+		query = query.Where("expiration_date <= ?", now)
+	} else if filter == "expiring_soon" {
+		threeDaysFromNow := now.AddDate(0, 0, 3)
+		query = query.Where("expiration_date > ? AND expiration_date <= ?", now, threeDaysFromNow)
 	}
 
+	// Sort
 	sort := c.Query("sort")
 	if sort == "expiry" {
-		query = query.Order("expiration_date ASC")
+		query = query.Order("expiration_date ASC NULLS LAST")
 	} else {
 		query = query.Order("created_at DESC")
 	}
@@ -340,21 +342,18 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 	}
 
 	for _, def := range itemDefs {
-		// Calculate total quantity (only unexpired items) and check for expiring items
+		// Calculate total quantity and check for expiring items
 		items := itemsByDef[def.ID]
 
+		var usableQuantity float64
 		var totalQuantity float64
 		hasExpiringSoon := false
 
 		for _, item := range items {
-			// AC: Exclude expired stock from "usable" stock
-			if item.ExpirationDate != nil && item.ExpirationDate.Before(now) {
-				continue
-			}
-
 			totalQuantity += item.Quantity
-			if item.ExpirationDate != nil && item.Quantity > 0 {
-				if item.ExpirationDate.Before(threeDaysFromNow) {
+			if item.ExpirationDate == nil || item.ExpirationDate.After(now) {
+				usableQuantity += item.Quantity
+				if item.ExpirationDate != nil && item.Quantity > 0 && item.ExpirationDate.Before(threeDaysFromNow) {
 					hasExpiringSoon = true
 				}
 			}
@@ -362,10 +361,10 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 
 		// Check if threshold is set and met
 		if def.LowStockThreshold != nil {
-			if totalQuantity <= *def.LowStockThreshold {
+			if usableQuantity <= *def.LowStockThreshold {
 				results = append(results, AlmostFinishedItemResponse{
 					ItemDefinition: def,
-					TotalQuantity:  totalQuantity,
+					TotalQuantity:  usableQuantity,
 					Reason:         "threshold_met",
 				})
 				continue
@@ -376,7 +375,7 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 		if hasExpiringSoon {
 			results = append(results, AlmostFinishedItemResponse{
 				ItemDefinition: def,
-				TotalQuantity:  totalQuantity,
+				TotalQuantity:  usableQuantity,
 				Reason:         "expiring_soon",
 			})
 			continue
@@ -402,18 +401,18 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 			dailyConsumptionRate := totalConsumed / daysDiff
 
 			if dailyConsumptionRate > 0 {
-				daysLeft := int(totalQuantity / dailyConsumptionRate)
+				daysLeft := int(usableQuantity / dailyConsumptionRate)
 
 				if daysLeft <= 28 {
 					results = append(results, AlmostFinishedItemResponse{
 						ItemDefinition:    def,
-						TotalQuantity:     totalQuantity,
+						TotalQuantity:     usableQuantity,
 						Reason:            "low_stock",
 						EstimatedDaysLeft: &daysLeft,
 					})
 				}
 			}
-		} else if totalQuantity == 0 && def.LowStockThreshold == nil {
+		} else if usableQuantity == 0 && def.LowStockThreshold == nil {
 			// If we have 0 quantity and no data and no threshold, might want to include it?
 			// But maybe the user just doesn't want to track it. Let's omit for now unless threshold is set.
 		}

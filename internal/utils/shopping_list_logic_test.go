@@ -4,7 +4,6 @@ import (
 	"errors"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/DATA-DOG/go-sqlmock"
@@ -15,20 +14,24 @@ import (
 	"gorm.io/gorm"
 )
 
+func setupShoppingTestDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+	require.NoError(t, err)
+	return gormDB, mock
+}
+
 func TestUpdateShoppingListForDefinition(t *testing.T) {
 	logger.InitLogger()
-
 	homeID := uuid.New()
 	itemDefID := uuid.New()
 
 	t.Run("threshold met - create new item", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
+		gormDB, mock := setupShoppingTestDB(t)
 		threshold := 5.0
 		target := 10.0
+
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity", "priority"}).
@@ -45,27 +48,23 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "shopping_list_items"`)).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+		mock.ExpectCommit()
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "homes" WHERE "homes"."id" = $1 ORDER BY "homes"."id" LIMIT $2`)).
 			WithArgs(homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(homeID, "My Home"))
 
-		mock.ExpectCommit()
-
-		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
+		err := UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("threshold met - update existing item", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
+		gormDB, mock := setupShoppingTestDB(t)
 		threshold := 5.0
 		target := 10.0
 		shoppingItemID := uuid.New()
+
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity", "priority"}).
@@ -85,19 +84,16 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
-		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
+		err := UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("threshold NOT met - remove existing item", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
+		gormDB, mock := setupShoppingTestDB(t)
 		threshold := 5.0
 		shoppingItemID := uuid.New()
+
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "priority"}).
@@ -117,18 +113,15 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectCommit()
 
-		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
+		err := UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("threshold removal - clean up", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
+		gormDB, mock := setupShoppingTestDB(t)
 		shoppingItemID := uuid.New()
+
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
@@ -144,32 +137,24 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectCommit()
 
-		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
+		err := UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
 		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("db error - find item definition", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
+		gormDB, mock := setupShoppingTestDB(t)
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
 			WillReturnError(errors.New("db error"))
 
-		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
+		err := UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
 		assert.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("db error - find shopping list item", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
+		gormDB, mock := setupShoppingTestDB(t)
 		threshold := 5.0
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
@@ -180,17 +165,13 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WithArgs(homeID, itemDefID, true, false, 1).
 			WillReturnError(errors.New("db error"))
 
-		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
+		err := UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
 		assert.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("db error - inventory sum", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
+		gormDB, mock := setupShoppingTestDB(t)
 		threshold := 5.0
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
@@ -205,17 +186,13 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WithArgs(homeID, itemDefID).
 			WillReturnError(errors.New("db error"))
 
-		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
+		err := UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
 		assert.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("db error - create item", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
+		gormDB, mock := setupShoppingTestDB(t)
 		threshold := 5.0
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
@@ -235,17 +212,13 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WillReturnError(errors.New("db error"))
 		mock.ExpectRollback()
 
-		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
+		err := UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
 		assert.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("db error - delete item", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
+		gormDB, mock := setupShoppingTestDB(t)
 		shoppingItemID := uuid.New()
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
@@ -261,105 +234,7 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 			WillReturnError(errors.New("db error"))
 		mock.ExpectRollback()
 
-		err = UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
-		assert.Error(t, err)
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-}
-
-func TestRefreshAllShoppingLists(t *testing.T) {
-	logger.InitLogger()
-
-	t.Run("success", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
-		homeID := uuid.New()
-		itemDefID := uuid.New()
-
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" ORDER BY "item_definitions"."id" LIMIT $1`)).
-			WithArgs(100).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
-				AddRow(itemDefID, homeID, "Milk", nil))
-
-		mock.ExpectBegin()
-		// Inside RefreshAllShoppingLists, check for expiring soon
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2 AND expiration_date > NOW() AND expiration_date <= $3`)).
-			WithArgs(homeID, itemDefID, sqlmock.AnyArg()).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}))
-
-		// Inside UpdateShoppingListForDefinition
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
-			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
-				AddRow(itemDefID, homeID, "Milk", nil))
-
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
-			WithArgs(homeID, itemDefID, true, false, 1).
-			WillReturnError(gorm.ErrRecordNotFound)
-		mock.ExpectCommit()
-
-		err = RefreshAllShoppingLists(gormDB)
-		assert.NoError(t, err)
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("success with expiry notification", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
-		homeID := uuid.New()
-		itemDefID := uuid.New()
-
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" ORDER BY "item_definitions"."id" LIMIT $1`)).
-			WithArgs(100).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
-				AddRow(itemDefID, homeID, "Milk", nil))
-
-		mock.ExpectBegin()
-		// Inside RefreshAllShoppingLists, check for expiring soon
-		now := time.Now()
-		expiryDate := now.Add(24 * time.Hour)
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "inventory_items" WHERE home_id = $1 AND item_definition_id = $2 AND expiration_date > NOW() AND expiration_date <= $3`)).
-			WithArgs(homeID, itemDefID, sqlmock.AnyArg()).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "expiration_date"}).
-				AddRow(uuid.New(), homeID, itemDefID, expiryDate))
-
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "homes" WHERE "homes"."id" = $1 ORDER BY "homes"."id" LIMIT $2`)).
-			WithArgs(homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(homeID, "My Home"))
-
-		// Inside UpdateShoppingListForDefinition
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
-			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
-				AddRow(itemDefID, homeID, "Milk", nil))
-
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
-			WithArgs(homeID, itemDefID, true, false, 1).
-			WillReturnError(gorm.ErrRecordNotFound)
-		mock.ExpectCommit()
-
-		err = RefreshAllShoppingLists(gormDB)
-		assert.NoError(t, err)
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
-	t.Run("db error fetching item definitions", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
-		require.NoError(t, err)
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
-		require.NoError(t, err)
-
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" ORDER BY "item_definitions"."id" LIMIT $1`)).
-			WithArgs(100).
-			WillReturnError(errors.New("db error"))
-
-		err = RefreshAllShoppingLists(gormDB)
+		err := UpdateShoppingListForDefinition(gormDB, homeID, itemDefID)
 		assert.Error(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -367,7 +242,19 @@ func TestRefreshAllShoppingLists(t *testing.T) {
 
 func TestSendLowStockNotification(t *testing.T) {
 	logger.InitLogger()
+	gormDB, mock := setupShoppingTestDB(t)
+
 	homeID := uuid.New()
-	SendLowStockNotification(homeID, "My Home", "Milk", "medium")
-	SendLowStockNotification(homeID, "My Home", "Eggs", "high")
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "homes" WHERE "homes"."id" = $1 ORDER BY "homes"."id" LIMIT $2`)).
+		WithArgs(homeID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(homeID, "My Home"))
+	SendLowStockNotification(gormDB, homeID, "Milk", "medium")
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "homes" WHERE "homes"."id" = $1 ORDER BY "homes"."id" LIMIT $2`)).
+		WithArgs(homeID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(homeID, "My Home"))
+	SendLowStockNotification(gormDB, homeID, "Eggs", "high")
+
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

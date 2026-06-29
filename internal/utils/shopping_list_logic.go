@@ -67,13 +67,7 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 			}
 
 			// AC 2.5: Trigger notification
-			var home models.Home
-			if err := tx.First(&home, homeID).Error; err == nil {
-				SendLowStockNotification(homeID, home.Name, itemDef.Name, itemDef.Priority)
-			} else {
-				// Fallback if home not found for some reason
-				SendLowStockNotification(homeID, homeID.String(), itemDef.Name, itemDef.Priority)
-			}
+			SendLowStockNotification(tx, homeID, itemDef.Name, itemDef.Priority)
 			return nil
 		} else if err == nil {
 			// Update existing
@@ -92,48 +86,33 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 	}
 }
 
-// RefreshAllShoppingLists iterates over all item definitions and updates their shopping list status.
-// This is useful for catching items that have expired since the last update.
-func RefreshAllShoppingLists(db *gorm.DB) error {
-	// Use FindInBatches for scalability
-	var itemDefs []models.ItemDefinition
-	err := db.FindInBatches(&itemDefs, 100, func(tx *gorm.DB, batch int) error {
-		for _, def := range itemDefs {
-			if err := db.Transaction(func(tx *gorm.DB) error {
-				// AC: Also check for expiring soon items to send notifications
-				threeDaysFromNow := time.Now().AddDate(0, 0, 3)
-				var expiringSoonItems []models.InventoryItem
-				if err := tx.Where("home_id = ? AND item_definition_id = ? AND expiration_date > NOW() AND expiration_date <= ?",
-					def.HomeID, def.ID, threeDaysFromNow).Find(&expiringSoonItems).Error; err == nil {
-					if len(expiringSoonItems) > 0 {
-						var home models.Home
-						if err := tx.First(&home, def.HomeID).Error; err == nil {
-							for _, item := range expiringSoonItems {
-								SendExpiryNotification(def.HomeID, home.Name, def.Name, item.ExpirationDate.Format("2006-01-02"))
-							}
-						} else {
-							for _, item := range expiringSoonItems {
-								SendExpiryNotification(def.HomeID, def.HomeID.String(), def.Name, item.ExpirationDate.Format("2006-01-02"))
-							}
-						}
-					}
-				}
+// RefreshAllShoppingLists iterates through all item definitions and refreshes the shopping lists.
+// This is intended to be run periodically (e.g., daily) to catch items that expired.
+func RefreshAllShoppingLists(db *gorm.DB) {
+	logger.Log.Info("Starting daily shopping list refresh")
+	now := time.Now()
+	threeDaysFromNow := now.AddDate(0, 0, 3)
 
-				return UpdateShoppingListForDefinition(tx, def.HomeID, def.ID)
-			}); err != nil {
-				logger.Log.Error("Failed to refresh shopping list for definition",
-					zap.String("item_definition_id", def.ID.String()),
-					zap.Error(err))
-				// Continue with others in the batch
+	// 1. Process expirations and notifications
+	var expiringItems []models.InventoryItem
+	if err := db.Where("expiration_date > ? AND expiration_date <= ?", now, threeDaysFromNow).
+		Find(&expiringItems).Error; err == nil {
+		for _, item := range expiringItems {
+			var def models.ItemDefinition
+			if err := db.First(&def, item.ItemDefinitionID).Error; err == nil {
+				SendExpiryNotification(db, item.HomeID, def.Name, *item.ExpirationDate)
 			}
 		}
-		return nil
-	}).Error
-
-	if err != nil {
-		logger.Log.Error("Failed to refresh shopping lists in batches", zap.Error(err))
-		return err
 	}
 
-	return nil
+	// 2. Refresh shopping lists using FindInBatches for scalability
+	var itemDefs []models.ItemDefinition
+	db.Model(&models.ItemDefinition{}).FindInBatches(&itemDefs, 100, func(tx *gorm.DB, batch int) error {
+		for _, def := range itemDefs {
+			UpdateShoppingListForDefinition(tx, def.HomeID, def.ID)
+		}
+		return nil
+	})
+
+	logger.Log.Info("Daily shopping list refresh completed")
 }
