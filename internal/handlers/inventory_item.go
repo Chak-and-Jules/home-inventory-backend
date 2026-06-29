@@ -19,12 +19,12 @@ type InventoryItemHandler struct {
 type CreateInventoryItemRequest struct {
 	ItemDefinitionID uuid.UUID  `json:"item_definition_id" binding:"required"`
 	Quantity         float64    `json:"quantity" binding:"required,gte=0"`
-	ExpiryDate       *time.Time `json:"expiry_date"`
+	ExpirationDate   *time.Time `json:"expiry_date"`
 }
 
 type UpdateInventoryItemRequest struct {
-	Quantity   float64    `json:"quantity" binding:"required,gte=0"`
-	ExpiryDate *time.Time `json:"expiry_date"`
+	Quantity       float64    `json:"quantity" binding:"required,gte=0"`
+	ExpirationDate *time.Time `json:"expiry_date"`
 }
 
 type UpdateQuantityRequest struct {
@@ -43,8 +43,26 @@ func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
 		return
 	}
 
+	query := h.DB.Preload("ItemDefinition.Category").Preload("ItemDefinition.SizeUnit").Where("home_id = ?", homeID)
+
+	// AC: Filter/sort options
+	filter := c.Query("filter")
+	if filter == "expiring_soon" {
+		threeDaysFromNow := time.Now().AddDate(0, 0, 3)
+		query = query.Where("expiration_date > NOW() AND expiration_date <= ?", threeDaysFromNow)
+	} else if filter == "expired" {
+		query = query.Where("expiration_date <= NOW()")
+	}
+
+	sort := c.Query("sort")
+	if sort == "expiry" {
+		query = query.Order("expiration_date ASC")
+	} else {
+		query = query.Order("created_at DESC")
+	}
+
 	var items []models.InventoryItem
-	if err := h.DB.Preload("ItemDefinition.Category").Preload("ItemDefinition.SizeUnit").Where("home_id = ?", homeID).Find(&items).Error; err != nil {
+	if err := query.Find(&items).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
 		return
 	}
@@ -73,7 +91,7 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 		HomeID:           homeID,
 		ItemDefinitionID: req.ItemDefinitionID,
 		Quantity:         req.Quantity,
-		ExpiryDate:       req.ExpiryDate,
+		ExpirationDate:   req.ExpirationDate,
 	}
 
 	if err := h.DB.Transaction(func(tx *gorm.DB) error {
@@ -130,8 +148,8 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
 		updates := map[string]interface{}{
-			"quantity":    req.Quantity,
-			"expiry_date": req.ExpiryDate,
+			"quantity":        req.Quantity,
+			"expiration_date": req.ExpirationDate,
 		}
 
 		if err := tx.Model(&item).Updates(updates).Error; err != nil {
@@ -330,13 +348,13 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 
 		for _, item := range items {
 			// AC: Exclude expired stock from "usable" stock
-			if item.ExpiryDate != nil && item.ExpiryDate.Before(now) {
+			if item.ExpirationDate != nil && item.ExpirationDate.Before(now) {
 				continue
 			}
 
 			totalQuantity += item.Quantity
-			if item.ExpiryDate != nil && item.Quantity > 0 {
-				if item.ExpiryDate.Before(threeDaysFromNow) {
+			if item.ExpirationDate != nil && item.Quantity > 0 {
+				if item.ExpirationDate.Before(threeDaysFromNow) {
 					hasExpiringSoon = true
 				}
 			}

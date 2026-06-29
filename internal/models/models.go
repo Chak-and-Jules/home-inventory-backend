@@ -107,7 +107,7 @@ type InventoryItem struct {
 	HomeID           uuid.UUID  `gorm:"type:uuid;not null;index"`
 	ItemDefinitionID uuid.UUID  `gorm:"type:uuid;not null;index"`
 	Quantity         float64    `gorm:"type:numeric;not null;default:0"`
-	ExpiryDate       *time.Time `gorm:"type:timestamp with time zone"`
+	ExpirationDate   *time.Time `gorm:"type:timestamp with time zone"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 

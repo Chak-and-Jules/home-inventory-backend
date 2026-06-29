@@ -24,3 +24,16 @@ func SendLowStockNotification(homeID uuid.UUID, itemName string, priority string
 		zap.String("message", msg),
 	)
 }
+
+// SendExpiryNotification logs a notification for items expiring soon.
+func SendExpiryNotification(homeID uuid.UUID, itemName string, expiryDate string) {
+	msg := fmt.Sprintf("Item expiring soon for home %s: %s (expires on %s)", homeID, itemName, expiryDate)
+
+	logger.Log.Info("Notification Triggered",
+		zap.String("type", "expiring_soon"),
+		zap.String("home_id", homeID.String()),
+		zap.String("item_name", itemName),
+		zap.String("expiry_date", expiryDate),
+		zap.String("message", msg),
+	)
+}

@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"time"
+
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/google/uuid"
@@ -32,7 +34,7 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 
 	var totalQuantity float64
 	if err := tx.Model(&models.InventoryItem{}).
-		Where("home_id = ? AND item_definition_id = ? AND (expiry_date IS NULL OR expiry_date > NOW())", homeID, itemDefID).
+		Where("home_id = ? AND item_definition_id = ? AND (expiration_date IS NULL OR expiration_date > NOW())", homeID, itemDefID).
 		Select("COALESCE(SUM(quantity), 0)").
 		Scan(&totalQuantity).Error; err != nil {
 		logger.Log.Error("Failed to calculate total quantity", zap.Error(err))
@@ -87,21 +89,35 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 // RefreshAllShoppingLists iterates over all item definitions and updates their shopping list status.
 // This is useful for catching items that have expired since the last update.
 func RefreshAllShoppingLists(db *gorm.DB) error {
+	// Use FindInBatches for scalability
 	var itemDefs []models.ItemDefinition
-	if err := db.Find(&itemDefs).Error; err != nil {
-		logger.Log.Error("Failed to fetch all item definitions for refresh", zap.Error(err))
-		return err
-	}
+	err := db.FindInBatches(&itemDefs, 100, func(tx *gorm.DB, batch int) error {
+		for _, def := range itemDefs {
+			if err := db.Transaction(func(tx *gorm.DB) error {
+				// AC: Also check for expiring soon items to send notifications
+				threeDaysFromNow := time.Now().AddDate(0, 0, 3)
+				var expiringSoonItems []models.InventoryItem
+				if err := tx.Where("home_id = ? AND item_definition_id = ? AND expiration_date > NOW() AND expiration_date <= ?",
+					def.HomeID, def.ID, threeDaysFromNow).Find(&expiringSoonItems).Error; err == nil {
+					for _, item := range expiringSoonItems {
+						SendExpiryNotification(def.HomeID, def.Name, item.ExpirationDate.Format("2006-01-02"))
+					}
+				}
 
-	for _, def := range itemDefs {
-		if err := db.Transaction(func(tx *gorm.DB) error {
-			return UpdateShoppingListForDefinition(tx, def.HomeID, def.ID)
-		}); err != nil {
-			logger.Log.Error("Failed to refresh shopping list for definition",
-				zap.String("item_definition_id", def.ID.String()),
-				zap.Error(err))
-			// Continue with others
+				return UpdateShoppingListForDefinition(tx, def.HomeID, def.ID)
+			}); err != nil {
+				logger.Log.Error("Failed to refresh shopping list for definition",
+					zap.String("item_definition_id", def.ID.String()),
+					zap.Error(err))
+				// Continue with others in the batch
+			}
 		}
+		return nil
+	}).Error
+
+	if err != nil {
+		logger.Log.Error("Failed to refresh shopping lists in batches", zap.Error(err))
+		return err
 	}
 
 	return nil
