@@ -46,17 +46,7 @@ func main() {
 	// Auto-migrate models (creates/updates tables based on struct definitions)
 
 	logger.Log.Info("Running AutoMigrate...")
-	err = db.AutoMigrate(
-		&models.Profile{},
-		&models.Language{},
-		&models.Home{},
-		&models.UserHome{},
-		&models.SizeUnit{},
-		&models.Category{},
-		&models.ItemDefinition{},
-		&models.InventoryItem{},
-		&models.InventoryTransaction{},
-	)
+	err = db.AutoMigrate(autoMigrateModels()...)
 	if err != nil {
 		logger.Log.Sugar().Warnf("AutoMigrate warning: %v", err)
 	}
@@ -69,6 +59,21 @@ func main() {
 	logger.Log.Sugar().Infof("Starting server on port %s...", port)
 	if err := r.Run(":" + port); err != nil {
 		logger.Log.Sugar().Fatalf("Failed to start server: %v", err)
+	}
+}
+
+func autoMigrateModels() []interface{} {
+	return []interface{}{
+		&models.Profile{},
+		&models.Language{},
+		&models.Home{},
+		&models.UserHome{},
+		&models.SizeUnit{},
+		&models.Category{},
+		&models.ItemDefinition{},
+		&models.InventoryItem{},
+		&models.ShoppingListItem{},
+		&models.InventoryTransaction{},
 	}
 }
 
