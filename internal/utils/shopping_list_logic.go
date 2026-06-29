@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -10,6 +12,7 @@ import (
 func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uuid.UUID) error {
 	var itemDef models.ItemDefinition
 	if err := tx.First(&itemDef, itemDefID).Error; err != nil {
+		logger.Log.Error("Failed to fetch item definition", zap.Error(err))
 		return err
 	}
 
@@ -23,6 +26,7 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 		if err == nil {
 			return tx.Delete(&existingItem).Error
 		}
+		logger.Log.Error("Failed to fetch existing shopping list item", zap.Error(err))
 		return nil
 	}
 
@@ -31,6 +35,7 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 		Where("home_id = ? AND item_definition_id = ?", homeID, itemDefID).
 		Select("COALESCE(SUM(quantity), 0)").
 		Scan(&totalQuantity).Error; err != nil {
+		logger.Log.Error("Failed to calculate total quantity", zap.Error(err))
 		return err
 	}
 
@@ -55,6 +60,7 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 				IsBought:         false,
 			}
 			if err := tx.Create(&newItem).Error; err != nil {
+				logger.Log.Error("Failed to create shopping list item", zap.Error(err))
 				return err
 			}
 
