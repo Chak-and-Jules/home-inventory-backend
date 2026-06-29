@@ -187,6 +187,10 @@ func TestCreateItemDefinition_Success(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
 		WithArgs(userID, homeID, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role", "is_default", "created_at", "updated_at"}).AddRow(userID.String(), homeID.String(), models.RoleOwner, false, time.Now(), time.Now()))
+	// The SQL trace uses a GORM dry-run Create, which still opens and commits
+	// the default transaction without executing the generated INSERT.
+	mock.ExpectBegin()
+	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "item_definitions"`)).
 		WithArgs(homeID, "Test Item", "Test Desc", categoryID.String(), sizeUnitID.String(), false, nil, nil, "medium", "http://test.com/img.jpg", sqlmock.AnyArg(), sqlmock.AnyArg()).
@@ -358,6 +362,9 @@ func TestCreateItemDefinition_DBError(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
 		WithArgs(userID, homeID, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role", "is_default", "created_at", "updated_at"}).AddRow(userID.String(), homeID.String(), models.RoleOwner, false, time.Now(), time.Now()))
+	// Account for the transaction opened by the SQL trace's dry-run Create.
+	mock.ExpectBegin()
+	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "item_definitions"`)).
 		WillReturnError(gorm.ErrInvalidDB)

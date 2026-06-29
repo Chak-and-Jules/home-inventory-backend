@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -87,6 +88,18 @@ func getenv(t *testing.T, key string) string {
 func TestSetupDatabase(t *testing.T) {
 	db, _ := setupDatabase("host=127.0.0.1 user=test password=test dbname=test port=0 sslmode=disable")
 	assert.NotNil(t, db)
+}
+
+func TestAutoMigrateModelsIncludesShoppingListItem(t *testing.T) {
+	var found bool
+	for _, model := range autoMigrateModels() {
+		if _, ok := model.(*models.ShoppingListItem); ok {
+			found = true
+			break
+		}
+	}
+
+	assert.True(t, found, "ShoppingListItem must be registered for automatic migration")
 }
 
 // TestMainCrash verifies that main() crashes gracefully if database connection fails
