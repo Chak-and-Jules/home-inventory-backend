@@ -702,7 +702,45 @@ func TestDeleteHome(t *testing.T) {
 		return handler, mock
 	}
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("success - non default", func(t *testing.T) {
+		handler, mock := setupTest(t)
+		req, err := http.NewRequest(http.MethodDelete, "/homes/"+homeID.String(), nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: homeID.String()}}
+		c.Set("userID", userID)
+
+		// RBAC check
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+
+		// User home associations
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "is_default"}).AddRow(userID, homeID, false))
+
+		// Count check
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
+			WithArgs(userID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`DELETE FROM "homes" WHERE "homes"\."id" = \$1`).
+			WithArgs(homeID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		handler.DeleteHome(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("prevent deleting only home", func(t *testing.T) {
 		handler, mock := setupTest(t)
 		req, err := http.NewRequest(http.MethodDelete, "/homes/"+homeID.String(), nil)
 		require.NoError(t, err)
@@ -717,10 +755,86 @@ func TestDeleteHome(t *testing.T) {
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "is_default"}).AddRow(userID, homeID, true))
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
+			WithArgs(userID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+		handler.DeleteHome(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("default home needs approval", func(t *testing.T) {
+		handler, mock := setupTest(t)
+		req, err := http.NewRequest(http.MethodDelete, "/homes/"+homeID.String(), nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: homeID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "is_default"}).AddRow(userID, homeID, true))
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
+			WithArgs(userID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+
+		handler.DeleteHome(c)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("success - delete default with approval", func(t *testing.T) {
+		handler, mock := setupTest(t)
+		otherHomeID := uuid.New()
+		req, err := http.NewRequest(http.MethodDelete, "/homes/"+homeID.String()+"?approved=true", nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: homeID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "is_default"}).AddRow(userID, homeID, true))
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
+			WithArgs(userID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "homes" WHERE ".*"."id" = \$1`).
+		mock.ExpectExec(`DELETE FROM "homes" WHERE "homes"\."id" = \$1`).
 			WithArgs(homeID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 ORDER BY created_at asc.* LIMIT \$2`).
+			WithArgs(userID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "is_default"}).AddRow(userID, otherHomeID, false))
+
+		mock.ExpectExec(`UPDATE "user_homes" SET "is_default"=\$1,"updated_at"=\$2 WHERE "user_id" = \$3 AND "home_id" = \$4`).
+			WithArgs(true, sqlmock.AnyArg(), userID, otherHomeID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
 		mock.ExpectCommit()
 
 		handler.DeleteHome(c)
@@ -802,8 +916,16 @@ func TestDeleteHome(t *testing.T) {
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleOwner))
 
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "is_default"}).AddRow(userID, homeID, false))
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE user_id = \$1`).
+			WithArgs(userID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "homes" WHERE ".*"."id" = \$1`).
+		mock.ExpectExec(`DELETE FROM "homes" WHERE "homes"\."id" = \$1`).
 			WithArgs(homeID).
 			WillReturnError(errors.New("delete error"))
 		mock.ExpectRollback()

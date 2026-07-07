@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
-	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/routes"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
