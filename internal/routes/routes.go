@@ -52,6 +52,15 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			homes.PUT("/:id", homeHandler.UpdateHome)
 			homes.DELETE("/:id", homeHandler.DeleteHome)
 			homes.POST("/:id/default", homeHandler.SetDefaultHome)
+
+			// Home Users
+			users := homes.Group("/:id/users")
+			{
+				users.GET("", homeHandler.GetHomeUsers)
+				users.POST("", homeHandler.AddHomeUser)
+				users.PUT("/:userId/role", homeHandler.UpdateHomeUserRole)
+				users.DELETE("/:userId", homeHandler.RemoveHomeUser)
+			}
 		}
 
 		// Categories

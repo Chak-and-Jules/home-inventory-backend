@@ -25,6 +25,15 @@ type UpdateHomeRequest struct {
 	Name string `json:"name" binding:"required"`
 }
 
+type AddHomeUserRequest struct {
+	Email string `json:"email" binding:"required,email"`
+	Role  string `json:"role" binding:"required,oneof=owner editor viewer"`
+}
+
+type UpdateHomeUserRoleRequest struct {
+	Role string `json:"role" binding:"required,oneof=owner editor viewer"`
+}
+
 func (h *HomeHandler) GetHomes(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
 
@@ -36,6 +45,139 @@ func (h *HomeHandler) GetHomes(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, userHomes)
+}
+
+func (h *HomeHandler) UpdateHomeUserRole(c *gin.Context) {
+	userID := c.MustGet("userID").(uuid.UUID)
+	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+	if !ok {
+		return
+	}
+	targetUserID, ok := utils.ParseUUIDParam(c, h.DB, "userId", "Invalid user ID")
+	if !ok {
+		return
+	}
+
+	var req UpdateHomeUserRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+
+	// RBAC: Only owners and editors can update roles
+	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor) {
+		return
+	}
+
+	var userHome models.UserHome
+	if err := h.DB.Where("user_id = ? AND home_id = ?", targetUserID, homeID).First(&userHome).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "User not found in home")})
+		} else {
+			logger.Log.Error("Failed to find user in home", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user in home")})
+		}
+		return
+	}
+
+	if err := h.DB.Model(&userHome).Update("role", req.Role).Error; err != nil {
+		logger.Log.Error("Failed to update user role", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update user role")})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "User role updated successfully")})
+}
+
+func (h *HomeHandler) RemoveHomeUser(c *gin.Context) {
+	userID := c.MustGet("userID").(uuid.UUID)
+	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+	if !ok {
+		return
+	}
+	targetUserID, ok := utils.ParseUUIDParam(c, h.DB, "userId", "Invalid user ID")
+	if !ok {
+		return
+	}
+
+	// RBAC: Only owners and editors can remove users
+	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor) {
+		return
+	}
+
+	var userHome models.UserHome
+	if err := h.DB.Where("user_id = ? AND home_id = ?", targetUserID, homeID).First(&userHome).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "User not found in home")})
+		} else {
+			logger.Log.Error("Failed to find user in home", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user in home")})
+		}
+		return
+	}
+
+	if err := h.DB.Where("user_id = ? AND home_id = ?", targetUserID, homeID).Delete(&models.UserHome{}).Error; err != nil {
+		logger.Log.Error("Failed to remove user from home", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to remove user from home")})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "User removed from home successfully")})
+}
+
+func (h *HomeHandler) AddHomeUser(c *gin.Context) {
+	userID := c.MustGet("userID").(uuid.UUID)
+	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+	if !ok {
+		return
+	}
+
+	var req AddHomeUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+
+	// RBAC: Only owners and editors can add users
+	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor) {
+		return
+	}
+
+	var profile models.Profile
+	if err := h.DB.Where("email = ?", req.Email).First(&profile).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "User not found")})
+		} else {
+			logger.Log.Error("Failed to find user profile", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user profile")})
+		}
+		return
+	}
+
+	// Check if user is already in the home
+	var count int64
+	h.DB.Model(&models.UserHome{}).Where("user_id = ? AND home_id = ?", profile.ID, homeID).Count(&count)
+	if count > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "User is already a member of this home")})
+		return
+	}
+
+	userHome := models.UserHome{
+		UserID: profile.ID,
+		HomeID: homeID,
+		Role:   req.Role,
+	}
+
+	if err := h.DB.Create(&userHome).Error; err != nil {
+		logger.Log.Error("Failed to add user to home", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to add user to home")})
+		return
+	}
+
+	// Preload User for the response
+	h.DB.Preload("User").First(&userHome)
+
+	c.JSON(http.StatusCreated, userHome)
 }
 
 // requireHomeRole retrieves the user's home access record and checks if they have one of the allowed roles.
@@ -181,4 +323,26 @@ func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Default home updated successfully")})
+}
+
+func (h *HomeHandler) GetHomeUsers(c *gin.Context) {
+	userID := c.MustGet("userID").(uuid.UUID)
+	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+	if !ok {
+		return
+	}
+
+	// RBAC: Verify user has access to this home
+	if !h.requireHomeRole(c, userID, homeID) {
+		return
+	}
+
+	var userHomes []models.UserHome
+	if err := h.DB.Preload("User").Where("home_id = ?", homeID).Find(&userHomes).Error; err != nil {
+		logger.Log.Error("Failed to fetch home users", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch home users")})
+		return
+	}
+
+	c.JSON(http.StatusOK, userHomes)
 }
