@@ -199,9 +199,10 @@ func TestCreateInventoryItem(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		i18n.InvalidateUserLanguageCache(userID)
 
+		quantity := 5.0
 		body := CreateInventoryItemRequest{
 			ItemDefinitionID: itemDefID,
-			Quantity:         5.0,
+			Quantity:         &quantity,
 		}
 		jsonBody, _ := json.Marshal(body)
 		req, _ := http.NewRequest(http.MethodPost, "/inventory", bytes.NewBuffer(jsonBody))
@@ -251,8 +252,9 @@ func TestUpdateInventoryItem(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		i18n.InvalidateUserLanguageCache(userID)
 
+		quantity := 10.0
 		body := UpdateInventoryItemRequest{
-			Quantity: 10.0,
+			Quantity: &quantity,
 		}
 		jsonBody, _ := json.Marshal(body)
 		req, _ := http.NewRequest(http.MethodPut, "/inventory/"+itemID.String(), bytes.NewBuffer(jsonBody))
@@ -294,6 +296,51 @@ func TestUpdateInventoryItem(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("allows zero quantity", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+
+		body := map[string]interface{}{"quantity": 0.0}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPut, "/inventory/"+itemID.String(), bytes.NewBuffer(jsonBody))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: itemID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "inventory_items" WHERE "inventory_items"."id" = $1 ORDER BY "inventory_items"."id" LIMIT $2`)).
+			WithArgs(itemID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(itemID, homeID, itemDefID, 5.0))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "inventory_items" SET "expiration_date"=$1,"quantity"=$2,"updated_at"=$3 WHERE "id" = $4`)).
+			WithArgs(sqlmock.AnyArg(), 0.0, sqlmock.AnyArg(), itemID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "inventory_transactions"`)).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
+			WithArgs(itemDefID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).AddRow(itemDefID, homeID, "Milk", nil))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
+			WillReturnError(gorm.ErrRecordNotFound)
+
+		mock.ExpectCommit()
+
+		handler.UpdateInventoryItem(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestUpdateInventoryItemQuantity(t *testing.T) {
@@ -308,8 +355,9 @@ func TestUpdateInventoryItemQuantity(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		i18n.InvalidateUserLanguageCache(userID)
 
+		quantity := 10.0
 		body := UpdateQuantityRequest{
-			Quantity: 10.0,
+			Quantity: &quantity,
 		}
 		jsonBody, _ := json.Marshal(body)
 		req, _ := http.NewRequest(http.MethodPatch, "/inventory/"+itemID.String()+"/quantity", bytes.NewBuffer(jsonBody))

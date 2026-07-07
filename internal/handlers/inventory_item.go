@@ -18,17 +18,17 @@ type InventoryItemHandler struct {
 
 type CreateInventoryItemRequest struct {
 	ItemDefinitionID uuid.UUID  `json:"item_definition_id" binding:"required"`
-	Quantity         float64    `json:"quantity" binding:"required,gte=0"`
+	Quantity         *float64   `json:"quantity" binding:"required"`
 	ExpirationDate   *time.Time `json:"expiry_date"`
 }
 
 type UpdateInventoryItemRequest struct {
-	Quantity       float64    `json:"quantity" binding:"required,gte=0"`
+	Quantity       *float64   `json:"quantity" binding:"required"`
 	ExpirationDate *time.Time `json:"expiry_date"`
 }
 
 type UpdateQuantityRequest struct {
-	Quantity float64 `json:"quantity" binding:"required,gte=0"`
+	Quantity *float64 `json:"quantity" binding:"required"`
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
@@ -89,10 +89,15 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 		return
 	}
 
+	if req.Quantity == nil || *req.Quantity < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+
 	item := models.InventoryItem{
 		HomeID:           homeID,
 		ItemDefinitionID: req.ItemDefinitionID,
-		Quantity:         req.Quantity,
+		Quantity:         *req.Quantity,
 		ExpirationDate:   req.ExpirationDate,
 	}
 
@@ -145,12 +150,17 @@ func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
 		return
 	}
 
+	if req.Quantity == nil || *req.Quantity < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+
 	// Log transaction if quantity changed
-	quantityChange := req.Quantity - item.Quantity
+	quantityChange := *req.Quantity - item.Quantity
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
 		updates := map[string]interface{}{
-			"quantity":        req.Quantity,
+			"quantity":        *req.Quantity,
 			"expiration_date": req.ExpirationDate,
 		}
 
@@ -203,11 +213,16 @@ func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) {
 		return
 	}
 
+	if req.Quantity == nil || *req.Quantity < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+
 	// Log transaction if quantity changed
-	quantityChange := req.Quantity - item.Quantity
+	quantityChange := *req.Quantity - item.Quantity
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&item).Update("quantity", req.Quantity).Error; err != nil {
+		if err := tx.Model(&item).Update("quantity", *req.Quantity).Error; err != nil {
 			return err
 		}
 
