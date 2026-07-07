@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/routes"
 	"github.com/joho/godotenv"
@@ -53,6 +54,9 @@ func main() {
 
 	// Setup Gin Router
 	r := routes.SetupRouter(db)
+
+	// Start background tasks
+	startDailyRefresh(db)
 
 	port := serverPort()
 
@@ -112,6 +116,18 @@ func serverPort() string {
 		return "8080"
 	}
 	return port
+}
+
+func startDailyRefresh(db *gorm.DB) {
+	go func() {
+		for {
+			utils.RefreshAllShoppingLists(db)
+			// Sleep until next day at 3 AM
+			now := time.Now()
+			nextRun := time.Date(now.Year(), now.Month(), now.Day()+1, 3, 0, 0, 0, now.Location())
+			time.Sleep(time.Until(nextRun))
+		}
+	}()
 }
 
 func setupDatabase(dsn string) (*gorm.DB, error) {

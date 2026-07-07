@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"time"
+
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/google/uuid"
@@ -32,7 +34,7 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 
 	var totalQuantity float64
 	if err := tx.Model(&models.InventoryItem{}).
-		Where("home_id = ? AND item_definition_id = ?", homeID, itemDefID).
+		Where("home_id = ? AND item_definition_id = ? AND (expiration_date IS NULL OR expiration_date > NOW())", homeID, itemDefID).
 		Select("COALESCE(SUM(quantity), 0)").
 		Scan(&totalQuantity).Error; err != nil {
 		logger.Log.Error("Failed to calculate total quantity", zap.Error(err))
@@ -65,7 +67,7 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 			}
 
 			// AC 2.5: Trigger notification
-			SendLowStockNotification(homeID, itemDef.Name, itemDef.Priority)
+			SendLowStockNotification(tx, homeID, itemDef.Name, itemDef.Priority)
 			return nil
 		} else if err == nil {
 			// Update existing
@@ -82,4 +84,35 @@ func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uu
 		}
 		return err
 	}
+}
+
+// RefreshAllShoppingLists iterates through all item definitions and refreshes the shopping lists.
+// This is intended to be run periodically (e.g., daily) to catch items that expired.
+func RefreshAllShoppingLists(db *gorm.DB) {
+	logger.Log.Info("Starting daily shopping list refresh")
+	now := time.Now()
+	threeDaysFromNow := now.AddDate(0, 0, 3)
+
+	// 1. Process expirations and notifications
+	var expiringItems []models.InventoryItem
+	if err := db.Where("expiration_date > ? AND expiration_date <= ?", now, threeDaysFromNow).
+		Find(&expiringItems).Error; err == nil {
+		for _, item := range expiringItems {
+			var def models.ItemDefinition
+			if err := db.First(&def, item.ItemDefinitionID).Error; err == nil {
+				SendExpiryNotification(db, item.HomeID, def.Name, *item.ExpirationDate)
+			}
+		}
+	}
+
+	// 2. Refresh shopping lists using FindInBatches for scalability
+	var itemDefs []models.ItemDefinition
+	db.Model(&models.ItemDefinition{}).FindInBatches(&itemDefs, 100, func(tx *gorm.DB, batch int) error {
+		for _, def := range itemDefs {
+			UpdateShoppingListForDefinition(tx, def.HomeID, def.ID)
+		}
+		return nil
+	})
+
+	logger.Log.Info("Daily shopping list refresh completed")
 }
