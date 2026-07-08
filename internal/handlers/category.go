@@ -59,6 +59,23 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 		return
 	}
 
+	// If parent_id is provided, verify it belongs to the same home
+	if req.ParentID != nil {
+		var parent models.Category
+		if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&parent).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
+			}
+			return
+		}
+		if parent.HomeID != homeID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
+			return
+		}
+	}
+
 	// Check for unique name in the same hierarchy level
 	var count int64
 	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND name = ?", homeID, req.Name)
@@ -111,6 +128,29 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
+	}
+
+	// If parent_id is provided, verify it belongs to the same home
+	if req.ParentID != nil {
+		// Prevent self-parenting
+		if *req.ParentID == id {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category cannot be its own parent")})
+			return
+		}
+
+		var parent models.Category
+		if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&parent).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
+			}
+			return
+		}
+		if parent.HomeID != category.HomeID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
+			return
+		}
 	}
 
 	// Check for unique name in the same hierarchy level

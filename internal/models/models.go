@@ -67,10 +67,17 @@ type SizeUnit struct {
 
 // Category represents an optional 2-level category hierarchy
 type Category struct {
-	ID        uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	HomeID    uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_category_home_name_parent"`
-	Name      string     `gorm:"type:varchar(255);not null;uniqueIndex:idx_category_home_name_parent"`
-	ParentID  *uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_category_home_name_parent"`
+	ID uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	// Standard unique index for when parent_id IS NOT NULL.
+	// PostgreSQL treats NULL as distinct, so we need a separate partial index for the NULL case.
+	HomeID   uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_category_home_name_parent;uniqueIndex:idx_category_home_name_null_parent,where:parent_id IS NULL"`
+	Name     string     `gorm:"type:varchar(255);not null;uniqueIndex:idx_category_home_name_parent;uniqueIndex:idx_category_home_name_null_parent,where:parent_id IS NULL"`
+	ParentID *uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_category_home_name_parent"`
+	// Partial unique index for top-level categories where parent_id IS NULL.
+	// Note: GORM doesn't natively support partial index creation via tags in all dialects,
+	// but specifying it here for documentation and future-proofing.
+	// We will also use application-level checks to ensure uniqueness.
+	// GORM's index tag for PostgreSQL supports 'where' clause.
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
