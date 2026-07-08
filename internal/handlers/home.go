@@ -278,11 +278,55 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 		return
 	}
 
+	// RBAC: Only owners can delete homes
 	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.Home{}, homeID).Error; err != nil {
+	var userHome models.UserHome
+	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
+		logger.Log.Warn("User home association not found", zap.Error(err))
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Home not found or access denied")})
+		return
+	}
+
+	var count int64
+	if err := h.DB.Model(&models.UserHome{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		logger.Log.Error("Failed to count user homes", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete home")})
+		return
+	}
+
+	if count <= 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Cannot delete your only home")})
+		return
+	}
+
+	approved := c.Query("approved") == "true"
+	if userHome.IsDefault && !approved {
+		c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "This is your default home. Please confirm deletion.")})
+		return
+	}
+
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		// Delete the home - this will cascade delete UserHome records
+		if err := tx.Delete(&models.Home{}, homeID).Error; err != nil {
+			return err
+		}
+
+		if userHome.IsDefault {
+			var oldestHome models.UserHome
+			if err := tx.Where("user_id = ?", userID).Order("created_at asc").First(&oldestHome).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&oldestHome).Update("is_default", true).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
 		logger.Log.Error("Failed to delete home", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete home")})
 		return

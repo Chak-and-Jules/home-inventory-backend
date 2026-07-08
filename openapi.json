@@ -718,6 +718,15 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "Set to true to confirm deletion if the home is the user's default home",
+            "in": "query",
+            "name": "approved",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
