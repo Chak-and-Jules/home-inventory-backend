@@ -125,6 +125,42 @@ func TestGetItemDefinitions_Success(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetItemDefinitions_BarcodeFilter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+
+	userID := uuid.New()
+	homeID := uuid.New()
+	barcode := "123456"
+
+	expectItemDefinitionAccess(mock, userID, homeID, models.RoleViewer)
+
+	// Mock the main query with barcode filter
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE home_id = $1 AND barcode = $2`)).
+		WithArgs(homeID, barcode).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode"}).
+			AddRow(uuid.New().String(), homeID.String(), barcode))
+
+	router := gin.New()
+	router.Use(authMiddleware(userID))
+	router.GET("/item-definitions", handler.GetItemDefinitions)
+
+	req, _ := http.NewRequest(http.MethodGet, "/item-definitions?barcode="+barcode, nil)
+	req.Header.Set("X-Home-Id", homeID.String())
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetItemDefinitions_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, mock, err := setupTestDB()

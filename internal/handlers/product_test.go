@@ -7,11 +7,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetProductLookup(t *testing.T) {
+	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 
 	t.Run("Missing barcode", func(t *testing.T) {
@@ -102,5 +104,52 @@ func TestGetProductLookup(t *testing.T) {
 		handler.GetProductLookup(c2)
 		assert.Equal(t, http.StatusOK, w2.Code)
 		assert.Equal(t, 1, callCount)
+	})
+
+	t.Run("External API Error 500", func(t *testing.T) {
+		barcode := "500500"
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+
+		handler := &ProductHandler{BaseURL: server.URL}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/api/v1/products/lookup?barcode="+barcode, nil)
+
+		handler.GetProductLookup(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("External API Invalid JSON", func(t *testing.T) {
+		barcode := "invalidjson"
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, "{invalid-json}")
+		}))
+		defer server.Close()
+
+		handler := &ProductHandler{BaseURL: server.URL}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/api/v1/products/lookup?barcode="+barcode, nil)
+
+		handler.GetProductLookup(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("External API HTTP client error", func(t *testing.T) {
+		// Using an invalid URL scheme to trigger client.Get error
+		handler := &ProductHandler{BaseURL: "invalid-scheme://"}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/api/v1/products/lookup?barcode=123", nil)
+
+		handler.GetProductLookup(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 }
