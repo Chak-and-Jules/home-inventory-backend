@@ -313,4 +313,60 @@ func TestScanInventoryItem(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("invalid request payload", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+		require.NoError(t, err)
+		handler := &InventoryItemHandler{DB: gormDB}
+		i18n.InvalidateUserLanguageCache(userID)
+
+		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", bytes.NewBuffer([]byte(`invalid-json`)))
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		mock.ExpectQuery(`SELECT "id","language_id" FROM "profiles" WHERE id = \$1 ORDER BY "profiles"\."id" LIMIT \$2`).
+			WithArgs(userID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "language_id"}).AddRow(userID, nil))
+
+		handler.ScanInventoryItem(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("invalid home id header", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+		require.NoError(t, err)
+		handler := &InventoryItemHandler{DB: gormDB}
+		i18n.InvalidateUserLanguageCache(userID)
+
+		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", nil)
+		req.Header.Set("X-Home-Id", "invalid-uuid")
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT "id","language_id" FROM "profiles" WHERE id = \$1 ORDER BY "profiles"\."id" LIMIT \$2`).
+			WithArgs(userID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "language_id"}).AddRow(userID, nil))
+
+		handler.ScanInventoryItem(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }

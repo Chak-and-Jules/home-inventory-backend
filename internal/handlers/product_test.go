@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/gin-gonic/gin"
@@ -106,6 +107,54 @@ func TestGetProductLookup(t *testing.T) {
 		assert.Equal(t, 1, callCount)
 	})
 
+	t.Run("Cache expired", func(t *testing.T) {
+		barcode := "expired-barcode"
+		handler := &ProductHandler{}
+		handler.cache.Store(barcode, cachedProduct{
+			product:   ProductLookupResponse{Name: "Old"},
+			expiresAt: time.Now().Add(-1 * time.Hour),
+		})
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(offResponse{Status: 1, Product: struct {
+				ProductName string `json:"product_name"`
+				Categories  string `json:"categories"`
+				ImageURL    string `json:"image_url"`
+			}{ProductName: "New"}})
+		}))
+		defer server.Close()
+		handler.BaseURL = server.URL
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/api/v1/products/lookup?barcode="+barcode, nil)
+		handler.GetProductLookup(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp ProductLookupResponse
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.Equal(t, "New", resp.Name)
+	})
+
+	t.Run("External API Status 0 (Not Found)", func(t *testing.T) {
+		barcode := "not-found-status-0"
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(offResponse{Status: 0})
+		}))
+		defer server.Close()
+
+		handler := &ProductHandler{BaseURL: server.URL}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/api/v1/products/lookup?barcode="+barcode, nil)
+
+		handler.GetProductLookup(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
 	t.Run("External API Error 500", func(t *testing.T) {
 		barcode := "500500"
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -121,6 +170,23 @@ func TestGetProductLookup(t *testing.T) {
 		handler.GetProductLookup(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("External API Error 404", func(t *testing.T) {
+		barcode := "404404"
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer server.Close()
+
+		handler := &ProductHandler{BaseURL: server.URL}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/api/v1/products/lookup?barcode="+barcode, nil)
+
+		handler.GetProductLookup(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
 
 	t.Run("External API Invalid JSON", func(t *testing.T) {

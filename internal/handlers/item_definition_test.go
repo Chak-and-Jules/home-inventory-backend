@@ -203,6 +203,63 @@ func TestGetItemDefinitions_Error(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetItemDefinitions_InvalidHomeID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+	userID := uuid.New()
+
+	router := gin.New()
+	router.Use(authMiddleware(userID))
+	router.GET("/item-definitions", handler.GetItemDefinitions)
+
+	req, _ := http.NewRequest(http.MethodGet, "/item-definitions", nil)
+	req.Header.Set("X-Home-Id", "invalid-uuid")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetItemDefinitions_Forbidden(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, err := setupTestDB()
+	assert.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	handler := &ItemDefinitionHandler{DB: db}
+	userID := uuid.New()
+	homeID := uuid.New()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+		WithArgs(userID, homeID, 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+
+	expectProfileLookup(mock, userID)
+
+	router := gin.New()
+	router.Use(authMiddleware(userID))
+	router.GET("/item-definitions", handler.GetItemDefinitions)
+
+	req, _ := http.NewRequest(http.MethodGet, "/item-definitions", nil)
+	req.Header.Set("X-Home-Id", homeID.String())
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestCreateItemDefinition_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, mock, err := setupTestDB()
