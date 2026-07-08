@@ -34,9 +34,10 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		handler := &InventoryItemHandler{DB: gormDB}
 
+		change := 1.0
 		reqBody := ScanInventoryRequest{
 			Barcode: barcode,
-			Change:  1,
+			Change:  &change,
 		}
 		jsonBody, _ := json.Marshal(reqBody)
 		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", bytes.NewBuffer(jsonBody))
@@ -92,9 +93,10 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		handler := &InventoryItemHandler{DB: gormDB}
 
+		change := -10.0
 		reqBody := ScanInventoryRequest{
 			Barcode: barcode,
-			Change:  -10,
+			Change:  &change,
 		}
 		jsonBody, _ := json.Marshal(reqBody)
 		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", bytes.NewBuffer(jsonBody))
@@ -144,6 +146,66 @@ func TestScanInventoryItem(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
+	t.Run("success increment pack of 60", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+		require.NoError(t, err)
+		handler := &InventoryItemHandler{DB: gormDB}
+
+		change := 60.0
+		reqBody := ScanInventoryRequest{
+			Barcode: barcode,
+			Change:  &change,
+		}
+		jsonBody, _ := json.Marshal(reqBody)
+		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", bytes.NewBuffer(jsonBody))
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		itemDefID := uuid.New()
+		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1 AND barcode = \$2`).
+			WithArgs(homeID, barcode, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode"}).AddRow(itemDefID, homeID, barcode))
+
+		itemID := uuid.New()
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1 AND item_definition_id = \$2 ORDER BY expiration_date ASC NULLS LAST`).
+			WithArgs(homeID, itemDefID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).AddRow(itemID, homeID, itemDefID, 10.0))
+
+		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "inventory_items" SET "quantity"=$1,"updated_at"=$2 WHERE "id" = $3`)).
+			WithArgs(70.0, sqlmock.AnyArg(), itemID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		mock.ExpectQuery(`INSERT INTO "inventory_transactions"`).
+			WithArgs(homeID, itemDefID, itemID, 60.0, sqlmock.AnyArg()).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+
+		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
+			WithArgs(itemDefID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(itemDefID, homeID, "Dishwasher Tablets"))
+
+		mock.ExpectQuery(`SELECT \* FROM "shopping_list_items" WHERE home_id = \$1 AND item_definition_id = \$2 AND is_auto_generated = \$3 AND is_bought = \$4`).
+			WithArgs(homeID, itemDefID, true, false, 1).
+			WillReturnError(gorm.ErrRecordNotFound)
+
+		mock.ExpectCommit()
+
+		handler.ScanInventoryItem(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
 	t.Run("insufficient stock", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
@@ -152,9 +214,10 @@ func TestScanInventoryItem(t *testing.T) {
 		handler := &InventoryItemHandler{DB: gormDB}
 		i18n.InvalidateUserLanguageCache(userID)
 
+		change := -1.0
 		reqBody := ScanInventoryRequest{
 			Barcode: barcode,
-			Change:  -1,
+			Change:  &change,
 		}
 		jsonBody, _ := json.Marshal(reqBody)
 		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", bytes.NewBuffer(jsonBody))
@@ -201,9 +264,10 @@ func TestScanInventoryItem(t *testing.T) {
 
 		i18n.InvalidateUserLanguageCache(userID)
 
+		change := 1.0
 		reqBody := ScanInventoryRequest{
 			Barcode: "unknown",
-			Change:  1,
+			Change:  &change,
 		}
 		jsonBody, _ := json.Marshal(reqBody)
 		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", bytes.NewBuffer(jsonBody))
@@ -240,9 +304,10 @@ func TestScanInventoryItem(t *testing.T) {
 		handler := &InventoryItemHandler{DB: gormDB}
 		i18n.InvalidateUserLanguageCache(userID)
 
+		change := 1.0
 		reqBody := ScanInventoryRequest{
 			Barcode: barcode,
-			Change:  1,
+			Change:  &change,
 		}
 		jsonBody, _ := json.Marshal(reqBody)
 		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", bytes.NewBuffer(jsonBody))
@@ -287,9 +352,10 @@ func TestScanInventoryItem(t *testing.T) {
 		handler := &InventoryItemHandler{DB: gormDB}
 		i18n.InvalidateUserLanguageCache(userID)
 
+		change := 1.0
 		reqBody := ScanInventoryRequest{
 			Barcode: barcode,
-			Change:  1,
+			Change:  &change,
 		}
 		jsonBody, _ := json.Marshal(reqBody)
 		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", bytes.NewBuffer(jsonBody))

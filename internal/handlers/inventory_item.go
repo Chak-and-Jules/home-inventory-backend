@@ -33,8 +33,8 @@ type UpdateQuantityRequest struct {
 }
 
 type ScanInventoryRequest struct {
-	Barcode string  `json:"barcode" binding:"required"`
-	Change  float64 `json:"change" binding:"required"` // e.g. 1 to increment, -1 to decrement
+	Barcode string   `json:"barcode" binding:"required"`
+	Change  *float64 `json:"change" binding:"required"` // e.g. 1 to increment, -1 to decrement, 60 for a pack
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
@@ -482,19 +482,19 @@ func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) {
 		}
 
 		if err == gorm.ErrRecordNotFound {
-			if req.Change < 0 {
+			if *req.Change < 0 {
 				return fmt.Errorf("insufficient stock")
 			}
 			item = models.InventoryItem{
 				HomeID:           homeID,
 				ItemDefinitionID: itemDef.ID,
-				Quantity:         req.Change,
+				Quantity:         *req.Change,
 			}
 			if err := tx.Create(&item).Error; err != nil {
 				return err
 			}
 		} else {
-			newQuantity := item.Quantity + req.Change
+			newQuantity := item.Quantity + *req.Change
 			if newQuantity < 0 {
 				newQuantity = 0
 			}
@@ -510,7 +510,7 @@ func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) {
 			HomeID:           homeID,
 			ItemDefinitionID: itemDef.ID,
 			InventoryItemID:  item.ID,
-			QuantityChange:   req.Change,
+			QuantityChange:   *req.Change,
 		}
 		if err := tx.Create(&txLog).Error; err != nil {
 			return err
