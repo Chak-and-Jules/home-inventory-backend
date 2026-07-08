@@ -684,6 +684,56 @@
         ]
       }
     },
+    "/inventory/scan": {
+      "post": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "barcode": {
+                    "type": "string"
+                  },
+                  "change": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "barcode",
+                  "change"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryItem"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "404": {
+            "description": "Item definition not found"
+          }
+        },
+        "summary": "Update inventory quantity by barcode scan",
+        "tags": [
+          "Inventory Items"
+        ]
+      }
+    },
     "/categories": {
       "get": {
         "parameters": [
@@ -1105,56 +1155,6 @@
         "summary": "Set home as default",
         "tags": [
           "Homes"
-        ]
-      }
-    },
-    "/inventory/scan": {
-      "post": {
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/HomeIdHeader"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "barcode": {
-                    "type": "string"
-                  },
-                  "change": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "barcode",
-                  "change"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InventoryItem"
-                }
-              }
-            },
-            "description": "Success"
-          },
-          "404": {
-            "description": "Item definition not found"
-          }
-        },
-        "summary": "Update inventory quantity by barcode scan",
-        "tags": [
-          "Inventory Items"
         ]
       }
     },

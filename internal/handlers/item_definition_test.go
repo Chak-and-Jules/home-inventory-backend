@@ -94,8 +94,8 @@ func TestGetItemDefinitions_Success(t *testing.T) {
 	// Mock the preload query for Category
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "categories" WHERE "categories"."id" = $1`)).
 		WithArgs(categoryID.String()).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "parent_id", "created_at", "updated_at"}).
-			AddRow(categoryID.String(), "Test Category", nil, time.Now(), time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "parent_id", "created_at", "updated_at"}).
+			AddRow(categoryID.String(), homeID.String(), "Test Category", nil, time.Now(), time.Now()))
 
 	// Mock the preload query for SizeUnit
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "size_units" WHERE "size_units"."id" = $1`)).
@@ -403,6 +403,7 @@ func TestCreateItemDefinition_DBError(t *testing.T) {
 	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "item_definitions"`)).
+		WithArgs(homeID, "Test Item", "Test Desc", categoryID.String(), sizeUnitID.String(), false, nil, nil, "medium", "http://test.com/img.jpg", nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnError(gorm.ErrInvalidDB)
 	mock.ExpectRollback()
 
@@ -412,7 +413,7 @@ func TestCreateItemDefinition_DBError(t *testing.T) {
 	router.Use(authMiddleware(userID))
 	router.POST("/item-definitions", handler.CreateItemDefinition)
 
-	reqBody := `{"name":"Test Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
+	reqBody := `{"name":"Test Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg","priority":"medium"}`
 	req, _ := http.NewRequest(http.MethodPost, "/item-definitions", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Home-Id", homeID.String())
@@ -503,6 +504,7 @@ func TestUpdateItemDefinition_DBError(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role", "is_default", "created_at", "updated_at"}).AddRow(userID.String(), homeID.String(), models.RoleOwner, false, time.Now(), time.Now()))
 	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "item_definitions"`)).
+		WithArgs(nil, categoryID.String(), "Test Desc", "http://test.com/img.jpg", false, nil, "Updated Item", "medium", sizeUnitID.String(), nil, sqlmock.AnyArg(), id.String()).
 		WillReturnError(gorm.ErrInvalidDB)
 	mock.ExpectRollback()
 
@@ -512,7 +514,7 @@ func TestUpdateItemDefinition_DBError(t *testing.T) {
 	router.Use(authMiddleware(userID))
 	router.PUT("/item-definitions/:id", handler.UpdateItemDefinition)
 
-	reqBody := `{"name":"Updated Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg"}`
+	reqBody := `{"name":"Updated Item","description":"Test Desc","category_id":"` + categoryID.String() + `","size_unit_id":"` + sizeUnitID.String() + `","is_expirable":false,"image_url":"http://test.com/img.jpg","priority":"medium"}`
 	req, _ := http.NewRequest(http.MethodPut, "/item-definitions/"+id.String(), strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Home-Id", homeID.String())
@@ -568,7 +570,7 @@ func TestDeleteItemDefinition_DBError(t *testing.T) {
 		WithArgs(userID, homeID, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role", "is_default", "created_at", "updated_at"}).AddRow(userID.String(), homeID.String(), models.RoleOwner, false, time.Now(), time.Now()))
 	mock.ExpectBegin()
-	mock.ExpectExec(`DELETE FROM "item_definitions" WHERE ".*"."id" = \$1`).
+	mock.ExpectExec(`DELETE FROM "item_definitions" WHERE "item_definitions"."id" = \$1`).
 		WithArgs(id.String()).
 		WillReturnError(gorm.ErrInvalidDB)
 	mock.ExpectRollback()
