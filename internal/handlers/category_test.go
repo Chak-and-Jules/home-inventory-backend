@@ -357,6 +357,52 @@ func TestGetCategories(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("category not found", func(t *testing.T) {
+		handler, mock := setupCategoryTest(t)
+		categoryID := uuid.New()
+
+		mock.ExpectQuery(`SELECT \* FROM "categories" WHERE "categories"\."id" = \$1 ORDER BY "categories"\."id" LIMIT \$2`).
+			WithArgs(categoryID, 1).
+			WillReturnError(gorm.ErrRecordNotFound)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, err := http.NewRequest(http.MethodDelete, "/categories/"+categoryID.String(), nil)
+		require.NoError(t, err)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: categoryID.String()}}
+		c.Set("userID", userID)
+
+		handler.DeleteCategory(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("access denied", func(t *testing.T) {
+		handler, mock := setupCategoryTest(t)
+		categoryID := uuid.New()
+		homeID := uuid.New()
+		expectCategoryByID(mock, categoryID, homeID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnError(errors.New("not found"))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, err := http.NewRequest(http.MethodDelete, "/categories/"+categoryID.String(), nil)
+		require.NoError(t, err)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: categoryID.String()}}
+		c.Set("userID", userID)
+
+		handler.DeleteCategory(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestUpdateCategory(t *testing.T) {
@@ -374,6 +420,82 @@ func TestUpdateCategory(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		req, err := http.NewRequest(http.MethodPut, "/categories/"+categoryID.String(), strings.NewReader(`{"name":"Updated Category", "parent_id":"`+categoryID.String()+`"}`))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: categoryID.String()}}
+		c.Set("userID", userID)
+
+		handler.UpdateCategory(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("parent not found", func(t *testing.T) {
+		handler, mock := setupCategoryTest(t)
+		expectCategoryByID(mock, categoryID, homeID)
+		expectCategoryAccess(mock, userID, homeID, models.RoleEditor)
+		parentID := uuid.New()
+
+		mock.ExpectQuery(`SELECT "id","home_id" FROM "categories" WHERE id = \$1 ORDER BY "categories"\."id" LIMIT \$2`).
+			WithArgs(parentID, 1).
+			WillReturnError(gorm.ErrRecordNotFound)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, err := http.NewRequest(http.MethodPut, "/categories/"+categoryID.String(), strings.NewReader(`{"name":"Updated Category", "parent_id":"`+parentID.String()+`"}`))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: categoryID.String()}}
+		c.Set("userID", userID)
+
+		handler.UpdateCategory(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("parent generic error", func(t *testing.T) {
+		handler, mock := setupCategoryTest(t)
+		expectCategoryByID(mock, categoryID, homeID)
+		expectCategoryAccess(mock, userID, homeID, models.RoleEditor)
+		parentID := uuid.New()
+
+		mock.ExpectQuery(`SELECT "id","home_id" FROM "categories" WHERE id = \$1 ORDER BY "categories"\."id" LIMIT \$2`).
+			WithArgs(parentID, 1).
+			WillReturnError(errors.New("db error"))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, err := http.NewRequest(http.MethodPut, "/categories/"+categoryID.String(), strings.NewReader(`{"name":"Updated Category", "parent_id":"`+parentID.String()+`"}`))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: categoryID.String()}}
+		c.Set("userID", userID)
+
+		handler.UpdateCategory(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("cross-home parent denied", func(t *testing.T) {
+		handler, mock := setupCategoryTest(t)
+		expectCategoryByID(mock, categoryID, homeID)
+		expectCategoryAccess(mock, userID, homeID, models.RoleEditor)
+		parentID := uuid.New()
+		otherHomeID := uuid.New()
+
+		mock.ExpectQuery(`SELECT "id","home_id" FROM "categories" WHERE id = \$1 ORDER BY "categories"\."id" LIMIT \$2`).
+			WithArgs(parentID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(parentID, otherHomeID))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, err := http.NewRequest(http.MethodPut, "/categories/"+categoryID.String(), strings.NewReader(`{"name":"Updated Category", "parent_id":"`+parentID.String()+`"}`))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
 		c.Request = req
@@ -564,6 +686,22 @@ func TestUpdateCategory(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("invalid home id", func(t *testing.T) {
+		handler, _ := setupCategoryTest(t)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, err := http.NewRequest(http.MethodGet, "/categories", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Home-Id", "invalid")
+		c.Request = req
+		c.Set("userID", userID)
+
+		handler.GetCategories(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
 }
 
 func TestDeleteCategory(t *testing.T) {
@@ -634,6 +772,31 @@ func TestDeleteCategory(t *testing.T) {
 		c.Set("userID", userID)
 
 		handler.DeleteCategory(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("parent generic error", func(t *testing.T) {
+		handler, mock := setupCategoryTest(t)
+		expectCategoryAccess(mock, userID, homeID, models.RoleOwner)
+		parentID := uuid.New()
+
+		mock.ExpectQuery(`SELECT "id","home_id" FROM "categories" WHERE id = \$1 ORDER BY "categories"\."id" LIMIT \$2`).
+			WithArgs(parentID, 1).
+			WillReturnError(errors.New("db error"))
+
+		req, err := http.NewRequest(http.MethodPost, "/categories", strings.NewReader(`{"name":"Test Category", "parent_id":"`+parentID.String()+`"}`))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		handler.CreateCategory(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
