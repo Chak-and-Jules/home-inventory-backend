@@ -31,6 +31,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	languageHandler := &handlers.LanguageHandler{DB: db}
 	inventoryItemHandler := &handlers.InventoryItemHandler{DB: db}
 	shoppingListHandler := &handlers.ShoppingListHandler{DB: db}
+	productHandler := &handlers.ProductHandler{DB: db}
 
 	// API v1 group
 	v1 := r.Group("/api/v1")
@@ -102,6 +103,13 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			inventory.PUT("/:id", inventoryItemHandler.UpdateInventoryItem)
 			inventory.PATCH("/:id/quantity", inventoryItemHandler.UpdateInventoryItemQuantity)
 			inventory.DELETE("/:id", inventoryItemHandler.DeleteInventoryItem)
+			inventory.POST("/scan", inventoryItemHandler.ScanInventoryItem)
+		}
+
+		// Products
+		products := v1.Group("/products")
+		{
+			products.GET("/lookup", productHandler.GetProductLookup)
 		}
 
 		// Shopping List

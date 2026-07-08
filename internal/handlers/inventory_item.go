@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -29,6 +30,11 @@ type UpdateInventoryItemRequest struct {
 
 type UpdateQuantityRequest struct {
 	Quantity *float64 `json:"quantity" binding:"required"`
+}
+
+type ScanInventoryRequest struct {
+	Barcode string  `json:"barcode" binding:"required"`
+	Change  float64 `json:"change" binding:"required"` // e.g. 1 to increment, -1 to decrement
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
@@ -434,4 +440,93 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, results)
+}
+
+func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) {
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+	if !ok {
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+		return
+	}
+
+	var req ScanInventoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+
+	// 1. Find ItemDefinition by barcode
+	var itemDef models.ItemDefinition
+	if err := h.DB.Where("home_id = ? AND barcode = ?", homeID, req.Barcode).First(&itemDef).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item definition not found")})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch item definition")})
+		return
+	}
+
+	// 2. Find or create InventoryItem for this definition
+	var item models.InventoryItem
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		err := tx.Where("home_id = ? AND item_definition_id = ?", homeID, itemDef.ID).
+			Order("expiration_date ASC NULLS LAST").
+			First(&item).Error
+
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+
+		if err == gorm.ErrRecordNotFound {
+			if req.Change < 0 {
+				return fmt.Errorf("insufficient stock")
+			}
+			item = models.InventoryItem{
+				HomeID:           homeID,
+				ItemDefinitionID: itemDef.ID,
+				Quantity:         req.Change,
+			}
+			if err := tx.Create(&item).Error; err != nil {
+				return err
+			}
+		} else {
+			newQuantity := item.Quantity + req.Change
+			if newQuantity < 0 {
+				newQuantity = 0
+			}
+
+			if err := tx.Model(&item).Update("quantity", newQuantity).Error; err != nil {
+				return err
+			}
+			item.Quantity = newQuantity
+		}
+
+		// Log transaction
+		txLog := models.InventoryTransaction{
+			HomeID:           homeID,
+			ItemDefinitionID: itemDef.ID,
+			InventoryItemID:  item.ID,
+			QuantityChange:   req.Change,
+		}
+		if err := tx.Create(&txLog).Error; err != nil {
+			return err
+		}
+
+		return utils.UpdateShoppingListForDefinition(tx, homeID, itemDef.ID)
+	})
+
+	if err != nil {
+		if err.Error() == "insufficient stock" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient stock")})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update inventory via scan")})
+		return
+	}
+
+	c.JSON(http.StatusOK, item)
 }
