@@ -27,6 +27,7 @@ type ItemDefinitionRequest struct {
 	TargetQuantity    *float64   `json:"target_quantity"`
 	Priority          string     `json:"priority"`
 	ImageURL          string     `json:"image_url"`
+	Barcode           *string    `json:"barcode"`
 }
 
 func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
@@ -41,8 +42,15 @@ func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
 		return
 	}
 
+	query := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID)
+
+	barcode := c.Query("barcode")
+	if barcode != "" {
+		query = query.Where("barcode = ?", barcode)
+	}
+
 	var defs []models.ItemDefinition
-	if err := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID).Find(&defs).Error; err != nil {
+	if err := query.Find(&defs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch item definitions")})
 		logger.Log.Error("Failed to fetch item definitions", zap.Error(err))
 		return
@@ -80,6 +88,7 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 		TargetQuantity:    req.TargetQuantity,
 		Priority:          req.Priority,
 		ImageURL:          req.ImageURL,
+		Barcode:           req.Barcode,
 	}
 
 	// Build and log the generated INSERT SQL using GORM DryRun mode so we can
@@ -140,6 +149,7 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 		"target_quantity":     req.TargetQuantity,
 		"priority":            req.Priority,
 		"image_url":           req.ImageURL,
+		"barcode":             req.Barcode,
 	}
 
 	if err := h.DB.Transaction(func(tx *gorm.DB) error {
