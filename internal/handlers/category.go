@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
@@ -76,9 +77,10 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 		}
 	}
 
-	// Check for unique name in the same hierarchy level
+	// Check for unique name in the same hierarchy level (case-insensitive and ignoring whitespace)
 	var count int64
-	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND name = ?", homeID, req.Name)
+	normalizedName := strings.ToLower(strings.ReplaceAll(req.Name, " ", ""))
+	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ?", homeID, normalizedName)
 	if req.ParentID == nil {
 		query = query.Where("parent_id IS NULL")
 	} else {
@@ -153,9 +155,10 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 		}
 	}
 
-	// Check for unique name in the same hierarchy level
+	// Check for unique name in the same hierarchy level (case-insensitive and ignoring whitespace)
 	var count int64
-	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND name = ? AND id != ?", category.HomeID, req.Name, id)
+	normalizedName := strings.ToLower(strings.ReplaceAll(req.Name, " ", ""))
+	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ? AND id != ?", category.HomeID, normalizedName, id)
 	if req.ParentID == nil {
 		query = query.Where("parent_id IS NULL")
 	} else {
