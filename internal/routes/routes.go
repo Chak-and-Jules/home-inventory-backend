@@ -32,6 +32,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	inventoryItemHandler := &handlers.InventoryItemHandler{DB: db}
 	shoppingListHandler := &handlers.ShoppingListHandler{DB: db}
 	productHandler := &handlers.ProductHandler{DB: db}
+	maintenanceHandler := &handlers.MaintenanceTaskHandler{DB: db}
 
 	// API v1 group
 	v1 := r.Group("/api/v1")
@@ -120,6 +121,16 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			shoppingList.PUT("/:id", shoppingListHandler.UpdateShoppingListItem)
 			shoppingList.PATCH("/:id/toggle-bought", shoppingListHandler.ToggleShoppingListItemBought)
 			shoppingList.DELETE("/:id", shoppingListHandler.DeleteShoppingListItem)
+		}
+
+		// Maintenance Tasks
+		maintenance := v1.Group("/maintenance-tasks")
+		{
+			maintenance.GET("", maintenanceHandler.GetMaintenanceTasks)
+			maintenance.POST("", maintenanceHandler.CreateMaintenanceTask)
+			maintenance.GET("/:id", maintenanceHandler.GetMaintenanceTask)
+			maintenance.PUT("/:id", maintenanceHandler.UpdateMaintenanceTask)
+			maintenance.DELETE("/:id", maintenanceHandler.DeleteMaintenanceTask)
 		}
 	}
 

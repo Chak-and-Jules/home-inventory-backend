@@ -618,6 +618,88 @@
           "quantity"
         ],
         "type": "object"
+      },
+      "MaintenanceTask": {
+        "properties": {
+          "CompletedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "CreatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "Description": {
+            "type": "string"
+          },
+          "Frequency": {
+            "type": "string"
+          },
+          "HomeID": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ID": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "InventoryItem": {
+            "$ref": "#/components/schemas/InventoryItem"
+          },
+          "InventoryItemID": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "IsCompleted": {
+            "type": "boolean"
+          },
+          "ScheduledDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "UpdatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MaintenanceTaskRequest": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "frequency": {
+            "type": "string"
+          },
+          "inventory_item_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "is_completed": {
+            "type": "boolean"
+          },
+          "scheduled_date": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "scheduled_date"
+        ],
+        "type": "object"
+      },
+      "MessageResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -929,6 +1011,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -962,6 +1051,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -986,6 +1082,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1018,6 +1121,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1093,6 +1203,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1125,6 +1242,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1149,6 +1273,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1234,6 +1365,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1266,6 +1404,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1300,6 +1445,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1399,6 +1551,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1431,6 +1590,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1472,6 +1638,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1661,6 +1834,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1693,6 +1873,13 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
@@ -1717,12 +1904,189 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
             "description": "Success"
           }
         },
         "summary": "Toggle bought status of shopping list item",
         "tags": [
           "Shopping List"
+        ]
+      }
+    },
+    "/maintenance-tasks": {
+      "get": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "description": "Filter by inventory item ID",
+            "in": "query",
+            "name": "inventory_item_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MaintenanceTask"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Get maintenance tasks for home",
+        "tags": [
+          "Maintenance Tasks"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceTask"
+                }
+              }
+            },
+            "description": "Created"
+          }
+        },
+        "summary": "Create maintenance task",
+        "tags": [
+          "Maintenance Tasks"
+        ]
+      }
+    },
+    "/maintenance-tasks/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Delete maintenance task",
+        "tags": [
+          "Maintenance Tasks"
+        ]
+      },
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceTask"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Get maintenance task",
+        "tags": [
+          "Maintenance Tasks"
+        ]
+      },
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Update maintenance task",
+        "tags": [
+          "Maintenance Tasks"
         ]
       }
     }
