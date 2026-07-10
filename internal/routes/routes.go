@@ -100,6 +100,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 		{
 			inventory.GET("", inventoryItemHandler.GetInventoryItems)
 			inventory.GET("/almost-finished", inventoryItemHandler.GetAlmostFinishedItems)
+			inventory.GET("/expiring", inventoryItemHandler.GetExpiringItems)
 			inventory.POST("", inventoryItemHandler.CreateInventoryItem)
 			inventory.PUT("/:id", inventoryItemHandler.UpdateInventoryItem)
 			inventory.PATCH("/:id/quantity", inventoryItemHandler.UpdateInventoryItemQuantity)

@@ -821,24 +821,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/HomeIdHeader"
-          },
-          {
-            "in": "query",
-            "name": "filter",
-            "schema": {
-              "type": "string",
-              "enum": ["expired", "expiring_soon"]
-            },
-            "description": "Filter items by status"
-          },
-          {
-            "in": "query",
-            "name": "sort",
-            "schema": {
-              "type": "string",
-              "enum": ["expiry"]
-            },
-            "description": "Sort items by field"
           }
         ],
         "responses": {
@@ -1294,6 +1276,38 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "description": "Filter items by status",
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "enum": [
+                "expired",
+                "expiring_soon"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sort items by field",
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "enum": [
+                "expiry"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter items expiring before this date",
+            "in": "query",
+            "name": "expiring_before",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1727,6 +1741,34 @@
         "summary": "Get size units",
         "tags": [
           "Size Units"
+        ]
+      }
+    },
+    "/inventory/expiring": {
+      "get": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InventoryItem"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Get inventory items expiring within 7 days",
+        "tags": [
+          "Inventory Items"
         ]
       }
     },
