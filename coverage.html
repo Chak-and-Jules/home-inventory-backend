@@ -55,21 +55,45 @@
 			<div id="nav">
 				<select id="files">
 
-				<option value="file0">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/category.go (81.6%)</option>
+				<option value="file0">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/category.go (85.0%)</option>
 
 				<option value="file1">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/home.go (85.8%)</option>
 
-				<option value="file2">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/inventory_item.go (73.4%)</option>
+				<option value="file2">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/inventory_item.go (76.4%)</option>
 
-				<option value="file3">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/item_definition.go (89.5%)</option>
+				<option value="file3">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/item_definition.go (90.0%)</option>
 
 				<option value="file4">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/language.go (100.0%)</option>
 
-				<option value="file5">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/profile.go (100.0%)</option>
+				<option value="file5">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/product.go (92.3%)</option>
 
-				<option value="file6">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/shopping_list.go (97.7%)</option>
+				<option value="file6">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/profile.go (100.0%)</option>
 
-				<option value="file7">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/size_unit.go (100.0%)</option>
+				<option value="file7">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/shopping_list.go (97.7%)</option>
+
+				<option value="file8">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/size_unit.go (100.0%)</option>
+
+				<option value="file9">github.com/Chak-and-Jules/home-inventory-backend/internal/i18n/i18n.go (89.5%)</option>
+
+				<option value="file10">github.com/Chak-and-Jules/home-inventory-backend/internal/logger/logger.go (82.6%)</option>
+
+				<option value="file11">github.com/Chak-and-Jules/home-inventory-backend/internal/middleware/auth.go (95.7%)</option>
+
+				<option value="file12">github.com/Chak-and-Jules/home-inventory-backend/internal/middleware/cors.go (100.0%)</option>
+
+				<option value="file13">github.com/Chak-and-Jules/home-inventory-backend/internal/middleware/ratelimit.go (100.0%)</option>
+
+				<option value="file14">github.com/Chak-and-Jules/home-inventory-backend/internal/routes/routes.go (100.0%)</option>
+
+				<option value="file15">github.com/Chak-and-Jules/home-inventory-backend/internal/utils/auth_helpers.go (100.0%)</option>
+
+				<option value="file16">github.com/Chak-and-Jules/home-inventory-backend/internal/utils/gin_utils.go (100.0%)</option>
+
+				<option value="file17">github.com/Chak-and-Jules/home-inventory-backend/internal/utils/notifications.go (56.2%)</option>
+
+				<option value="file18">github.com/Chak-and-Jules/home-inventory-backend/internal/utils/shopping_list_logic.go (56.9%)</option>
+
+				<option value="file19">github.com/Chak-and-Jules/home-inventory-backend/main.go (55.6%)</option>
 
 				</select>
 			</div>
@@ -144,23 +168,6 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) <span class="cov8" titl
                 return
         }</span>
 
-        // If parent_id is provided, verify it belongs to the same home
-        <span class="cov8" title="1">if req.ParentID != nil </span><span class="cov8" title="1">{
-                var parent models.Category
-                if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&amp;parent).Error; err != nil </span><span class="cov8" title="1">{
-                        if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
-                                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
-                        }</span> else<span class="cov0" title="0"> {
-                                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
-                        }</span>
-                        <span class="cov8" title="1">return</span>
-                }
-                <span class="cov8" title="1">if parent.HomeID != homeID </span><span class="cov8" title="1">{
-                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
-                        return
-                }</span>
-        }
-
         // Check for unique name in the same hierarchy level
         <span class="cov8" title="1">var count int64
         query := h.DB.Model(&amp;models.Category{}).Where("home_id = ? AND name = ?", homeID, req.Name)
@@ -214,29 +221,6 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) <span class="cov8" titl
                 c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
                 return
         }</span>
-
-        // If parent_id is provided, verify it belongs to the same home
-        <span class="cov8" title="1">if req.ParentID != nil </span><span class="cov8" title="1">{
-                // Prevent self-parenting
-                if *req.ParentID == id </span><span class="cov8" title="1">{
-                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category cannot be its own parent")})
-                        return
-                }</span>
-
-                <span class="cov8" title="1">var parent models.Category
-                if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&amp;parent).Error; err != nil </span><span class="cov0" title="0">{
-                        if err == gorm.ErrRecordNotFound </span><span class="cov0" title="0">{
-                                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
-                        }</span> else<span class="cov0" title="0"> {
-                                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
-                        }</span>
-                        <span class="cov0" title="0">return</span>
-                }
-                <span class="cov8" title="1">if parent.HomeID != category.HomeID </span><span class="cov0" title="0">{
-                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
-                        return
-                }</span>
-        }
 
         // Check for unique name in the same hierarchy level
         <span class="cov8" title="1">var count int64
@@ -689,6 +673,7 @@ func (h *HomeHandler) GetHomeUsers(c *gin.Context) <span class="cov8" title="1">
 		<pre class="file" id="file2" style="display: none">package handlers
 
 import (
+        "fmt"
         "net/http"
         "time"
 
@@ -717,6 +702,11 @@ type UpdateInventoryItemRequest struct {
 
 type UpdateQuantityRequest struct {
         Quantity *float64 `json:"quantity" binding:"required"`
+}
+
+type ScanInventoryRequest struct {
+        Barcode string  `json:"barcode" binding:"required"`
+        Change  float64 `json:"change" binding:"required"` // e.g. 1 to increment, -1 to decrement
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) <span class="cov8" title="1">{
@@ -1123,6 +1113,95 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) <span clas
 
         <span class="cov8" title="1">c.JSON(http.StatusOK, results)</span>
 }
+
+func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) <span class="cov8" title="1">{
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req ScanInventoryRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        // 1. Find ItemDefinition by barcode
+        <span class="cov8" title="1">var itemDef models.ItemDefinition
+        if err := h.DB.Where("home_id = ? AND barcode = ?", homeID, req.Barcode).First(&amp;itemDef).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item definition not found")})
+                        return
+                }</span>
+                <span class="cov0" title="0">c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch item definition")})
+                return</span>
+        }
+
+        // 2. Find or create InventoryItem for this definition
+        <span class="cov8" title="1">var item models.InventoryItem
+        err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                err := tx.Where("home_id = ? AND item_definition_id = ?", homeID, itemDef.ID).
+                        Order("expiration_date ASC NULLS LAST").
+                        First(&amp;item).Error
+
+                if err != nil &amp;&amp; err != gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        if req.Change &lt; 0 </span><span class="cov8" title="1">{
+                                return fmt.Errorf("insufficient stock")
+                        }</span>
+                        <span class="cov8" title="1">item = models.InventoryItem{
+                                HomeID:           homeID,
+                                ItemDefinitionID: itemDef.ID,
+                                Quantity:         req.Change,
+                        }
+                        if err := tx.Create(&amp;item).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                } else<span class="cov8" title="1"> {
+                        newQuantity := item.Quantity + req.Change
+                        if newQuantity &lt; 0 </span><span class="cov8" title="1">{
+                                newQuantity = 0
+                        }</span>
+
+                        <span class="cov8" title="1">if err := tx.Model(&amp;item).Update("quantity", newQuantity).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov8" title="1">item.Quantity = newQuantity</span>
+                }
+
+                // Log transaction
+                <span class="cov8" title="1">txLog := models.InventoryTransaction{
+                        HomeID:           homeID,
+                        ItemDefinitionID: itemDef.ID,
+                        InventoryItemID:  item.ID,
+                        QuantityChange:   req.Change,
+                }
+                if err := tx.Create(&amp;txLog).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">return utils.UpdateShoppingListForDefinition(tx, homeID, itemDef.ID)</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                if err.Error() == "insufficient stock" </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient stock")})
+                        return
+                }</span>
+                <span class="cov8" title="1">c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update inventory via scan")})
+                return</span>
+        }
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, item)</span>
+}
 </pre>
 
 		<pre class="file" id="file3" style="display: none">package handlers
@@ -1154,6 +1233,7 @@ type ItemDefinitionRequest struct {
         TargetQuantity    *float64   `json:"target_quantity"`
         Priority          string     `json:"priority"`
         ImageURL          string     `json:"image_url"`
+        Barcode           *string    `json:"barcode"`
 }
 
 func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) <span class="cov8" title="1">{
@@ -1168,8 +1248,15 @@ func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) <span class="
                 return
         }</span>
 
+        <span class="cov8" title="1">query := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID)
+
+        barcode := c.Query("barcode")
+        if barcode != "" </span><span class="cov8" title="1">{
+                query = query.Where("barcode = ?", barcode)
+        }</span>
+
         <span class="cov8" title="1">var defs []models.ItemDefinition
-        if err := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID).Find(&amp;defs).Error; err != nil </span><span class="cov8" title="1">{
+        if err := query.Find(&amp;defs).Error; err != nil </span><span class="cov8" title="1">{
                 c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch item definitions")})
                 logger.Log.Error("Failed to fetch item definitions", zap.Error(err))
                 return
@@ -1207,6 +1294,7 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) <span class
                 TargetQuantity:    req.TargetQuantity,
                 Priority:          req.Priority,
                 ImageURL:          req.ImageURL,
+                Barcode:           req.Barcode,
         }
 
         // Build and log the generated INSERT SQL using GORM DryRun mode so we can
@@ -1267,6 +1355,7 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) <span class
                 "target_quantity":     req.TargetQuantity,
                 "priority":            req.Priority,
                 "image_url":           req.ImageURL,
+                "barcode":             req.Barcode,
         }
 
         if err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
@@ -1346,6 +1435,125 @@ func (h *LanguageHandler) GetLanguages(c *gin.Context) <span class="cov8" title=
 </pre>
 
 		<pre class="file" id="file5" style="display: none">package handlers
+
+import (
+        "encoding/json"
+        "fmt"
+        "net/http"
+        "sync"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+        "github.com/gin-gonic/gin"
+        "go.uber.org/zap"
+        "gorm.io/gorm"
+)
+
+type ProductHandler struct {
+        DB      *gorm.DB
+        BaseURL string
+        cache   sync.Map
+}
+
+type ProductLookupResponse struct {
+        Barcode  string `json:"barcode"`
+        Name     string `json:"name"`
+        Category string `json:"category"`
+        ImageURL string `json:"image_url"`
+}
+
+type offResponse struct {
+        Status int `json:"status"`
+        Product struct {
+                ProductName string `json:"product_name"`
+                Categories  string `json:"categories"`
+                ImageURL    string `json:"image_url"`
+        } `json:"product"`
+}
+
+type cachedProduct struct {
+        product   ProductLookupResponse
+        expiresAt time.Time
+}
+
+func (h *ProductHandler) GetProductLookup(c *gin.Context) <span class="cov8" title="1">{
+        barcode := c.Query("barcode")
+        if barcode == "" </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "barcode query parameter is required")})
+                return
+        }</span>
+
+        // Check cache
+        <span class="cov8" title="1">if val, ok := h.cache.Load(barcode); ok </span><span class="cov8" title="1">{
+                cp := val.(cachedProduct)
+                if time.Now().Before(cp.expiresAt) </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusOK, cp.product)
+                        return
+                }</span>
+                <span class="cov8" title="1">h.cache.Delete(barcode)</span>
+        }
+
+        // Fetch from Open Food Facts
+        <span class="cov8" title="1">baseURL := h.BaseURL
+        if baseURL == "" </span><span class="cov0" title="0">{
+                baseURL = "https://world.openfoodfacts.org"
+        }</span>
+        <span class="cov8" title="1">url := fmt.Sprintf("%s/api/v2/product/%s.json", baseURL, barcode)
+
+        // ⚡ Sentinel: Use custom http.Client with timeout to prevent goroutine exhaustion
+        client := &amp;http.Client{
+                Timeout: 10 * time.Second,
+        }
+
+        resp, err := client.Get(url)
+        if err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to fetch product from Open Food Facts", zap.String("barcode", barcode), zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch product info")})
+                return
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                if resp.StatusCode == http.StatusNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Product not found")})
+                        return
+                }</span>
+                <span class="cov8" title="1">logger.Log.Error("Open Food Facts returned non-200 status", zap.String("barcode", barcode), zap.Int("status", resp.StatusCode))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch product info")})
+                return</span>
+        }
+
+        <span class="cov8" title="1">var off offResponse
+        if err := json.NewDecoder(resp.Body).Decode(&amp;off); err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to decode Open Food Facts response", zap.String("barcode", barcode), zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch product info")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if off.Status == 0 </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Product not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">product := ProductLookupResponse{
+                Barcode:  barcode,
+                Name:     off.Product.ProductName,
+                Category: off.Product.Categories,
+                ImageURL: off.Product.ImageURL,
+        }
+
+        // Cache the result for 24 hours
+        h.cache.Store(barcode, cachedProduct{
+                product:   product,
+                expiresAt: time.Now().Add(24 * time.Hour),
+        })
+
+        c.JSON(http.StatusOK, product)</span>
+}
+</pre>
+
+		<pre class="file" id="file6" style="display: none">package handlers
 
 import (
         "net/http"
@@ -1504,7 +1712,7 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) <span class="cov8" title=
 }
 </pre>
 
-		<pre class="file" id="file6" style="display: none">package handlers
+		<pre class="file" id="file7" style="display: none">package handlers
 
 import (
         "net/http"
@@ -1694,7 +1902,7 @@ func (h *ShoppingListHandler) DeleteShoppingListItem(c *gin.Context) <span class
 }
 </pre>
 
-		<pre class="file" id="file7" style="display: none">package handlers
+		<pre class="file" id="file8" style="display: none">package handlers
 
 import (
         "net/http"
@@ -1727,6 +1935,1102 @@ func (h *SizeUnitHandler) GetSizeUnits(c *gin.Context) <span class="cov8" title=
 
         c.JSON(http.StatusOK, units)</span>
 }
+</pre>
+
+		<pre class="file" id="file9" style="display: none">package i18n
+
+import (
+        "strings"
+        "sync"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "gorm.io/gorm"
+)
+
+var userLangCache sync.Map
+
+var Translations = map[string]map[string]string{
+        "English": {},
+        "Türkçe": {
+                "A category with this name already exists at this level": "Bu düzeyde aynı isme sahip bir kategori zaten mevcut",
+                "Access denied to this home":                             "Bu eve erişim reddedildi",
+                "Authorization header is missing":                        "Yetkilendirme başlığı eksik",
+                "Too many requests":                                      "Çok fazla istek",
+                "Category deleted successfully":                          "Kategori başarıyla silindi",
+                "Category not found":                                     "Kategori bulunamadı",
+                "Category updated successfully":                          "Kategori başarıyla güncellendi",
+                "Cannot delete your only home":                           "Tek evinizi silemezsiniz",
+                "Default home updated successfully":                      "Varsayılan ev başarıyla güncellendi",
+                "Email missing from token claims":                        "E-posta token claims içinde eksik",
+                "Failed to check homes":                                  "Evleri kontrol etme başarısız oldu",
+                "Failed to create category":                              "Kategori oluşturulamadı",
+                "Failed to create default home":                          "Varsayılan ev oluşturulamadı",
+                "Failed to create home":                                  "Ev oluşturulamadı",
+                "Failed to create inventory item":                        "Envanter öğesi oluşturulamadı",
+                "Failed to create item definition":                       "Öğe tanımı oluşturulamadı",
+                "Failed to create shopping list item":                    "Alışveriş listesi öğesi oluşturulamadı",
+                "Failed to delete category":                              "Kategori silinemedi",
+                "Failed to delete home":                                  "Ev silinemedi",
+                "Failed to delete inventory item":                        "Envanter öğesi silinemedi",
+                "Failed to delete item definition (it might be in use)":  "Öğe tanımı silinemedi (kullanımda olabilir)",
+                "Failed to delete shopping list item":                    "Alışveriş listesi öğesi silinemedi",
+                "Failed to fetch categories":                             "Kategoriler getirilemedi",
+                "Failed to fetch homes":                                  "Evler getirilemedi",
+                "Failed to fetch inventory items":                        "Envanter öğeleri getirilemedi",
+                "Failed to fetch item definitions":                       "Öğe tanımları getirilemedi",
+                "Failed to fetch shopping list items":                    "Alışveriş listesi öğeleri getirilemedi",
+                "Failed to fetch languages":                              "Diller getirilemedi",
+                "Failed to fetch profile":                                "Profil getirilemedi",
+                "Failed to fetch product info":                           "Ürün bilgisi getirilemedi",
+                "Failed to fetch size units":                             "Boyut birimleri getirilemedi",
+                "Failed to parse token claims":                           "Token claims ayrıştırılamadı",
+                "Failed to set default home":                             "Varsayılan ev ayarlanamadı",
+                "Failed to sync profile":                                 "Profil senkronizasyonu başarısız oldu",
+                "Failed to update category":                              "Kategori güncellenemedi",
+                "Failed to update home":                                  "Ev güncellenemedi",
+                "Failed to update inventory item":                        "Envanter öğesi güncellenemedi",
+                "Failed to update item definition":                       "Öğe tanımı güncellenemedi",
+                "Failed to update profile":                               "Profil güncellenemedi",
+                "Failed to update quantity":                              "Miktar güncellenemedi",
+                "Failed to update shopping list item":                    "Alışveriş listesi öğesi güncellenemedi",
+                "Failed to update inventory via scan":                    "Tarama yoluyla envanter güncellenemedi",
+                "Failed to toggle bought status":                         "Satın alma durumu değiştirilemedi",
+                "Failed to validate category uniqueness":                 "Kategori benzersizliğini doğrulama başarısız oldu",
+                "Home deleted successfully":                              "Ev başarıyla silindi",
+                "Home not found or access denied":                        "Ev bulunamadı veya erişim reddedildi",
+                "Home updated successfully":                              "Ev başarıyla güncellendi",
+                "Insufficient stock":                                     "Yetersiz stok",
+                "This is your default home. Please confirm deletion.":    "Bu sizin varsayılan evinizdir. Lütfen silme işlemini onaylayın.",
+                "Insufficient permissions to update home":                "Evi güncellemek için yetersiz izinler",
+                "Invalid ID":                                        "Geçersiz ID",
+                "Invalid authorization header format":               "Geçersiz yetkilendirme başlığı formatı",
+                "Invalid category ID":                               "Geçersiz kategori ID",
+                "Invalid home ID":                                   "Geçersiz ev ID",
+                "Invalid home_id":                                   "Geçersiz ev_id",
+                "Invalid inventory item ID":                         "Geçersiz envanter öğesi ID",
+                "Invalid item definition ID":                        "Geçersiz öğe tanımı ID",
+                "Invalid shopping list item ID":                     "Geçersiz alışveriş listesi öğesi ID",
+                "Item definition does not belong to this home":      "Öğe tanımı bu eve ait değil",
+                "Invalid user ID in token":                          "Token içinde geçersiz kullanıcı ID'si",
+                "Invalid request payload":                           "Geçersiz istek yükü",
+                "Invalid token":                                     "Geçersiz belirteç",
+                "Inventory item deleted successfully":               "Envanter öğesi başarıyla silindi",
+                "Inventory item not found":                          "Envanter öğesi bulunamadı",
+                "Inventory item updated successfully":               "Envanter öğesi başarıyla güncellendi",
+                "Item definition deleted successfully":              "Öğe tanımı başarıyla silindi",
+                "Product not found":                                 "Ürün bulunamadı",
+                "Shopping list item deleted successfully":           "Alışveriş listesi öğesi başarıyla silindi",
+                "Shopping list item updated successfully":           "Alışveriş listesi öğesi başarıyla güncellendi",
+                "Shopping list item status toggled successfully":    "Alışveriş listesi öğesi durumu başarıyla değiştirildi",
+                "Item definition or name is required":               "Öğe tanımı veya isim gereklidir",
+                "Shopping list item not found":                      "Alışveriş listesi öğesi bulunamadı",
+                "Item definition not found":                         "Öğe tanımı bulunamadı",
+                "Item definition updated successfully":              "Öğe tanımı başarıyla güncellendi",
+                "JWT secret is not configured":                      "JWT sırrı yapılandırılmamış",
+                "No valid fields to update":                         "Güncellenecek geçerli alan yok",
+                "Only owners can delete homes":                      "Sadece sahipler evleri silebilir",
+                "Profile email does not match authenticated user":   "Profil e-postası doğrulanmış kullanıcıyla eşleşmiyor",
+                "Profile not found":                                 "Profil bulunamadı",
+                "Profile updated successfully":                      "Profil başarıyla güncellendi",
+                "Profile user ID does not match authenticated user": "Profil kullanıcı ID'si doğrulanmış kullanıcıyla eşleşmiyor",
+                "Quantity updated successfully":                     "Miktar başarıyla güncellendi",
+                "SUPABASE_URL is not configured":                    "SUPABASE_URL yapılandırılmamış",
+                "Subject missing from token claims":                 "Konu token claims içinde eksik",
+                "Write access denied to this home":                  "Bu eve yazma erişimi reddedildi",
+                "id header is required":                             "id başlığı gereklidir",
+                "id query parameter is required":                    "id sorgu parametresi gereklidir",
+                "x-home-id header is required":                      "x-home-id başlığı gereklidir",
+        },
+}
+
+// InvalidateUserLanguageCache removes a user from the language cache
+func InvalidateUserLanguageCache(userID uuid.UUID) <span class="cov8" title="1">{
+        userLangCache.Delete(userID)
+}</span>
+
+// TranslateDB gets the user language from context/DB and translates the string
+func TranslateDB(db *gorm.DB, c *gin.Context, key string) string <span class="cov8" title="1">{
+        if c == nil </span><span class="cov8" title="1">{
+                return key
+        }</span>
+
+        <span class="cov8" title="1">userIDVal, exists := c.Get("userID")
+        if !exists </span><span class="cov8" title="1">{
+                return key
+        }</span>
+
+        <span class="cov8" title="1">userID, ok := userIDVal.(uuid.UUID)
+        if !ok </span><span class="cov0" title="0">{
+                return key
+        }</span>
+
+        <span class="cov8" title="1">langName := "English"
+        if val, ok := userLangCache.Load(userID); ok </span><span class="cov8" title="1">{
+                langName = val.(string)
+        }</span> else<span class="cov8" title="1"> if db != nil </span><span class="cov8" title="1">{
+                var profile models.Profile
+                // Only hit DB if DB is valid
+                if err := db.Preload("Language").Select("id", "language_id").Where("id = ?", userID).First(&amp;profile).Error; err == nil </span><span class="cov8" title="1">{
+                        if profile.Language != nil &amp;&amp; profile.Language.Name != "" </span><span class="cov8" title="1">{
+                                langName = profile.Language.Name
+                        }</span>
+                }
+                <span class="cov8" title="1">userLangCache.Store(userID, langName)</span>
+        }
+
+        // ⚡ Bolt: Avoid strings.EqualFold in hot paths for small set of enum-like values to improve performance (exact match is orders of magnitude faster)
+        <span class="cov8" title="1">langKey := "English"
+        if langName == "Türkçe" || langName == "Turkish" || langName == "tr" || langName == "türkçe" || langName == "turkish" || langName == "TR" || langName == "Tr" </span><span class="cov8" title="1">{
+                langKey = "Türkçe"
+        }</span>
+
+        <span class="cov8" title="1">if langMap, ok := Translations[langKey]; ok </span><span class="cov8" title="1">{
+                // ⚡ Bolt: Fast path exact key match to avoid expensive string operations
+                if val, ok := langMap[key]; ok </span><span class="cov8" title="1">{
+                        return val
+                }</span>
+
+                // Check for templated keys
+                <span class="cov8" title="1">var lookupKey string
+                var suffix string
+
+                if strings.HasSuffix(key, " query parameter is required") </span><span class="cov8" title="1">{
+                        lookupKey = "id query parameter is required"
+                        suffix = key[:len(key)-len(" query parameter is required")]
+                }</span> else<span class="cov8" title="1"> if strings.HasSuffix(key, " header is required") </span><span class="cov0" title="0">{
+                        lookupKey = "id header is required"
+                        suffix = key[:len(key)-len(" header is required")]
+                }</span>
+
+                <span class="cov8" title="1">if lookupKey != "" </span><span class="cov8" title="1">{
+                        if val, ok := langMap[lookupKey]; ok </span><span class="cov8" title="1">{
+                                // ⚡ Bolt: Fast string slice replace to avoid strings.Contains double-scan and strings.Replace allocation
+                                if idx := strings.Index(val, "id"); idx != -1 </span><span class="cov8" title="1">{
+                                        return val[:idx] + suffix + val[idx+2:]
+                                }</span>
+                                <span class="cov0" title="0">return val</span>
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">return key</span>
+}
+</pre>
+
+		<pre class="file" id="file10" style="display: none">package logger
+
+import (
+        "log"
+        "os"
+
+        adapter "github.com/axiomhq/axiom-go/adapters/zap"
+        "go.uber.org/zap"
+        "go.uber.org/zap/zapcore"
+)
+
+var Log *zap.Logger
+
+func InitLogger() <span class="cov8" title="1">{
+
+        // Determine if we should use Axiom logging
+        axiomDataset := os.Getenv("AXIOM_DATASET")
+        axiomToken := os.Getenv("AXIOM_TOKEN")
+
+        var core zapcore.Core
+
+        if axiomDataset != "" &amp;&amp; axiomToken != "" </span><span class="cov8" title="1">{
+                // Initialize the Axiom adapter for zap
+                axiomCore, err := adapter.New(
+                        adapter.SetDataset(axiomDataset),
+                )
+                if err != nil </span><span class="cov8" title="1">{
+                        log.Printf("Failed to initialize Axiom logger adapter: %v, falling back to standard console logging", err)
+                        core = getFallbackCore()
+                }</span> else<span class="cov0" title="0"> {
+                        // Also log to console in production for standard output tracking
+                        consoleEncoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
+                        consoleCore := zapcore.NewCore(
+                                consoleEncoder,
+                                zapcore.Lock(os.Stdout),
+                                zapcore.InfoLevel,
+                        )
+
+                        // Combine both cores
+                        core = zapcore.NewTee(consoleCore, axiomCore)
+                }</span>
+        } else<span class="cov8" title="1"> {
+                core = getFallbackCore()
+        }</span>
+
+        <span class="cov8" title="1">Log = zap.New(core, zap.AddCaller())
+
+        // Replace global zap logger
+        zap.ReplaceGlobals(Log)</span>
+}
+
+func getFallbackCore() zapcore.Core <span class="cov8" title="1">{
+        // Fallback to standard console logging if Axiom isn't configured
+        config := zap.NewProductionConfig()
+        if os.Getenv("APP_ENV") == "local" || os.Getenv("APP_ENV") == "" </span><span class="cov8" title="1">{
+                config = zap.NewDevelopmentConfig()
+        }</span>
+
+        <span class="cov8" title="1">coreLogger, err := config.Build()
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to build fallback zap logger: %v", err)
+        }</span>
+        <span class="cov8" title="1">return coreLogger.Core()</span>
+}
+
+func Sync() <span class="cov8" title="1">{
+        if Log != nil </span><span class="cov8" title="1">{
+                _ = Log.Sync()
+        }</span>
+}
+</pre>
+
+		<pre class="file" id="file11" style="display: none">package middleware
+
+import (
+        "crypto/ecdsa"
+        "crypto/elliptic"
+        "encoding/base64"
+        "encoding/json"
+        "fmt"
+        "math/big"
+        "net/http"
+        "os"
+        "strings"
+        "sync"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/gin-gonic/gin"
+        "github.com/golang-jwt/jwt/v5"
+        "github.com/google/uuid"
+)
+
+var supabaseUrl string
+var jwksURL string
+var jwtSecret string
+var jwtSecretBytes []byte // ⚡ Bolt: Cached byte slice to avoid per-request memory allocation during HMAC verification
+
+var (
+        jwksCache sync.Map // ⚡ Bolt: Replaced map+RWMutex with sync.Map for lock-free, concurrent reads of ECDSA public keys
+)
+
+func SupabaseAuthMiddleware() gin.HandlerFunc <span class="cov8" title="1">{
+        supabaseUrl = os.Getenv("SUPABASE_URL")
+        if supabaseUrl == "" </span><span class="cov8" title="1">{
+                // Don't panic in library code or tests; return a middleware that
+                // responds with 500 so callers (tests/servers) can handle it.
+                return func(c *gin.Context) </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(nil, c, "SUPABASE_URL is not configured")})
+                }</span>
+        }
+
+        <span class="cov8" title="1">jwksURL = supabaseUrl + "/auth/v1/.well-known/jwks.json"
+        jwtSecret = os.Getenv("SUPABASE_JWT_SECRET")
+        jwtSecretBytes = []byte(jwtSecret) // Cache byte slice
+
+        return func(c *gin.Context) </span><span class="cov8" title="1">{
+                authHeader := c.GetHeader("Authorization")
+                if authHeader == "" </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Authorization header is missing")})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if !strings.HasPrefix(authHeader, "Bearer ") </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid authorization header format")})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">tokenString := authHeader[7:]
+                // ⚡ Bolt: Use IndexByte instead of Contains string since we're just checking for a space character
+                if strings.IndexByte(tokenString, ' ') != -1 </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid authorization header format")})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if jwtSecret == "" </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(nil, c, "JWT secret is not configured")})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">claims, err := FetchAndVerifyToken(tokenString)
+
+                if err != nil </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid token")})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if claims == nil </span><span class="cov0" title="0">{
+                        c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Failed to parse token claims")})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">sub, ok := (*claims)["sub"].(string)
+                if !ok </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Subject missing from token claims")})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">userID, err := uuid.Parse(sub)
+                if err != nil </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid user ID in token")})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">email, ok := (*claims)["email"].(string)
+                if !ok </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Email missing from token claims")})
+                        return
+                }</span>
+
+                // Set the user ID in the context so subsequent handlers can access it
+                <span class="cov8" title="1">c.Set("userID", userID)
+                c.Set("email", email)
+                c.Next()</span>
+        }
+}
+
+// FetchAndVerifyToken validates a Supabase token using the ECDSA public key
+func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) <span class="cov8" title="1">{
+        token, err := jwt.ParseWithClaims(tokenString, &amp;jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) </span><span class="cov8" title="1">{
+                if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok </span><span class="cov8" title="1">{
+                        if jwtSecret == "" </span><span class="cov0" title="0">{
+                                return nil, fmt.Errorf("JWT secret is not configured")
+                        }</span>
+                        <span class="cov8" title="1">return jwtSecretBytes, nil</span> // ⚡ Bolt: Return cached bytes to avoid allocation
+                }
+
+                <span class="cov8" title="1">kid, ok := token.Header["kid"].(string)
+                if !ok </span><span class="cov8" title="1">{
+                        return nil, fmt.Errorf("kid not found in token header")
+                }</span>
+
+                // Check cache first
+                <span class="cov8" title="1">if pubKeyInterface, exists := jwksCache.Load(kid); exists </span><span class="cov8" title="1">{
+                        return pubKeyInterface.(*ecdsa.PublicKey), nil
+                }</span>
+
+                // Fetch JWKS from Supabase for ECDSA verification
+                <span class="cov8" title="1">client := &amp;http.Client{
+                        Timeout: 10 * time.Second,
+                }
+                resp, err := client.Get(jwksURL)
+                if err != nil </span><span class="cov8" title="1">{
+                        return nil, fmt.Errorf("could not fetch JWKS: %v", err)
+                }</span>
+                <span class="cov8" title="1">defer resp.Body.Close()
+
+                var jwks map[string]interface{}
+                if err := json.NewDecoder(resp.Body).Decode(&amp;jwks); err != nil </span><span class="cov8" title="1">{
+                        return nil, fmt.Errorf("could not parse JWKS: %v", err)
+                }</span>
+
+                <span class="cov8" title="1">keys, ok := jwks["keys"].([]interface{})
+                if !ok </span><span class="cov8" title="1">{
+                        return nil, fmt.Errorf("invalid JWKS format")
+                }</span>
+
+                <span class="cov8" title="1">for _, key := range keys </span><span class="cov8" title="1">{
+                        keyMap := key.(map[string]interface{})
+                        if keyMap["kid"] == kid </span><span class="cov8" title="1">{
+                                pubKey, err := parseECDSAPublicKey(keyMap)
+                                if err != nil </span><span class="cov8" title="1">{
+                                        return nil, err
+                                }</span>
+
+                                // Update cache
+                                <span class="cov8" title="1">jwksCache.Store(kid, pubKey)
+
+                                return pubKey, nil</span>
+                        }
+                }
+
+                <span class="cov8" title="1">return nil, fmt.Errorf("key not found")</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">if claims, ok := token.Claims.(*jwt.MapClaims); ok &amp;&amp; token.Valid </span><span class="cov8" title="1">{
+                return claims, nil
+        }</span>
+
+        <span class="cov0" title="0">return nil, fmt.Errorf("invalid token")</span>
+}
+
+// parseECDSAPublicKey extracts ECDSA public key from JWKS key data
+func parseECDSAPublicKey(keyMap map[string]interface{}) (*ecdsa.PublicKey, error) <span class="cov8" title="1">{
+        x, ok := keyMap["x"].(string)
+        if !ok </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("x coordinate not found in JWKS key")
+        }</span>
+
+        <span class="cov8" title="1">y, ok := keyMap["y"].(string)
+        if !ok </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("y coordinate not found in JWKS key")
+        }</span>
+
+        <span class="cov8" title="1">xBytes, err := base64.RawURLEncoding.DecodeString(x)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to decode x: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">yBytes, err := base64.RawURLEncoding.DecodeString(y)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to decode y: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">pubKey := &amp;ecdsa.PublicKey{
+                Curve: elliptic.P256(),
+                X:     new(big.Int).SetBytes(xBytes),
+                Y:     new(big.Int).SetBytes(yBytes),
+        }
+
+        return pubKey, nil</span>
+}
+</pre>
+
+		<pre class="file" id="file12" style="display: none">package middleware
+
+import (
+        "net/http"
+
+        "github.com/gin-gonic/gin"
+)
+
+// CORSMiddleware simple CORS middleware to handle OPTIONS
+func CORSMiddleware() gin.HandlerFunc <span class="cov8" title="1">{
+        return func(c *gin.Context) </span><span class="cov8" title="1">{
+                c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+                c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-home-id")
+                c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
+
+                if c.Request.Method == "OPTIONS" </span><span class="cov8" title="1">{
+                        c.AbortWithStatus(http.StatusNoContent)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">c.Next()</span>
+        }
+}
+</pre>
+
+		<pre class="file" id="file13" style="display: none">package middleware
+
+import (
+        "net/http"
+        "sync"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/gin-gonic/gin"
+        "golang.org/x/time/rate"
+)
+
+type rateLimiter struct {
+        limiters sync.Map
+        rate     rate.Limit
+        burst    int
+}
+
+var limiter = &amp;rateLimiter{
+        limiters: sync.Map{},
+        rate:     rate.Every(1 * time.Minute / 300), // 300 requests per minute
+        burst:    300,
+}
+
+func (l *rateLimiter) getLimiter(ip string) *rate.Limiter <span class="cov8" title="1">{
+        lim, exists := l.limiters.Load(ip)
+        if !exists </span><span class="cov8" title="1">{
+                // ⚡ Bolt: Use lock-free sync.Map for highly concurrent IP rate limiting,
+                // replacing a global sync.Mutex which bottlenecks all requests.
+                newLimiter := rate.NewLimiter(l.rate, l.burst)
+                lim, _ = l.limiters.LoadOrStore(ip, newLimiter)
+        }</span>
+
+        <span class="cov8" title="1">return lim.(*rate.Limiter)</span>
+}
+
+// RateLimitMiddleware applies IP-based rate limiting
+func RateLimitMiddleware() gin.HandlerFunc <span class="cov8" title="1">{
+        return func(c *gin.Context) </span><span class="cov8" title="1">{
+                ip := c.ClientIP()
+                lim := limiter.getLimiter(ip)
+
+                if !lim.Allow() </span><span class="cov8" title="1">{
+                        c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+                                "error": i18n.TranslateDB(nil, c, "Too many requests"),
+                        })
+                        return
+                }</span>
+
+                <span class="cov8" title="1">c.Next()</span>
+        }
+}
+</pre>
+
+		<pre class="file" id="file14" style="display: none">package routes
+
+import (
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/handlers"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/middleware"
+        ginzap "github.com/gin-contrib/zap"
+        "github.com/gin-gonic/gin"
+        "gorm.io/gorm"
+)
+
+func SetupRouter(db *gorm.DB) *gin.Engine <span class="cov8" title="1">{
+        r := gin.New()
+        r.Use(ginzap.Ginzap(logger.Log, time.RFC3339, true))
+        r.Use(ginzap.RecoveryWithZap(logger.Log, true))
+
+        r.Use(middleware.CORSMiddleware())
+
+        r.Use(middleware.RateLimitMiddleware())
+
+        // CORS middleware can be added here if needed
+
+        // Initialize handlers
+        homeHandler := &amp;handlers.HomeHandler{DB: db}
+        profileHandler := &amp;handlers.ProfileHandler{DB: db}
+        categoryHandler := &amp;handlers.CategoryHandler{DB: db}
+        itemDefHandler := &amp;handlers.ItemDefinitionHandler{DB: db}
+        sizeUnitHandler := &amp;handlers.SizeUnitHandler{DB: db}
+        languageHandler := &amp;handlers.LanguageHandler{DB: db}
+        inventoryItemHandler := &amp;handlers.InventoryItemHandler{DB: db}
+        shoppingListHandler := &amp;handlers.ShoppingListHandler{DB: db}
+        productHandler := &amp;handlers.ProductHandler{DB: db}
+
+        // API v1 group
+        v1 := r.Group("/api/v1")
+        v1.Use(middleware.SupabaseAuthMiddleware())
+        </span><span class="cov8" title="1">{
+                // Profiles
+                profiles := v1.Group("/profiles")
+                </span><span class="cov8" title="1">{
+                        profiles.GET("", profileHandler.GetProfile)
+                        profiles.PUT("", profileHandler.UpdateProfile)
+                        profiles.POST("/sync", profileHandler.SyncProfile)
+                }</span>
+
+                // Homes
+                <span class="cov8" title="1">homes := v1.Group("/homes")
+                </span><span class="cov8" title="1">{
+                        homes.GET("", homeHandler.GetHomes)
+                        homes.POST("", homeHandler.CreateHome)
+                        homes.PUT("/:id", homeHandler.UpdateHome)
+                        homes.DELETE("/:id", homeHandler.DeleteHome)
+                        homes.POST("/:id/default", homeHandler.SetDefaultHome)
+
+                        // Home Users
+                        users := homes.Group("/:id/users")
+                        </span><span class="cov8" title="1">{
+                                users.GET("", homeHandler.GetHomeUsers)
+                                users.POST("", homeHandler.AddHomeUser)
+                                users.PUT("/:userId/role", homeHandler.UpdateHomeUserRole)
+                                users.DELETE("/:userId", homeHandler.RemoveHomeUser)
+                        }</span>
+                }
+
+                // Categories
+                <span class="cov8" title="1">categories := v1.Group("/categories")
+                </span><span class="cov8" title="1">{
+                        categories.GET("", categoryHandler.GetCategories)
+                        categories.POST("", categoryHandler.CreateCategory)
+                        categories.PUT("/:id", categoryHandler.UpdateCategory)
+                        categories.DELETE("/:id", categoryHandler.DeleteCategory)
+                }</span>
+
+                // Item Definitions
+                <span class="cov8" title="1">itemDefs := v1.Group("/item-definitions")
+                </span><span class="cov8" title="1">{
+                        itemDefs.GET("", itemDefHandler.GetItemDefinitions)
+                        itemDefs.POST("", itemDefHandler.CreateItemDefinition)
+                        itemDefs.PUT("/:id", itemDefHandler.UpdateItemDefinition)
+                        itemDefs.DELETE("/:id", itemDefHandler.DeleteItemDefinition)
+                }</span>
+
+                // Size Units
+                <span class="cov8" title="1">sizeUnits := v1.Group("/size-units")
+                </span><span class="cov8" title="1">{
+                        sizeUnits.GET("", sizeUnitHandler.GetSizeUnits)
+                }</span>
+
+                // Languages
+                <span class="cov8" title="1">languages := v1.Group("/languages")
+                </span><span class="cov8" title="1">{
+                        languages.GET("", languageHandler.GetLanguages)
+                }</span>
+
+                // Inventory Items
+                <span class="cov8" title="1">inventory := v1.Group("/inventory")
+                </span><span class="cov8" title="1">{
+                        inventory.GET("", inventoryItemHandler.GetInventoryItems)
+                        inventory.GET("/almost-finished", inventoryItemHandler.GetAlmostFinishedItems)
+                        inventory.POST("", inventoryItemHandler.CreateInventoryItem)
+                        inventory.PUT("/:id", inventoryItemHandler.UpdateInventoryItem)
+                        inventory.PATCH("/:id/quantity", inventoryItemHandler.UpdateInventoryItemQuantity)
+                        inventory.DELETE("/:id", inventoryItemHandler.DeleteInventoryItem)
+                        inventory.POST("/scan", inventoryItemHandler.ScanInventoryItem)
+                }</span>
+
+                // Products
+                <span class="cov8" title="1">products := v1.Group("/products")
+                </span><span class="cov8" title="1">{
+                        products.GET("/lookup", productHandler.GetProductLookup)
+                }</span>
+
+                // Shopping List
+                <span class="cov8" title="1">shoppingList := v1.Group("/shopping-list")
+                </span><span class="cov8" title="1">{
+                        shoppingList.GET("", shoppingListHandler.GetShoppingList)
+                        shoppingList.POST("", shoppingListHandler.CreateShoppingListItem)
+                        shoppingList.PUT("/:id", shoppingListHandler.UpdateShoppingListItem)
+                        shoppingList.PATCH("/:id/toggle-bought", shoppingListHandler.ToggleShoppingListItemBought)
+                        shoppingList.DELETE("/:id", shoppingListHandler.DeleteShoppingListItem)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return r</span>
+}
+</pre>
+
+		<pre class="file" id="file15" style="display: none">package utils
+
+import (
+        "errors"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "gorm.io/gorm"
+)
+
+// GetUserHome retrieves the user's home access record
+func GetUserHome(c *gin.Context, db *gorm.DB, homeID uuid.UUID) (*models.UserHome, error) <span class="cov8" title="1">{
+        userID, exists := c.Get("userID")
+        if !exists </span><span class="cov8" title="1">{
+                return nil, errors.New("missing user id")
+        }</span>
+        <span class="cov8" title="1">uid, ok := userID.(uuid.UUID)
+        if !ok </span><span class="cov8" title="1">{
+                return nil, errors.New("invalid user id type")
+        }</span>
+
+        <span class="cov8" title="1">var userHome models.UserHome
+        if err := db.Where("user_id = ? AND home_id = ?", uid, homeID).First(&amp;userHome).Error; err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">return &amp;userHome, nil</span>
+}
+
+// VerifyHomeAccess checks if the user has access to the home
+func VerifyHomeAccess(c *gin.Context, db *gorm.DB, homeID uuid.UUID) bool <span class="cov8" title="1">{
+        _, err := GetUserHome(c, db, homeID)
+        return err == nil
+}</span>
+
+// VerifyHomeWriteAccess checks if the user has owner or editor access to the home
+func VerifyHomeWriteAccess(c *gin.Context, db *gorm.DB, homeID uuid.UUID) bool <span class="cov8" title="1">{
+        userHome, err := GetUserHome(c, db, homeID)
+        if err != nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">return userHome.Role == models.RoleOwner || userHome.Role == models.RoleEditor</span>
+}
+</pre>
+
+		<pre class="file" id="file16" style="display: none">package utils
+
+import (
+        "net/http"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "gorm.io/gorm"
+)
+
+// ParseUUIDParam extracts a path parameter, parses it as a UUID, and returns the result.
+// If parsing fails, it sends a 400 Bad Request response and returns (uuid.Nil, false).
+func ParseUUIDParam(c *gin.Context, db *gorm.DB, name string, errorMessage string) (uuid.UUID, bool) <span class="cov8" title="1">{
+        valStr := c.Param(name)
+        id, err := uuid.Parse(valStr)
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(db, c, errorMessage)})
+                return uuid.Nil, false
+        }</span>
+        <span class="cov8" title="1">return id, true</span>
+}
+
+// ParseUUIDQuery extracts a query parameter, parses it as a UUID, and returns the result.
+// If the parameter is missing or invalid, it sends a 400 Bad Request response and returns (uuid.Nil, false).
+func ParseUUIDQuery(c *gin.Context, db *gorm.DB, name string, errorMessage string) (uuid.UUID, bool) <span class="cov8" title="1">{
+        valStr := c.Query(name)
+        if valStr == "" </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(db, c, name+" query parameter is required")})
+                return uuid.Nil, false
+        }</span>
+        <span class="cov8" title="1">id, err := uuid.Parse(valStr)
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(db, c, errorMessage)})
+                return uuid.Nil, false
+        }</span>
+        <span class="cov8" title="1">return id, true</span>
+}
+
+// ParseUUIDHeader extracts a header value, parses it as a UUID, and returns the result.
+// If the header is missing or invalid, it sends a 400 Bad Request response and returns (uuid.Nil, false).
+func ParseUUIDHeader(c *gin.Context, db *gorm.DB, name string, errorMessage string) (uuid.UUID, bool) <span class="cov8" title="1">{
+        valStr := c.GetHeader(name)
+        if valStr == "" </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(db, c, name+" header is required")})
+                return uuid.Nil, false
+        }</span>
+        <span class="cov8" title="1">id, err := uuid.Parse(valStr)
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(db, c, errorMessage)})
+                return uuid.Nil, false
+        }</span>
+        <span class="cov8" title="1">return id, true</span>
+}
+</pre>
+
+		<pre class="file" id="file17" style="display: none">package utils
+
+import (
+        "fmt"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/google/uuid"
+        "go.uber.org/zap"
+        "gorm.io/gorm"
+)
+
+// SendLowStockNotification logs a notification for low stock items.
+// In a real application, this would send a push notification or an in-app alert.
+func SendLowStockNotification(db *gorm.DB, homeID uuid.UUID, itemName string, priority string) <span class="cov8" title="1">{
+        var home models.Home
+        homeName := homeID.String()
+        if db != nil </span><span class="cov8" title="1">{
+                if err := db.First(&amp;home, homeID).Error; err == nil </span><span class="cov8" title="1">{
+                        homeName = home.Name
+                }</span>
+        }
+
+        <span class="cov8" title="1">msg := fmt.Sprintf("Low stock alert for home %s: %s", homeName, itemName)
+        if priority == "high" </span><span class="cov8" title="1">{
+                msg = fmt.Sprintf("URGENT: %s", msg)
+        }</span>
+
+        <span class="cov8" title="1">logger.Log.Info("Notification Triggered",
+                zap.String("type", "low_stock"),
+                zap.String("home_id", homeID.String()),
+                zap.String("home_name", homeName),
+                zap.String("item_name", itemName),
+                zap.String("priority", priority),
+                zap.String("message", msg),
+        )</span>
+}
+
+// SendExpiryNotification logs a notification for items expiring soon.
+func SendExpiryNotification(db *gorm.DB, homeID uuid.UUID, itemName string, expiryDate time.Time) <span class="cov0" title="0">{
+        var home models.Home
+        homeName := homeID.String()
+        if db != nil </span><span class="cov0" title="0">{
+                if err := db.First(&amp;home, homeID).Error; err == nil </span><span class="cov0" title="0">{
+                        homeName = home.Name
+                }</span>
+        }
+
+        <span class="cov0" title="0">msg := fmt.Sprintf("Item expiring soon for home %s: %s (expires on %s)", homeName, itemName, expiryDate.Format("2006-01-02"))
+
+        logger.Log.Info("Notification Triggered",
+                zap.String("type", "expiring_soon"),
+                zap.String("home_id", homeID.String()),
+                zap.String("home_name", homeName),
+                zap.String("item_name", itemName),
+                zap.String("expiry_date", expiryDate.Format("2006-01-02")),
+                zap.String("message", msg),
+        )</span>
+}
+</pre>
+
+		<pre class="file" id="file18" style="display: none">package utils
+
+import (
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/google/uuid"
+        "go.uber.org/zap"
+        "gorm.io/gorm"
+)
+
+// UpdateShoppingListForDefinition checks the stock levels for a given item definition and updates the shopping list accordingly.
+func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uuid.UUID) error <span class="cov8" title="1">{
+        var itemDef models.ItemDefinition
+        if err := tx.First(&amp;itemDef, itemDefID).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to fetch item definition", zap.Error(err))
+                return err
+        }</span>
+
+        <span class="cov8" title="1">var existingItem models.ShoppingListItem
+        err := tx.Where("home_id = ? AND item_definition_id = ? AND is_auto_generated = ? AND is_bought = ?",
+                homeID, itemDefID, true, false).First(&amp;existingItem).Error
+
+        // If no threshold is set, we don't auto-generate.
+        // We also remove any existing auto-generated items that are not bought.
+        if itemDef.LowStockThreshold == nil </span><span class="cov8" title="1">{
+                if err == nil </span><span class="cov8" title="1">{
+                        return tx.Delete(&amp;existingItem).Error
+                }</span>
+                <span class="cov0" title="0">logger.Log.Error("Failed to fetch existing shopping list item", zap.Error(err))
+                return nil</span>
+        }
+
+        <span class="cov8" title="1">var totalQuantity float64
+        if err := tx.Model(&amp;models.InventoryItem{}).
+                Where("home_id = ? AND item_definition_id = ? AND (expiration_date IS NULL OR expiration_date &gt; NOW())", homeID, itemDefID).
+                Select("COALESCE(SUM(quantity), 0)").
+                Scan(&amp;totalQuantity).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to calculate total quantity", zap.Error(err))
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if totalQuantity &lt;= *itemDef.LowStockThreshold </span><span class="cov8" title="1">{
+                // Needs to be on the shopping list
+                neededQuantity := 1.0
+                if itemDef.TargetQuantity != nil </span><span class="cov8" title="1">{
+                        neededQuantity = *itemDef.TargetQuantity - totalQuantity
+                        if neededQuantity &lt;= 0 </span><span class="cov0" title="0">{
+                                neededQuantity = 1.0 // Fallback if target is somehow less than current but still below threshold
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        // Create new
+                        newItem := models.ShoppingListItem{
+                                HomeID:           homeID,
+                                ItemDefinitionID: &amp;itemDefID,
+                                Name:             itemDef.Name,
+                                Quantity:         neededQuantity,
+                                IsAutoGenerated:  true,
+                                IsBought:         false,
+                        }
+                        if err := tx.Create(&amp;newItem).Error; err != nil </span><span class="cov8" title="1">{
+                                logger.Log.Error("Failed to create shopping list item", zap.Error(err))
+                                return err
+                        }</span>
+
+                        // AC 2.5: Trigger notification
+                        <span class="cov8" title="1">SendLowStockNotification(tx, homeID, itemDef.Name, itemDef.Priority)
+                        return nil</span>
+                } else<span class="cov8" title="1"> if err == nil </span><span class="cov8" title="1">{
+                        // Update existing
+                        return tx.Model(&amp;existingItem).Update("quantity", neededQuantity).Error
+                }</span>
+                <span class="cov0" title="0">return err</span>
+        } else<span class="cov8" title="1"> {
+                // Should NOT be on the shopping list (auto-generated one)
+                if err == nil </span><span class="cov8" title="1">{
+                        // Remove it
+                        return tx.Delete(&amp;existingItem).Error
+                }</span> else<span class="cov0" title="0"> if err == gorm.ErrRecordNotFound </span><span class="cov0" title="0">{
+                        return nil
+                }</span>
+                <span class="cov0" title="0">return err</span>
+        }
+}
+
+// RefreshAllShoppingLists iterates through all item definitions and refreshes the shopping lists.
+// This is intended to be run periodically (e.g., daily) to catch items that expired.
+func RefreshAllShoppingLists(db *gorm.DB) <span class="cov0" title="0">{
+        logger.Log.Info("Starting daily shopping list refresh")
+        now := time.Now()
+        threeDaysFromNow := now.AddDate(0, 0, 3)
+
+        // 1. Process expirations and notifications
+        var expiringItems []models.InventoryItem
+        if err := db.Where("expiration_date &gt; ? AND expiration_date &lt;= ?", now, threeDaysFromNow).
+                Find(&amp;expiringItems).Error; err == nil </span><span class="cov0" title="0">{
+                for _, item := range expiringItems </span><span class="cov0" title="0">{
+                        var def models.ItemDefinition
+                        if err := db.First(&amp;def, item.ItemDefinitionID).Error; err == nil </span><span class="cov0" title="0">{
+                                SendExpiryNotification(db, item.HomeID, def.Name, *item.ExpirationDate)
+                        }</span>
+                }
+        }
+
+        // 2. Refresh shopping lists using FindInBatches for scalability
+        <span class="cov0" title="0">var itemDefs []models.ItemDefinition
+        db.Model(&amp;models.ItemDefinition{}).FindInBatches(&amp;itemDefs, 100, func(tx *gorm.DB, batch int) error </span><span class="cov0" title="0">{
+                for _, def := range itemDefs </span><span class="cov0" title="0">{
+                        UpdateShoppingListForDefinition(tx, def.HomeID, def.ID)
+                }</span>
+                <span class="cov0" title="0">return nil</span>
+        })
+
+        <span class="cov0" title="0">logger.Log.Info("Daily shopping list refresh completed")</span>
+}
+</pre>
+
+		<pre class="file" id="file19" style="display: none">package main
+
+import (
+        "fmt"
+        "os"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/routes"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
+        "github.com/joho/godotenv"
+        "gorm.io/driver/postgres"
+        "gorm.io/gorm"
+        "gorm.io/gorm/schema"
+)
+
+func main() <span class="cov8" title="1">{
+        logger.InitLogger()
+        defer logger.Sync()
+        // Load environment variables from .env file
+        if err := godotenv.Load(); err != nil </span><span class="cov8" title="1">{
+                logger.Log.Info("No .env file found. Using OS environment variables.")
+        }</span>
+
+        <span class="cov8" title="1">appEnv := initAppEnv()
+        logger.Log.Sugar().Infof("Starting application in %s environment", appEnv)
+
+        // Database Connection String
+        dsn := buildPostgresDSN()
+
+        // Connect to PostgreSQL via GORM
+        db, err := setupDatabase(dsn)
+        if err != nil </span><span class="cov8" title="1">{
+                logger.Log.Sugar().Fatalf("Failed to connect to database: %v", err)
+        }</span>
+
+        // Get generic database object sql.DB to configure connection pool
+        <span class="cov0" title="0">sqlDB, err := db.DB()
+        if err != nil </span><span class="cov0" title="0">{
+                logger.Log.Sugar().Fatalf("Failed to get generic database object: %v", err)
+        }</span>
+
+        // Configure connection pool
+        <span class="cov0" title="0">configureConnectionPool(sqlDB)
+
+        // Auto-migrate models (creates/updates tables based on struct definitions)
+
+        logger.Log.Info("Running AutoMigrate...")
+        err = db.AutoMigrate(autoMigrateModels()...)
+        if err != nil </span><span class="cov0" title="0">{
+                logger.Log.Sugar().Warnf("AutoMigrate warning: %v", err)
+        }</span>
+
+        // Setup Gin Router
+        <span class="cov0" title="0">r := routes.SetupRouter(db)
+
+        // Start background tasks
+        startDailyRefresh(db)
+
+        port := serverPort()
+
+        logger.Log.Sugar().Infof("Starting server on port %s...", port)
+        if err := r.Run(":" + port); err != nil </span><span class="cov0" title="0">{
+                logger.Log.Sugar().Fatalf("Failed to start server: %v", err)
+        }</span>
+}
+
+func autoMigrateModels() []interface{} <span class="cov8" title="1">{
+        return []interface{}{
+                &amp;models.Profile{},
+                &amp;models.Language{},
+                &amp;models.Home{},
+                &amp;models.UserHome{},
+                &amp;models.SizeUnit{},
+                &amp;models.Category{},
+                &amp;models.ItemDefinition{},
+                &amp;models.InventoryItem{},
+                &amp;models.ShoppingListItem{},
+                &amp;models.InventoryTransaction{},
+        }
+}</span>
+
+func initAppEnv() string <span class="cov8" title="1">{
+        appEnv := os.Getenv("APP_ENV")
+        if appEnv == "" </span><span class="cov8" title="1">{
+                appEnv = "production"
+                os.Setenv("APP_ENV", appEnv)
+        }</span>
+        <span class="cov8" title="1">return appEnv</span>
+}
+
+func buildPostgresDSN() string <span class="cov8" title="1">{
+        return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=require",
+                os.Getenv("DB_HOST"),
+                os.Getenv("DB_USER"),
+                os.Getenv("DB_PASSWORD"),
+                os.Getenv("DB_NAME"),
+                os.Getenv("DB_PORT"),
+        )
+}</span>
+
+func configureConnectionPool(sqlDB interface {
+        SetMaxIdleConns(int)
+        SetMaxOpenConns(int)
+        SetConnMaxLifetime(time.Duration)
+}) <span class="cov8" title="1">{
+        sqlDB.SetMaxIdleConns(5)
+        sqlDB.SetMaxOpenConns(30)
+        sqlDB.SetConnMaxLifetime(time.Hour)
+}</span>
+
+func serverPort() string <span class="cov8" title="1">{
+        port := os.Getenv("PORT")
+        if port == "" </span><span class="cov8" title="1">{
+                return "8080"
+        }</span>
+        <span class="cov8" title="1">return port</span>
+}
+
+func startDailyRefresh(db *gorm.DB) <span class="cov0" title="0">{
+        go func() </span><span class="cov0" title="0">{
+                for </span><span class="cov0" title="0">{
+                        utils.RefreshAllShoppingLists(db)
+                        // Sleep until next day at 3 AM
+                        now := time.Now()
+                        nextRun := time.Date(now.Year(), now.Month(), now.Day()+1, 3, 0, 0, 0, now.Location())
+                        time.Sleep(time.Until(nextRun))
+                }</span>
+        }()
+}
+
+func setupDatabase(dsn string) (*gorm.DB, error) <span class="cov8" title="1">{
+        return gorm.Open(postgres.New(postgres.Config{
+                DSN:                  dsn,
+                PreferSimpleProtocol: true, // disables implicit prepared statement usage
+        }), &amp;gorm.Config{
+                NamingStrategy: schema.NamingStrategy{
+                        TablePrefix:   "",
+                        SingularTable: false,
+                },
+        })
+}</span>
 </pre>
 
 		</div>

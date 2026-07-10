@@ -187,6 +187,10 @@
           "ImageURL": {
             "type": "string"
           },
+          "barcode": {
+            "type": "string",
+            "nullable": true
+          },
           "IsExpirable": {
             "type": "boolean"
           },
@@ -253,6 +257,10 @@
           },
           "image_url": {
             "type": "string"
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true
           },
           "is_expirable": {
             "type": "boolean"
@@ -628,6 +636,104 @@
   },
   "openapi": "3.0.3",
   "paths": {
+    "/products/lookup": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Barcode to look up",
+            "in": "query",
+            "name": "barcode",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "barcode": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "image_url": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        },
+        "summary": "Look up product information by barcode",
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/inventory/scan": {
+      "post": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "barcode": {
+                    "type": "string"
+                  },
+                  "change": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "barcode",
+                  "change"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryItem"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "404": {
+            "description": "Item definition not found"
+          }
+        },
+        "summary": "Update inventory quantity by barcode scan",
+        "tags": [
+          "Inventory Items"
+        ]
+      }
+    },
     "/categories": {
       "get": {
         "parameters": [
@@ -1225,6 +1331,20 @@
             "description": "Success"
           }
         },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "description": "Filter by barcode",
+            "in": "query",
+            "name": "barcode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "summary": "Get item definitions for home",
         "tags": [
           "Item Definitions"

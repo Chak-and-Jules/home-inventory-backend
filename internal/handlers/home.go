@@ -304,7 +304,7 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 
 	approved := c.Query("approved") == "true"
 	if userHome.IsDefault && !approved {
-		c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "This is your default home. Please confirm deletion.")})
+		c.JSON(http.StatusConflict, gin.H{"warning": i18n.TranslateDB(h.DB, c, "This is your default home. Please confirm deletion.")})
 		return
 	}
 

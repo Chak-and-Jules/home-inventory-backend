@@ -89,7 +89,7 @@ type Category struct {
 // ItemDefinition represents the blueprint of an item
 type ItemDefinition struct {
 	ID                uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	HomeID            uuid.UUID  `gorm:"type:uuid;not null;index"`
+	HomeID            uuid.UUID  `gorm:"type:uuid;not null;index;uniqueIndex:idx_item_def_home_barcode"`
 	Name              string     `gorm:"type:varchar(255);not null"`
 	Description       string     `gorm:"type:text"`
 	CategoryID        *uuid.UUID `gorm:"type:uuid;index"`
@@ -99,6 +99,7 @@ type ItemDefinition struct {
 	TargetQuantity    *float64   `gorm:"type:numeric"`
 	Priority          string     `gorm:"type:varchar(50);default:'medium'"`
 	ImageURL          string     `gorm:"type:text"`
+	Barcode           *string    `gorm:"type:varchar(255);index;uniqueIndex:idx_item_def_home_barcode"`
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 
