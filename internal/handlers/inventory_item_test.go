@@ -305,6 +305,54 @@ func TestGetExpiringItems(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("missing home_id", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		req, err := http.NewRequest(http.MethodGet, "/inventory/expiring", nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		expectI18n(mock, userID)
+
+		handler.GetExpiringItems(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("db error", func(t *testing.T) {
+		handler, mock := setupInventoryTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		req, err := http.NewRequest(http.MethodGet, "/inventory/expiring", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "inventory_items" WHERE home_id = $1 AND expiration_date > $2 AND expiration_date <= $3 ORDER BY expiration_date ASC`)).
+			WithArgs(homeID, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnError(errors.New("db error"))
+
+		expectI18n(mock, userID)
+
+		handler.GetExpiringItems(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "Failed to fetch inventory items")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestCreateInventoryItem(t *testing.T) {
