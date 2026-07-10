@@ -75,7 +75,7 @@ func (h *MaintenanceTaskHandler) GetMaintenanceTask(c *gin.Context) {
 	}
 
 	var task models.MaintenanceTask
-	if err := h.DB.Preload("InventoryItem.ItemDefinition").Where("id = ?", id).Take(&task).Error; err != nil {
+	if err := h.DB.Preload("InventoryItem.ItemDefinition").First(&task, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
 		} else {
@@ -111,7 +111,7 @@ func (h *MaintenanceTaskHandler) CreateMaintenanceTask(c *gin.Context) {
 
 	if req.InventoryItemID != nil {
 		var item models.InventoryItem
-		if err := h.DB.Where("id = ?", req.InventoryItemID).Take(&item).Error; err != nil {
+		if err := h.DB.First(&item, req.InventoryItemID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
 			} else {
@@ -154,7 +154,7 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 	}
 
 	var task models.MaintenanceTask
-	if err := h.DB.Where("id = ?", id).Take(&task).Error; err != nil {
+	if err := h.DB.First(&task, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
 		} else {
@@ -176,7 +176,7 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 
 	if req.InventoryItemID != nil {
 		var item models.InventoryItem
-		if err := h.DB.Where("id = ?", req.InventoryItemID).Take(&item).Error; err != nil {
+		if err := h.DB.First(&item, req.InventoryItemID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
 			} else {
@@ -222,7 +222,7 @@ func (h *MaintenanceTaskHandler) DeleteMaintenanceTask(c *gin.Context) {
 	}
 
 	var task models.MaintenanceTask
-	if err := h.DB.Where("id = ?", id).Take(&task).Error; err != nil {
+	if err := h.DB.First(&task, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
 		} else {
@@ -236,7 +236,7 @@ func (h *MaintenanceTaskHandler) DeleteMaintenanceTask(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Where("id = ?", id).Delete(&models.MaintenanceTask{}).Error; err != nil {
+	if err := h.DB.Delete(&models.MaintenanceTask{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete maintenance task")})
 		return
 	}

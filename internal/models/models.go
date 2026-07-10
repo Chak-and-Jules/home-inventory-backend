@@ -162,12 +162,12 @@ type MaintenanceTask struct {
 	HomeID          uuid.UUID  `gorm:"type:uuid;not null;index"`
 	InventoryItemID *uuid.UUID `gorm:"type:uuid;index"`
 	Description     string     `gorm:"type:varchar(255);not null"`
-	ScheduledDate   time.Time  `gorm:"type:timestamp with time zone;not null"`
+	ScheduledDate   time.Time  `gorm:"type:timestamp with time zone;not null;index"`
 	Frequency       string     `gorm:"type:varchar(50)"` // e.g., "once", "monthly", "yearly"
 	IsCompleted     bool       `gorm:"default:false"`
 	CompletedAt     *time.Time `gorm:"type:timestamp with time zone"`
 	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	UpdatedAt       time.Time `gorm:"index"`
 
 	// Relations
 	Home          Home           `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
