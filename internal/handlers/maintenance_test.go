@@ -84,6 +84,11 @@ func TestGetMaintenanceTasks(t *testing.T) {
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
 
+		// ⚡ Bolt: Expect validation query for inventory item
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE id = \$1 AND home_id = \$2.*`).
+			WithArgs(itemID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(itemID, homeID))
+
 		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE home_id = \$1 AND inventory_item_id = \$2.*`).
 			WithArgs(homeID, itemID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "inventory_item_id"}).
@@ -93,6 +98,29 @@ func TestGetMaintenanceTasks(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("inventory item not found", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		itemID := uuid.New()
+		req, _ := http.NewRequest(http.MethodGet, "/maintenance-tasks?inventory_item_id="+itemID.String(), nil)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE id = \$1 AND home_id = \$2.*`).
+			WillReturnError(gorm.ErrRecordNotFound)
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.GetMaintenanceTasks(c)
+		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
 
 	t.Run("missing home_id", func(t *testing.T) {
@@ -169,6 +197,29 @@ func TestGetMaintenanceTasks(t *testing.T) {
 		handler.GetMaintenanceTasks(c)
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
+
+	t.Run("inventory fetch error", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		itemID := uuid.New()
+		req, _ := http.NewRequest(http.MethodGet, "/maintenance-tasks?inventory_item_id="+itemID.String(), nil)
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
+
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE id = \$1 AND home_id = \$2.*`).
+			WillReturnError(errors.New("db error"))
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.GetMaintenanceTasks(c)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
 }
 
 func TestGetMaintenanceTask(t *testing.T) {
@@ -189,7 +240,7 @@ func TestGetMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE "maintenance_tasks"."id" = \$1.*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WithArgs(taskID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "description"}).AddRow(taskID, homeID, "Test Task"))
 
@@ -214,7 +265,7 @@ func TestGetMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnError(gorm.ErrRecordNotFound)
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -233,7 +284,7 @@ func TestGetMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnError(errors.New("db error"))
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -252,7 +303,7 @@ func TestGetMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnError(gorm.ErrRecordNotFound)
@@ -273,7 +324,7 @@ func TestGetMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnError(errors.New("other error"))
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -310,7 +361,7 @@ func TestCreateMaintenanceTask(t *testing.T) {
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
-		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE "inventory_items"."id" = \$1.*`).
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE id = \$1.*`).
 			WithArgs(itemID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(itemID, homeID))
 
@@ -410,7 +461,7 @@ func TestCreateMaintenanceTask(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
-		mock.ExpectQuery(`SELECT \* FROM "inventory_items".*`).
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE id = \$1.*`).
 			WillReturnError(gorm.ErrRecordNotFound)
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -433,7 +484,7 @@ func TestCreateMaintenanceTask(t *testing.T) {
 
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
-		mock.ExpectQuery(`SELECT \* FROM "inventory_items".*`).
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(itemID, uuid.New()))
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -492,7 +543,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE "maintenance_tasks"."id" = \$1.*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WithArgs(taskID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_completed"}).AddRow(taskID, homeID, false))
 
@@ -532,7 +583,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WithArgs(taskID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_completed"}).AddRow(taskID, homeID, false))
 
@@ -569,7 +620,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WithArgs(taskID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_completed"}).AddRow(taskID, homeID, true))
 
@@ -599,7 +650,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnError(gorm.ErrRecordNotFound)
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -618,7 +669,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "viewer"))
@@ -639,7 +690,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
@@ -662,11 +713,11 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
-		mock.ExpectQuery(`SELECT \* FROM "inventory_items".*`).
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE id = \$1.*`).
 			WillReturnError(gorm.ErrRecordNotFound)
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -687,11 +738,11 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
-		mock.ExpectQuery(`SELECT \* FROM "inventory_items".*`).
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(itemID, uuid.New()))
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -710,7 +761,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnError(errors.New("other error"))
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -731,7 +782,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
@@ -764,7 +815,7 @@ func TestDeleteMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE "maintenance_tasks"."id" = \$1.*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WithArgs(taskID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 
@@ -773,7 +824,7 @@ func TestDeleteMaintenanceTask(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "maintenance_tasks" WHERE .*id.* = \$1`).
+		mock.ExpectExec(`DELETE FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WithArgs(taskID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectCommit()
@@ -798,7 +849,7 @@ func TestDeleteMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnError(gorm.ErrRecordNotFound)
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -817,7 +868,7 @@ func TestDeleteMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "viewer"))
@@ -838,7 +889,7 @@ func TestDeleteMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnError(errors.New("other error"))
 		expectMaintenanceI18nQuery(mock, userID)
 
@@ -857,12 +908,12 @@ func TestDeleteMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks".*`).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 		mock.ExpectQuery(`SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 		mock.ExpectBegin()
-		mock.ExpectExec(`DELETE FROM "maintenance_tasks" WHERE .*id.* = \$1`).
+		mock.ExpectExec(`DELETE FROM "maintenance_tasks" WHERE id = \$1.*`).
 			WillReturnError(errors.New("db error"))
 		mock.ExpectRollback()
 		expectMaintenanceI18nQuery(mock, userID)
