@@ -78,6 +78,7 @@ func autoMigrateModels() []interface{} {
 		&models.InventoryItem{},
 		&models.ShoppingListItem{},
 		&models.InventoryTransaction{},
+		&models.MaintenanceTask{},
 	}
 }
 

@@ -155,3 +155,21 @@ type InventoryTransaction struct {
 	ItemDefinition ItemDefinition `gorm:"foreignKey:ItemDefinitionID;constraint:OnDelete:CASCADE"`
 	InventoryItem  InventoryItem  `gorm:"foreignKey:InventoryItemID;constraint:OnDelete:CASCADE"`
 }
+
+// MaintenanceTask represents a recurring or one-time maintenance task
+type MaintenanceTask struct {
+	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	HomeID          uuid.UUID  `gorm:"type:uuid;not null;index"`
+	InventoryItemID *uuid.UUID `gorm:"type:uuid;index"`
+	Description     string     `gorm:"type:varchar(255);not null"`
+	ScheduledDate   time.Time  `gorm:"type:timestamp with time zone;not null"`
+	Frequency       string     `gorm:"type:varchar(50)"` // e.g., "once", "monthly", "yearly"
+	IsCompleted     bool       `gorm:"default:false"`
+	CompletedAt     *time.Time `gorm:"type:timestamp with time zone"`
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+
+	// Relations
+	Home          Home           `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
+	InventoryItem *InventoryItem `gorm:"foreignKey:InventoryItemID;constraint:OnDelete:SET NULL"`
+}
