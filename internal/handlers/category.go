@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
@@ -59,9 +60,27 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 		return
 	}
 
-	// Check for unique name in the same hierarchy level
+	// If parent_id is provided, verify it belongs to the same home
+	if req.ParentID != nil {
+		var parent models.Category
+		if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&parent).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
+			}
+			return
+		}
+		if parent.HomeID != homeID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
+			return
+		}
+	}
+
+	// Check for unique name in the same hierarchy level (case-insensitive and ignoring whitespace)
 	var count int64
-	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND name = ?", homeID, req.Name)
+	normalizedName := strings.ToLower(strings.ReplaceAll(req.Name, " ", ""))
+	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ?", homeID, normalizedName)
 	if req.ParentID == nil {
 		query = query.Where("parent_id IS NULL")
 	} else {
@@ -113,9 +132,33 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	// Check for unique name in the same hierarchy level
+	// If parent_id is provided, verify it belongs to the same home
+	if req.ParentID != nil {
+		// Prevent self-parenting
+		if *req.ParentID == id {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category cannot be its own parent")})
+			return
+		}
+
+		var parent models.Category
+		if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&parent).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
+			}
+			return
+		}
+		if parent.HomeID != category.HomeID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
+			return
+		}
+	}
+
+	// Check for unique name in the same hierarchy level (case-insensitive and ignoring whitespace)
 	var count int64
-	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND name = ? AND id != ?", category.HomeID, req.Name, id)
+	normalizedName := strings.ToLower(strings.ReplaceAll(req.Name, " ", ""))
+	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ? AND id != ?", category.HomeID, normalizedName, id)
 	if req.ParentID == nil {
 		query = query.Where("parent_id IS NULL")
 	} else {
