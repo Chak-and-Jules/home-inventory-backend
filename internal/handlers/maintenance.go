@@ -139,7 +139,11 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 
 	var task models.MaintenanceTask
 	if err := h.DB.First(&task, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update maintenance task")})
+		}
 		return
 	}
 
@@ -169,8 +173,8 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 	updates := map[string]interface{}{
 		"inventory_item_id": req.InventoryItemID,
 		"description":       req.Description,
-		"scheduled_date":     req.ScheduledDate,
-		"frequency":          req.Frequency,
+		"scheduled_date":    req.ScheduledDate,
+		"frequency":         req.Frequency,
 	}
 
 	if req.IsCompleted != task.IsCompleted {
@@ -199,7 +203,11 @@ func (h *MaintenanceTaskHandler) DeleteMaintenanceTask(c *gin.Context) {
 
 	var task models.MaintenanceTask
 	if err := h.DB.First(&task, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch maintenance task")})
+		}
 		return
 	}
 
@@ -208,8 +216,7 @@ func (h *MaintenanceTaskHandler) DeleteMaintenanceTask(c *gin.Context) {
 		return
 	}
 
-	// ⚡ Bolt: Use explicit ID to avoid GORM attempting to find the record again
-	if err := h.DB.Where("id = ?", id).Delete(&models.MaintenanceTask{}).Error; err != nil {
+	if err := h.DB.Delete(&models.MaintenanceTask{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete maintenance task")})
 		return
 	}

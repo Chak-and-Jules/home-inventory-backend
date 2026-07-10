@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
 	"testing"
 	"time"
 
@@ -29,7 +28,8 @@ func setupMaintenanceTest(t *testing.T) (*MaintenanceTaskHandler, sqlmock.Sqlmoc
 	return handler, mock
 }
 
-func expectI18nQuery(mock sqlmock.Sqlmock, userID uuid.UUID) {
+// ⚡ Bolt: Robust expectation for i18n lookup to handle GORM's implicit clauses
+func expectMaintenanceI18nQuery(mock sqlmock.Sqlmock, userID uuid.UUID) {
 	mock.ExpectQuery(`SELECT "id","language_id" FROM "profiles" WHERE id = \$1.*`).
 		WithArgs(userID, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "language_id"}).AddRow(userID, nil))
@@ -52,12 +52,12 @@ func TestGetMaintenanceTasks(t *testing.T) {
 		c.Request = req
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2.*`).
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
 
 		taskID := uuid.New()
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "maintenance_tasks" WHERE home_id = $1 ORDER BY scheduled_date ASC`)).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE home_id = \$1.*`).
 			WithArgs(homeID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "description", "scheduled_date"}).
 				AddRow(taskID, homeID, "Change HVAC Filter", time.Now()))
@@ -87,11 +87,11 @@ func TestGetMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "maintenance_tasks" WHERE "maintenance_tasks"."id" = $1 ORDER BY "maintenance_tasks"."id" LIMIT $2`)).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE "maintenance_tasks"."id" = \$1.*`).
 			WithArgs(taskID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "description"}).AddRow(taskID, homeID, "Test Task"))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2.*`).
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
 
@@ -127,16 +127,18 @@ func TestCreateMaintenanceTask(t *testing.T) {
 		c.Request = req
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2.*`).
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "inventory_items" WHERE "inventory_items"."id" = $1 ORDER BY "inventory_items"."id" LIMIT $2`)).
+		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE "inventory_items"."id" = \$1.*`).
 			WithArgs(itemID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(itemID, homeID))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "maintenance_tasks"`)).
+		mock.ExpectBegin()
+		mock.ExpectQuery(`INSERT INTO "maintenance_tasks".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+		mock.ExpectCommit()
 
 		handler.CreateMaintenanceTask(c)
 
@@ -169,16 +171,21 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "maintenance_tasks" WHERE "maintenance_tasks"."id" = $1 ORDER BY "maintenance_tasks"."id" LIMIT $2`)).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE "maintenance_tasks"."id" = \$1.*`).
 			WithArgs(taskID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_completed"}).AddRow(taskID, homeID, false))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2.*`).
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
-		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "maintenance_tasks" SET`)).
+		mock.ExpectBegin()
+		mock.ExpectExec(`UPDATE "maintenance_tasks" SET.*`).
 			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		// Success response message is translated
+		expectMaintenanceI18nQuery(mock, userID)
 
 		handler.UpdateMaintenanceTask(c)
 
@@ -205,17 +212,22 @@ func TestDeleteMaintenanceTask(t *testing.T) {
 		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
 		c.Set("userID", userID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "maintenance_tasks" WHERE "maintenance_tasks"."id" = $1 ORDER BY "maintenance_tasks"."id" LIMIT $2`)).
+		mock.ExpectQuery(`SELECT \* FROM "maintenance_tasks" WHERE "maintenance_tasks"."id" = \$1.*`).
 			WithArgs(taskID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2.*`).
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
+		mock.ExpectBegin()
 		mock.ExpectExec(`DELETE FROM "maintenance_tasks" WHERE .*id.* = \$1`).
 			WithArgs(taskID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		// Success response message is translated
+		expectMaintenanceI18nQuery(mock, userID)
 
 		handler.DeleteMaintenanceTask(c)
 
