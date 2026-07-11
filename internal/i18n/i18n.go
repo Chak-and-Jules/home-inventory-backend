@@ -117,6 +117,7 @@ var Translations = map[string]map[string]string{
 		"id header is required":                             "id başlığı gereklidir",
 		"id query parameter is required":                    "id sorgu parametresi gereklidir",
 		"x-home-id header is required":                      "x-home-id başlığı gereklidir",
+		"Invalid date format for expiring_before. Use RFC3339 (e.g. 2023-01-02T15:04:05Z)": "expiring_before için geçersiz tarih formatı. RFC3339 kullanın (ör. 2023-01-02T15:04:05Z)",
 	},
 }
 

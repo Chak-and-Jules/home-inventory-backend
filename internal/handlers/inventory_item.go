@@ -61,6 +61,16 @@ func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
 		query = query.Where("expiration_date > ? AND expiration_date <= ?", now, threeDaysFromNow)
 	}
 
+	expiringBefore := c.Query("expiring_before")
+	if expiringBefore != "" {
+		t, err := time.Parse(time.RFC3339, expiringBefore)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid date format for expiring_before. Use RFC3339 (e.g. 2023-01-02T15:04:05Z)")})
+			return
+		}
+		query = query.Where("expiration_date <= ?", t)
+	}
+
 	// Sort
 	sort := c.Query("sort")
 	if sort == "expiry" {
@@ -74,6 +84,33 @@ func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
 		return
 	}
+	c.JSON(http.StatusOK, items)
+}
+
+func (h *InventoryItemHandler) GetExpiringItems(c *gin.Context) {
+	// ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+	if !ok {
+		return
+	}
+
+	if !utils.VerifyHomeAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+		return
+	}
+
+	now := time.Now()
+	sevenDaysFromNow := now.AddDate(0, 0, 7)
+
+	var items []models.InventoryItem
+	if err := h.DB.Preload("ItemDefinition.Category").Preload("ItemDefinition.SizeUnit").
+		Where("home_id = ? AND expiration_date > ? AND expiration_date <= ?", homeID, now, sevenDaysFromNow).
+		Order("expiration_date ASC").
+		Find(&items).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
+		return
+	}
+
 	c.JSON(http.StatusOK, items)
 }
 
