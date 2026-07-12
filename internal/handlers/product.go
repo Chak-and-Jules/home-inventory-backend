@@ -28,7 +28,7 @@ type ProductLookupResponse struct {
 }
 
 type offResponse struct {
-	Status int `json:"status"`
+	Status  int `json:"status"`
 	Product struct {
 		ProductName string `json:"product_name"`
 		Categories  string `json:"categories"`

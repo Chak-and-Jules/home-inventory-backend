@@ -95,12 +95,12 @@ func RefreshAllShoppingLists(db *gorm.DB) {
 
 	// 1. Process expirations and notifications
 	var expiringItems []models.InventoryItem
-	if err := db.Where("expiration_date > ? AND expiration_date <= ?", now, threeDaysFromNow).
+	// ⚡ Bolt: Eliminate N+1 query by preloading ItemDefinition to get the item name
+	if err := db.Preload("ItemDefinition").Where("expiration_date > ? AND expiration_date <= ?", now, threeDaysFromNow).
 		Find(&expiringItems).Error; err == nil {
 		for _, item := range expiringItems {
-			var def models.ItemDefinition
-			if err := db.First(&def, item.ItemDefinitionID).Error; err == nil {
-				SendExpiryNotification(db, item.HomeID, def.Name, *item.ExpirationDate)
+			if item.ItemDefinition.ID != uuid.Nil {
+				SendExpiryNotification(db, item.HomeID, item.ItemDefinition.Name, *item.ExpirationDate)
 			}
 		}
 	}
