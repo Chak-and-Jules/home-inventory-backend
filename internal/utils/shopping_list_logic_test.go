@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"time"
+
 	"errors"
 	"regexp"
 	"testing"
@@ -257,4 +259,98 @@ func TestSendLowStockNotification(t *testing.T) {
 	SendLowStockNotification(gormDB, homeID, "Eggs", "high")
 
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRefreshAllShoppingLists(t *testing.T) {
+	logger.InitLogger()
+	gormDB, mock := setupShoppingTestDB(t)
+
+	now := time.Now()
+
+	// 1. Mocking the expiring items query (with Preload)
+	mock.ExpectQuery(`(?i)SELECT \* FROM "inventory_items" WHERE expiration_date > \$1 AND expiration_date <= \$2`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "expiration_date"}).
+			AddRow(uuid.New(), uuid.New(), uuid.New(), now))
+
+	// Preload item definitions
+	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
+		WithArgs(sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "home_id"}).
+			AddRow(uuid.New(), "Milk", uuid.New()))
+
+	// 2. Mocking the FindInBatches query for ItemDefinitions
+	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions".*LIMIT \$1`).
+		WithArgs(100).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(uuid.New(), uuid.New()))
+
+	// UpdateShoppingListForDefinition calls
+	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1.*`).
+		WithArgs(sqlmock.AnyArg(), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "low_stock_threshold"}).AddRow(uuid.New(), "Milk", nil))
+
+	mock.ExpectQuery(`(?i)SELECT \* FROM "shopping_list_items".*`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), true, false, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`(?i)DELETE FROM "shopping_list_items".*`).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	RefreshAllShoppingLists(gormDB)
+
+	err := mock.ExpectationsWereMet()
+	assert.NoError(t, err)
+}
+
+func TestRefreshAllShoppingLists_Error(t *testing.T) {
+	logger.InitLogger()
+	gormDB, mock := setupShoppingTestDB(t)
+
+	// 1. Mocking the expiring items query (with Preload) to return error
+	mock.ExpectQuery(`(?i)SELECT \* FROM "inventory_items" WHERE expiration_date > \$1 AND expiration_date <= \$2`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnError(errors.New("db error"))
+
+	// 2. Mocking the FindInBatches query for ItemDefinitions
+	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions".*LIMIT \$1`).
+		WithArgs(100).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(uuid.New(), uuid.New()))
+
+	// UpdateShoppingListForDefinition calls
+	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1.*`).
+		WithArgs(sqlmock.AnyArg(), 1).
+		WillReturnError(errors.New("db error"))
+
+	RefreshAllShoppingLists(gormDB)
+
+	err := mock.ExpectationsWereMet()
+	assert.NoError(t, err)
+}
+
+func TestRefreshAllShoppingLists_ItemDefMissing(t *testing.T) {
+	logger.InitLogger()
+	gormDB, mock := setupShoppingTestDB(t)
+
+	now := time.Now()
+
+	// 1. Mocking the expiring items query (with Preload) returning an item but without preload matching
+	mock.ExpectQuery(`(?i)SELECT \* FROM "inventory_items" WHERE expiration_date > \$1 AND expiration_date <= \$2`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "expiration_date"}).
+			AddRow(uuid.New(), uuid.New(), uuid.New(), now))
+
+	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
+		WithArgs(sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "home_id"})) // No matching item
+
+	// 2. Mocking the FindInBatches query for ItemDefinitions
+	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions".*LIMIT \$1`).
+		WithArgs(100).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"})) // empty batch
+
+	RefreshAllShoppingLists(gormDB)
+
+	err := mock.ExpectationsWereMet()
+	assert.NoError(t, err)
 }
