@@ -630,6 +630,12 @@
             "format": "date-time",
             "type": "string"
           },
+          "Dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/TaskItemDependency"
+            },
+            "type": "array"
+          },
           "Description": {
             "type": "string"
           },
@@ -668,6 +674,12 @@
       },
       "MaintenanceTaskRequest": {
         "properties": {
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/TaskItemDependencyRequest"
+            },
+            "type": "array"
+          },
           "description": {
             "type": "string"
           },
@@ -690,6 +702,54 @@
         "required": [
           "description",
           "scheduled_date"
+        ],
+        "type": "object"
+      },
+      "TaskItemDependency": {
+        "properties": {
+          "CreatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "ID": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ItemDefinition": {
+            "$ref": "#/components/schemas/ItemDefinition"
+          },
+          "ItemDefinitionID": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "MaintenanceTaskID": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "QuantityRequired": {
+            "type": "number"
+          },
+          "UpdatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TaskItemDependencyRequest": {
+        "properties": {
+          "item_definition_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "quantity_required": {
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "item_definition_id",
+          "quantity_required"
         ],
         "type": "object"
       },
@@ -2028,6 +2088,43 @@
           }
         },
         "summary": "Create maintenance task",
+        "tags": [
+          "Maintenance Tasks"
+        ]
+      }
+    },
+    "/maintenance-tasks/{id}/complete": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "description": "Insufficient stock or already completed"
+          },
+          "404": {
+            "description": "Maintenance task not found"
+          }
+        },
+        "summary": "Mark a maintenance task as completed and deduct dependencies from inventory",
         "tags": [
           "Maintenance Tasks"
         ]

@@ -132,6 +132,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			maintenance.GET("/:id", maintenanceHandler.GetMaintenanceTask)
 			maintenance.PUT("/:id", maintenanceHandler.UpdateMaintenanceTask)
 			maintenance.DELETE("/:id", maintenanceHandler.DeleteMaintenanceTask)
+			maintenance.POST("/:id/complete", maintenanceHandler.CompleteMaintenanceTask)
 		}
 	}
 
