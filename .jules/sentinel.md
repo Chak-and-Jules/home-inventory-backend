@@ -12,3 +12,8 @@
 **Vulnerability:** External HTTP GET request (`http.Get`) to fetch Supabase JWKS inside the token parsing loop didn't specify a timeout.
 **Learning:** This is a DoS risk because the default HTTP client has no timeout. If the external endpoint hangs or responds extremely slowly, it ties up a goroutine. Under load, this could exhaust available goroutines and crash the service or degrade performance.
 **Prevention:** Always use a custom `http.Client` with a strict `Timeout` when making outbound HTTP requests, especially those on hot paths like authentication middleware.
+
+## 2026-07-18 - [Security Headers]
+**Vulnerability:** Missing standard HTTP security headers (HSTS, clickjacking protection, MIME-sniffing protection).
+**Learning:** Gin doesn't add security headers by default; they must be explicitly added via middleware to ensure defense-in-depth on all routes.
+**Prevention:** Always implement a dedicated security headers middleware early in the global router chain (e.g., using `r.Use`) for any new Gin web application.
