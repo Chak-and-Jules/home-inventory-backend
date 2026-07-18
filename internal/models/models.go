@@ -170,6 +170,21 @@ type MaintenanceTask struct {
 	UpdatedAt       time.Time `gorm:"index"`
 
 	// Relations
-	Home          Home           `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
-	InventoryItem *InventoryItem `gorm:"foreignKey:InventoryItemID;constraint:OnDelete:SET NULL"`
+	Home          Home                 `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
+	InventoryItem *InventoryItem       `gorm:"foreignKey:InventoryItemID;constraint:OnDelete:SET NULL"`
+	Dependencies  []TaskItemDependency `gorm:"foreignKey:MaintenanceTaskID;constraint:OnDelete:CASCADE"`
+}
+
+// TaskItemDependency links a maintenance task to required inventory items
+type TaskItemDependency struct {
+	ID                uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	MaintenanceTaskID uuid.UUID `gorm:"type:uuid;not null;index"`
+	ItemDefinitionID  uuid.UUID `gorm:"type:uuid;not null;index"`
+	QuantityRequired  float64   `gorm:"type:numeric;not null;default:1"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+
+	// Relations
+	MaintenanceTask *MaintenanceTask `gorm:"foreignKey:MaintenanceTaskID;constraint:OnDelete:CASCADE"`
+	ItemDefinition  ItemDefinition   `gorm:"foreignKey:ItemDefinitionID;constraint:OnDelete:RESTRICT"`
 }

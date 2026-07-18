@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
@@ -16,12 +18,18 @@ type MaintenanceTaskHandler struct {
 	DB *gorm.DB
 }
 
+type TaskItemDependencyRequest struct {
+	ItemDefinitionID uuid.UUID `json:"item_definition_id" binding:"required"`
+	QuantityRequired float64   `json:"quantity_required" binding:"required"`
+}
+
 type MaintenanceTaskRequest struct {
-	InventoryItemID *uuid.UUID `json:"inventory_item_id"`
-	Description     string     `json:"description" binding:"required"`
-	ScheduledDate   time.Time  `json:"scheduled_date" binding:"required"`
-	Frequency       string     `json:"frequency"`
-	IsCompleted     bool       `json:"is_completed"`
+	InventoryItemID *uuid.UUID                  `json:"inventory_item_id"`
+	Description     string                      `json:"description" binding:"required"`
+	ScheduledDate   time.Time                   `json:"scheduled_date" binding:"required"`
+	Frequency       string                      `json:"frequency"`
+	IsCompleted     bool                        `json:"is_completed"`
+	Dependencies    []TaskItemDependencyRequest `json:"dependencies"`
 }
 
 func (h *MaintenanceTaskHandler) GetMaintenanceTasks(c *gin.Context) {
@@ -35,7 +43,7 @@ func (h *MaintenanceTaskHandler) GetMaintenanceTasks(c *gin.Context) {
 		return
 	}
 
-	query := h.DB.Preload("InventoryItem.ItemDefinition").Where("home_id = ?", homeID)
+	query := h.DB.Preload("InventoryItem.ItemDefinition").Preload("Dependencies.ItemDefinition").Where("home_id = ?", homeID)
 
 	inventoryItemIDStr := c.Query("inventory_item_id")
 	if inventoryItemIDStr != "" {
@@ -75,7 +83,7 @@ func (h *MaintenanceTaskHandler) GetMaintenanceTask(c *gin.Context) {
 	}
 
 	var task models.MaintenanceTask
-	if err := h.DB.Preload("InventoryItem.ItemDefinition").First(&task, id).Error; err != nil {
+	if err := h.DB.Preload("InventoryItem.ItemDefinition").Preload("Dependencies.ItemDefinition").First(&task, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
 		} else {
@@ -131,20 +139,38 @@ func (h *MaintenanceTaskHandler) CreateMaintenanceTask(c *gin.Context) {
 		Description:     req.Description,
 		ScheduledDate:   req.ScheduledDate,
 		Frequency:       req.Frequency,
-		IsCompleted:     req.IsCompleted,
+		IsCompleted:     false, // ⚡ Bolt: Always create as incomplete to enforce inventory deduction via the dedicated /complete endpoint.
 	}
 
-	if task.IsCompleted {
-		now := time.Now()
-		task.CompletedAt = &now
-	}
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&task).Error; err != nil {
+			return err
+		}
 
-	if err := h.DB.Create(&task).Error; err != nil {
+		for _, dep := range req.Dependencies {
+			dependency := models.TaskItemDependency{
+				MaintenanceTaskID: task.ID,
+				ItemDefinitionID:  dep.ItemDefinitionID,
+				QuantityRequired:  dep.QuantityRequired,
+			}
+			if err := tx.Create(&dependency).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create maintenance task")})
 		return
 	}
 
-	c.JSON(http.StatusCreated, task)
+	// Reload to include dependencies
+	var result models.MaintenanceTask
+	h.DB.Preload("Dependencies.ItemDefinition").First(&result, task.ID)
+
+	c.JSON(http.StatusCreated, result)
 }
 
 func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
@@ -197,17 +223,34 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 		"frequency":         req.Frequency,
 	}
 
-	if req.IsCompleted != task.IsCompleted {
-		updates["is_completed"] = req.IsCompleted
-		if req.IsCompleted {
-			now := time.Now()
-			updates["completed_at"] = &now
-		} else {
-			updates["completed_at"] = nil
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&task).Updates(updates).Error; err != nil {
+			return err
 		}
-	}
 
-	if err := h.DB.Model(&task).Updates(updates).Error; err != nil {
+		// ⚡ Bolt: Only update dependencies if they are provided in the request to support partial updates and avoid data loss.
+		if req.Dependencies != nil {
+			// Update dependencies: simple approach, delete existing and recreate
+			if err := tx.Where("maintenance_task_id = ?", task.ID).Delete(&models.TaskItemDependency{}).Error; err != nil {
+				return err
+			}
+
+			for _, dep := range req.Dependencies {
+				dependency := models.TaskItemDependency{
+					MaintenanceTaskID: task.ID,
+					ItemDefinitionID:  dep.ItemDefinitionID,
+					QuantityRequired:  dep.QuantityRequired,
+				}
+				if err := tx.Create(&dependency).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update maintenance task")})
 		return
 	}
@@ -242,4 +285,108 @@ func (h *MaintenanceTaskHandler) DeleteMaintenanceTask(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Maintenance task deleted successfully")})
+}
+
+func (h *MaintenanceTaskHandler) CompleteMaintenanceTask(c *gin.Context) {
+	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid maintenance task ID")
+	if !ok {
+		return
+	}
+
+	var task models.MaintenanceTask
+	if err := h.DB.Preload("Dependencies").First(&task, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch maintenance task")})
+		}
+		return
+	}
+
+	if task.IsCompleted {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task already completed")})
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, task.HomeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+		return
+	}
+
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		updates := map[string]interface{}{
+			"is_completed": true,
+			"completed_at": &now,
+		}
+
+		if err := tx.Model(&models.MaintenanceTask{}).Where("id = ?", task.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+
+		for _, dep := range task.Dependencies {
+			remainingToDeduct := dep.QuantityRequired
+
+			var items []models.InventoryItem
+			if err := tx.Where("home_id = ? AND item_definition_id = ?", task.HomeID, dep.ItemDefinitionID).
+				Order("expiration_date ASC NULLS LAST").
+				Find(&items).Error; err != nil {
+				return err
+			}
+
+			var totalAvailable float64
+			for _, item := range items {
+				totalAvailable += item.Quantity
+			}
+
+			if totalAvailable < dep.QuantityRequired {
+				return fmt.Errorf("insufficient stock for item %s", dep.ItemDefinitionID)
+			}
+
+			for _, item := range items {
+				if remainingToDeduct <= 0 {
+					break
+				}
+
+				deduction := item.Quantity
+				if deduction > remainingToDeduct {
+					deduction = remainingToDeduct
+				}
+
+				if err := tx.Model(&item).Update("quantity", item.Quantity-deduction).Error; err != nil {
+					return err
+				}
+
+				// Log transaction
+				txLog := models.InventoryTransaction{
+					HomeID:           task.HomeID,
+					ItemDefinitionID: dep.ItemDefinitionID,
+					InventoryItemID:  item.ID,
+					QuantityChange:   -deduction,
+				}
+				if err := tx.Create(&txLog).Error; err != nil {
+					return err
+				}
+
+				remainingToDeduct -= deduction
+			}
+
+			if err := utils.UpdateShoppingListForDefinition(tx, task.HomeID, dep.ItemDefinitionID); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		if strings.HasPrefix(err.Error(), "insufficient stock") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient stock for task dependencies")})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to complete maintenance task")})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Maintenance task completed successfully")})
 }

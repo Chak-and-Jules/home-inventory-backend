@@ -64,6 +64,11 @@ func TestGetMaintenanceTasks(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "description", "scheduled_date"}).
 				AddRow(taskID, homeID, "Change HVAC Filter", time.Now()))
 
+		// Preload Dependencies
+		mock.ExpectQuery(`(?i)SELECT \* FROM "task_item_dependencies" WHERE .*maintenance_task_id.* = \$1.*`).
+			WithArgs(taskID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id"}))
+
 		handler.GetMaintenanceTasks(c)
 
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -95,6 +100,11 @@ func TestGetMaintenanceTasks(t *testing.T) {
 			WithArgs(homeID, itemID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "inventory_item_id"}).
 				AddRow(taskID, homeID, itemID))
+
+		// Preload Dependencies
+		mock.ExpectQuery(`(?i)SELECT \* FROM "task_item_dependencies" WHERE .*maintenance_task_id.* = \$1.*`).
+			WithArgs(taskID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id"}))
 
 		// Preload InventoryItem
 		itemDefID := uuid.New()
@@ -234,6 +244,11 @@ func TestGetMaintenanceTask(t *testing.T) {
 			WithArgs(taskID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "description"}).AddRow(taskID, homeID, "Test Task"))
 
+		// Preload Dependencies
+		mock.ExpectQuery(`(?i)SELECT \* FROM "task_item_dependencies" WHERE .*maintenance_task_id.* = \$1.*`).
+			WithArgs(taskID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id"}))
+
 		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes" WHERE .*user_id.* = \$1 AND .*home_id.* = \$2.*`).
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id"}).AddRow(userID, homeID))
@@ -276,6 +291,12 @@ func TestGetMaintenanceTask(t *testing.T) {
 
 		mock.ExpectQuery(`(?i)SELECT .* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
+
+		// Preload Dependencies
+		mock.ExpectQuery(`(?i)SELECT \* FROM "task_item_dependencies" WHERE .*maintenance_task_id.* = \$1.*`).
+			WithArgs(taskID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id"}))
+
 		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes" WHERE .*user_id.* = \$1 AND .*home_id.* = \$2.*`).
 			WillReturnError(gorm.ErrRecordNotFound)
 		expectMaintenanceI18nQuery(mock, userID)
@@ -337,9 +358,19 @@ func TestCreateMaintenanceTask(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(itemID, homeID))
 
 		mock.ExpectBegin()
+		taskID := uuid.New()
 		mock.ExpectQuery(`INSERT INTO "maintenance_tasks".*`).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(taskID))
 		mock.ExpectCommit()
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WithArgs(taskID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
+
+		// Preload Dependencies
+		mock.ExpectQuery(`(?i)SELECT \* FROM "task_item_dependencies" WHERE .*maintenance_task_id.* = \$1.*`).
+			WithArgs(taskID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id"}))
 
 		handler.CreateMaintenanceTask(c)
 
@@ -347,14 +378,17 @@ func TestCreateMaintenanceTask(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("success completed", func(t *testing.T) {
+	t.Run("success with dependencies", func(t *testing.T) {
 		handler, mock := setupMaintenanceTest(t)
 		i18n.InvalidateUserLanguageCache(userID)
+		itemDefID := uuid.New()
 
 		body := MaintenanceTaskRequest{
-			Description:   "Completed Task",
+			Description:   "With Deps",
 			ScheduledDate: time.Now(),
-			IsCompleted:   true,
+			Dependencies: []TaskItemDependencyRequest{
+				{ItemDefinitionID: itemDefID, QuantityRequired: 2},
+			},
 		}
 		jsonBody, _ := json.Marshal(body)
 		req, _ := http.NewRequest(http.MethodPost, "/maintenance-tasks", bytes.NewBuffer(jsonBody))
@@ -369,15 +403,35 @@ func TestCreateMaintenanceTask(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
+		taskID := uuid.New()
 		mock.ExpectQuery(`INSERT INTO "maintenance_tasks".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(taskID))
+
+		mock.ExpectQuery(`INSERT INTO "task_item_dependencies".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
 		mock.ExpectCommit()
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WithArgs(taskID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
+
+		// Preload Dependencies
+		mock.ExpectQuery(`(?i)SELECT \* FROM "task_item_dependencies" WHERE .*maintenance_task_id.* = \$1.*`).
+			WithArgs(taskID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id", "item_definition_id", "quantity_required"}).
+				AddRow(uuid.New(), taskID, itemDefID, 2.0))
+
+		// Preload ItemDefinition
+		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE .*id.* = \$1.*`).
+			WithArgs(itemDefID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(itemDefID, "Def"))
 
 		handler.CreateMaintenanceTask(c)
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
 
 	t.Run("access denied", func(t *testing.T) {
 		handler, mock := setupMaintenanceTest(t)
@@ -535,6 +589,46 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
+	t.Run("success ignore is_completed in update", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+
+		body := MaintenanceTaskRequest{
+			Description:   "Update",
+			ScheduledDate: time.Now(),
+			IsCompleted:   true, // Should be ignored
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPut, "/maintenance-tasks/"+taskID.String(), bytes.NewBuffer(jsonBody))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`(?i)SELECT .* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_completed"}).AddRow(taskID, homeID, false))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		mock.ExpectBegin()
+		// Ensure is_completed is NOT in the update query.
+		// GORM with map updates only includes what's in the map.
+		mock.ExpectExec(`UPDATE "maintenance_tasks" SET "description"=\$1,"frequency"=\$2,"inventory_item_id"=\$3,"scheduled_date"=\$4,"updated_at"=\$5 WHERE "id" = \$6`).
+			WithArgs("Update", "", nil, sqlmock.AnyArg(), sqlmock.AnyArg(), taskID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
+
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.UpdateMaintenanceTask(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
 	t.Run("success toggle completed", func(t *testing.T) {
 		handler, mock := setupMaintenanceTest(t)
 		i18n.InvalidateUserLanguageCache(userID)
@@ -570,6 +664,88 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		handler.UpdateMaintenanceTask(c)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("success with dependencies", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		itemDefID := uuid.New()
+
+		body := MaintenanceTaskRequest{
+			Description:   "Updated",
+			ScheduledDate: time.Now(),
+			Dependencies: []TaskItemDependencyRequest{
+				{ItemDefinitionID: itemDefID, QuantityRequired: 3},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPut, "/maintenance-tasks/"+taskID.String(), bytes.NewBuffer(jsonBody))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`(?i)SELECT .* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`UPDATE "maintenance_tasks" SET.*`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`DELETE FROM "task_item_dependencies" WHERE maintenance_task_id = \$1`).
+			WithArgs(taskID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectQuery(`INSERT INTO "task_item_dependencies".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+		mock.ExpectCommit()
+
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.UpdateMaintenanceTask(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("success partial update without dependencies", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+
+		body := MaintenanceTaskRequest{
+			Description:   "Partial Update",
+			ScheduledDate: time.Now(),
+			Dependencies:  nil, // dependencies omitted
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPut, "/maintenance-tasks/"+taskID.String(), bytes.NewBuffer(jsonBody))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`(?i)SELECT .* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`UPDATE "maintenance_tasks" SET.*`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		// DELETE should NOT be called
+		mock.ExpectCommit()
+
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.UpdateMaintenanceTask(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("success toggle uncompleted", func(t *testing.T) {
@@ -786,6 +962,155 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 
 		handler.UpdateMaintenanceTask(c)
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+func TestCompleteMaintenanceTask(t *testing.T) {
+	logger.InitLogger()
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	homeID := uuid.New()
+	taskID := uuid.New()
+	itemDefID := uuid.New()
+	itemID := uuid.New()
+
+	t.Run("success with dependencies", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		req, _ := http.NewRequest(http.MethodPost, "/maintenance-tasks/"+taskID.String()+"/complete", nil)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`(?i)SELECT .* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_completed"}).AddRow(taskID, homeID, false))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "task_item_dependencies" WHERE .*maintenance_task_id.* = \$1.*`).
+			WithArgs(taskID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id", "item_definition_id", "quantity_required"}).
+				AddRow(uuid.New(), taskID, itemDefID, 2.0))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`UPDATE "maintenance_tasks" SET.*`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		// Deduction logic
+		mock.ExpectQuery(`(?i)SELECT \* FROM "inventory_items" WHERE .*home_id.* = \$1 AND .*item_definition_id.* = \$2.*ORDER BY expiration_date ASC NULLS LAST`).
+			WithArgs(homeID, itemDefID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).
+				AddRow(itemID, homeID, itemDefID, 10.0))
+
+		mock.ExpectExec(`UPDATE "inventory_items" SET .* WHERE "id" = \$3`).
+			WithArgs(8.0, sqlmock.AnyArg(), itemID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		mock.ExpectQuery(`INSERT INTO "inventory_transactions".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+
+		// Shopping list update
+		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE .*id.* = \$1.*`).
+			WithArgs(itemDefID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "low_stock_threshold"}).AddRow(itemDefID, "Item", 5.0))
+		mock.ExpectQuery(`(?i)SELECT \* FROM "shopping_list_items" WHERE .*home_id.* = \$1 AND .*item_definition_id.* = \$2.*`).
+			WillReturnError(gorm.ErrRecordNotFound)
+		mock.ExpectQuery(`(?i)SELECT COALESCE\(SUM\(quantity\), 0\) FROM "inventory_items" WHERE .*home_id.* = \$1 AND .*item_definition_id.* = \$2.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(8.0))
+
+		mock.ExpectCommit()
+
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.CompleteMaintenanceTask(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		req, _ := http.NewRequest(http.MethodPost, "/maintenance-tasks/"+taskID.String()+"/complete", nil)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`(?i)SELECT .* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WillReturnError(gorm.ErrRecordNotFound)
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.CompleteMaintenanceTask(c)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("already completed", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		req, _ := http.NewRequest(http.MethodPost, "/maintenance-tasks/"+taskID.String()+"/complete", nil)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`(?i)SELECT .* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_completed"}).AddRow(taskID, homeID, true))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "task_item_dependencies" WHERE .*maintenance_task_id.* = \$1.*`).
+			WithArgs(taskID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id", "item_definition_id", "quantity_required"}).
+				AddRow(uuid.New(), taskID, itemDefID, 2.0))
+
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.CompleteMaintenanceTask(c)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("insufficient stock", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		req, _ := http.NewRequest(http.MethodPost, "/maintenance-tasks/"+taskID.String()+"/complete", nil)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`(?i)SELECT .* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_completed"}).AddRow(taskID, homeID, false))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "task_item_dependencies" WHERE .*maintenance_task_id.* = \$1.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id", "item_definition_id", "quantity_required"}).
+				AddRow(uuid.New(), taskID, itemDefID, 20.0))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`UPDATE "maintenance_tasks" SET.*`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "inventory_items" WHERE .*home_id.* = \$1 AND .*item_definition_id.* = \$2.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "quantity"}).AddRow(itemID, 10.0))
+
+		mock.ExpectRollback()
+
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.CompleteMaintenanceTask(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 
