@@ -282,12 +282,9 @@ func TestRefreshAllShoppingLists(t *testing.T) {
 	// 2. Mocking the FindInBatches query for ItemDefinitions
 	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions".*LIMIT \$1`).
 		WithArgs(100).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(uuid.New(), uuid.New()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).AddRow(uuid.New(), uuid.New(), "Milk", nil))
 
-	// UpdateShoppingListForDefinition calls
-	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1.*`).
-		WithArgs(sqlmock.AnyArg(), 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "low_stock_threshold"}).AddRow(uuid.New(), "Milk", nil))
+	// UpdateShoppingListForDefinition calls no longer fetch item definition
 
 	mock.ExpectQuery(`(?i)SELECT \* FROM "shopping_list_items".*`).
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), true, false, 1).
@@ -317,9 +314,9 @@ func TestRefreshAllShoppingLists_Error(t *testing.T) {
 		WithArgs(100).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(uuid.New(), uuid.New()))
 
-	// UpdateShoppingListForDefinition calls
-	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1.*`).
-		WithArgs(sqlmock.AnyArg(), 1).
+	// UpdateShoppingListForDefinition calls no longer fetch item definition
+	mock.ExpectQuery(`(?i)SELECT \* FROM "shopping_list_items".*`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), true, false, 1).
 		WillReturnError(errors.New("db error"))
 
 	RefreshAllShoppingLists(gormDB)

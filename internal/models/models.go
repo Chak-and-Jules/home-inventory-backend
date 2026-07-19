@@ -115,7 +115,7 @@ type InventoryItem struct {
 	HomeID           uuid.UUID  `gorm:"type:uuid;not null;index"`
 	ItemDefinitionID uuid.UUID  `gorm:"type:uuid;not null;index"`
 	Quantity         float64    `gorm:"type:numeric;not null;default:0"`
-	ExpirationDate   *time.Time `gorm:"type:timestamp with time zone;column:expiration_date" json:"expiry_date"`
+	ExpirationDate   *time.Time `gorm:"type:timestamp with time zone;column:expiration_date;index" json:"expiry_date"` // ⚡ Bolt: Added index for frequent expiration filtering and table-wide daily background scans
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 
