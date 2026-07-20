@@ -432,7 +432,6 @@ func TestCreateMaintenanceTask(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-
 	t.Run("access denied", func(t *testing.T) {
 		handler, mock := setupMaintenanceTest(t)
 		i18n.InvalidateUserLanguageCache(userID)

@@ -25,7 +25,7 @@ var Translations = map[string]map[string]string{
 		"Cannot delete your only home":                           "Tek evinizi silemezsiniz",
 		"Default home updated successfully":                      "Varsayılan ev başarıyla güncellendi",
 		"A category cannot be its own parent":                    "Bir kategori kendisinin üst kategorisi olamaz",
-		"Maintenance task already completed":                      "Bakım görevi zaten tamamlanmış",
+		"Maintenance task already completed":                     "Bakım görevi zaten tamamlanmış",
 		"Email missing from token claims":                        "E-posta token claims içinde eksik",
 		"Failed to check homes":                                  "Evleri kontrol etme başarısız oldu",
 		"Failed to create category":                              "Kategori oluşturulamadı",
