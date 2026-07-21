@@ -121,6 +121,11 @@ var Translations = map[string]map[string]string{
 		"id query parameter is required":                    "id sorgu parametresi gereklidir",
 		"x-home-id header is required":                      "x-home-id başlığı gereklidir",
 		"Invalid date format for expiring_before. Use RFC3339 (e.g. 2023-01-02T15:04:05Z)": "expiring_before için geçersiz tarih formatı. RFC3339 kullanın (ör. 2023-01-02T15:04:05Z)",
+		"Email and user ID are required": "E-posta ve kullanıcı ID gereklidir",
+		"Invalid user ID format":         "Geçersiz kullanıcı ID formatı",
+		"Account not found":              "Hesap bulunamadı",
+		"Failed to delete account":       "Hesap silinemedi",
+		"Account deleted successfully":   "Hesap başarıyla silindi",
 	},
 }
 

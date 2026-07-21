@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
@@ -25,6 +28,11 @@ type ProfileSyncRequest struct {
 type ProfileSyncUser struct {
 	ID    uuid.UUID `json:"id" binding:"required"`
 	Email string    `json:"email" binding:"required,email"`
+}
+
+type DeleteAccountRequest struct {
+	Email  string `json:"email" binding:"required,email"`
+	UserID string `json:"user_id" binding:"required"`
 }
 
 func (h *ProfileHandler) SyncProfile(c *gin.Context) {
@@ -154,4 +162,93 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Profile updated successfully")})
+}
+
+func (h *ProfileHandler) DeleteAccount(c *gin.Context) {
+	var req DeleteAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
+	}
+
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+
+	var profile models.Profile
+	if err := h.DB.Where("id = ? AND email = ?", userID, req.Email).First(&profile).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Account not found"})
+		return
+	}
+
+	err = h.DB.Transaction(func(tx *gorm.DB) error {
+		var userHomes []models.UserHome
+		if err := tx.Where("user_id = ? AND role = ?", userID, models.RoleOwner).Find(&userHomes).Error; err != nil {
+			return err
+		}
+
+		var homesToDelete []uuid.UUID
+		for _, uh := range userHomes {
+			var otherOwnersCount int64
+			if err := tx.Model(&models.UserHome{}).Where("home_id = ? AND role = ? AND user_id != ?", uh.HomeID, models.RoleOwner, userID).Count(&otherOwnersCount).Error; err != nil {
+				return err
+			}
+			if otherOwnersCount == 0 {
+				homesToDelete = append(homesToDelete, uh.HomeID)
+			}
+		}
+
+		if len(homesToDelete) > 0 {
+			if err := tx.Where("id IN ?", homesToDelete).Delete(&models.Home{}).Error; err != nil {
+				return err
+			}
+		}
+
+		if err := tx.Where("user_id = ?", userID).Delete(&models.UserHome{}).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Where("id = ?", userID).Delete(&models.Profile{}).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		logger.Log.Error("Failed to delete account from database", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+		return
+	}
+
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+	if supabaseURL != "" && serviceKey != "" {
+		reqURL := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, userID.String())
+		httpReq, err := http.NewRequest(http.MethodDelete, reqURL, nil)
+		if err == nil {
+			httpReq.Header.Set("Authorization", "Bearer "+serviceKey)
+			httpReq.Header.Set("apikey", serviceKey)
+
+			client := &http.Client{Timeout: 10 * time.Second}
+			resp, err := client.Do(httpReq)
+			if err != nil {
+				logger.Log.Error("Failed to delete user from Supabase auth", zap.Error(err))
+			} else {
+				defer resp.Body.Close()
+				if resp.StatusCode >= 400 {
+					logger.Log.Error("Supabase auth deletion returned error status", zap.Int("status", resp.StatusCode))
+				}
+			}
+		} else {
+			logger.Log.Error("Failed to create request for Supabase auth deletion", zap.Error(err))
+		}
+	}
+
+	i18n.InvalidateUserLanguageCache(userID)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
 }
