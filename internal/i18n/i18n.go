@@ -131,20 +131,34 @@ func InvalidateUserLanguageCache(userID uuid.UUID) {
 
 // TranslateDB gets the user language from context/DB and translates the string
 func TranslateDB(db *gorm.DB, c *gin.Context, key string) string {
-	if c == nil {
-		return key
-	}
-
-	userIDVal, exists := c.Get("userID")
-	if !exists {
-		return key
-	}
-
-	userID, ok := userIDVal.(uuid.UUID)
+	userID, ok := getUserID(c)
 	if !ok {
 		return key
 	}
 
+	langName := getUserLanguage(db, userID)
+	langKey := getLanguageKey(langName)
+
+	if langMap, ok := Translations[langKey]; ok {
+		return executeTranslationTemplate(langMap, key)
+	}
+
+	return key
+}
+
+func getUserID(c *gin.Context) (uuid.UUID, bool) {
+	if c == nil {
+		return uuid.Nil, false
+	}
+	userIDVal, exists := c.Get("userID")
+	if !exists {
+		return uuid.Nil, false
+	}
+	userID, ok := userIDVal.(uuid.UUID)
+	return userID, ok
+}
+
+func getUserLanguage(db *gorm.DB, userID uuid.UUID) string {
 	langName := "English"
 	if val, ok := userLangCache.Load(userID); ok {
 		langName = val.(string)
@@ -158,39 +172,43 @@ func TranslateDB(db *gorm.DB, c *gin.Context, key string) string {
 		}
 		userLangCache.Store(userID, langName)
 	}
+	return langName
+}
 
+func getLanguageKey(langName string) string {
 	// ⚡ Bolt: Avoid strings.EqualFold in hot paths for small set of enum-like values to improve performance (exact match is orders of magnitude faster)
 	langKey := "English"
 	if langName == "Türkçe" || langName == "Turkish" || langName == "tr" || langName == "türkçe" || langName == "turkish" || langName == "TR" || langName == "Tr" {
 		langKey = "Türkçe"
 	}
+	return langKey
+}
 
-	if langMap, ok := Translations[langKey]; ok {
-		// ⚡ Bolt: Fast path exact key match to avoid expensive string operations
-		if val, ok := langMap[key]; ok {
-			return val
-		}
+func executeTranslationTemplate(langMap map[string]string, key string) string {
+	// ⚡ Bolt: Fast path exact key match to avoid expensive string operations
+	if val, ok := langMap[key]; ok {
+		return val
+	}
 
-		// Check for templated keys
-		var lookupKey string
-		var suffix string
+	// Check for templated keys
+	var lookupKey string
+	var suffix string
 
-		if strings.HasSuffix(key, " query parameter is required") {
-			lookupKey = "id query parameter is required"
-			suffix = key[:len(key)-len(" query parameter is required")]
-		} else if strings.HasSuffix(key, " header is required") {
-			lookupKey = "id header is required"
-			suffix = key[:len(key)-len(" header is required")]
-		}
+	if strings.HasSuffix(key, " query parameter is required") {
+		lookupKey = "id query parameter is required"
+		suffix = key[:len(key)-len(" query parameter is required")]
+	} else if strings.HasSuffix(key, " header is required") {
+		lookupKey = "id header is required"
+		suffix = key[:len(key)-len(" header is required")]
+	}
 
-		if lookupKey != "" {
-			if val, ok := langMap[lookupKey]; ok {
-				// ⚡ Bolt: Fast string slice replace to avoid strings.Contains double-scan and strings.Replace allocation
-				if idx := strings.Index(val, "id"); idx != -1 {
-					return val[:idx] + suffix + val[idx+2:]
-				}
-				return val
+	if lookupKey != "" {
+		if val, ok := langMap[lookupKey]; ok {
+			// ⚡ Bolt: Fast string slice replace to avoid strings.Contains double-scan and strings.Replace allocation
+			if idx := strings.Index(val, "id"); idx != -1 {
+				return val[:idx] + suffix + val[idx+2:]
 			}
+			return val
 		}
 	}
 
