@@ -64,6 +64,23 @@
         ],
         "type": "object"
       },
+      "DeleteAccountRequest": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "user_id"
+        ],
+        "type": "object"
+      },
       "CreateHomeRequest": {
         "properties": {
           "name": {
@@ -778,6 +795,46 @@
   },
   "openapi": "3.0.3",
   "paths": {
+    "/account/delete-request": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Account deleted successfully"
+          },
+          "400": {
+            "description": "Invalid request payload"
+          },
+          "404": {
+            "description": "Account not found"
+          },
+          "500": {
+            "description": "Failed to delete account"
+          }
+        },
+        "security": [],
+        "summary": "Request account deletion",
+        "tags": [
+          "Account"
+        ]
+      }
+    },
     "/products/lookup": {
       "get": {
         "parameters": [
