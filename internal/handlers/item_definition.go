@@ -90,24 +90,7 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 		ImageURL:          req.ImageURL,
 		Barcode:           req.Barcode,
 	}
-
-	// Build and log the generated INSERT SQL using GORM DryRun mode so we can
-	// inspect what statement will be executed (helps debug rollbacks/fk issues)
-	dry := h.DB.Session(&gorm.Session{DryRun: true}).Create(&def)
-	var sqlStr string
-	var sqlVars []interface{}
-	if dry != nil && dry.Statement != nil {
-		sqlStr = dry.Statement.SQL.String()
-		sqlVars = dry.Statement.Vars
-	}
-	logger.Log.Info("Generated INSERT for ItemDefinition", zap.String("sql", sqlStr), zap.Any("vars", sqlVars))
-
-	if err := h.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&def).Error; err != nil {
-			return err
-		}
-		return utils.UpdateShoppingListForDefinition(tx, homeID, def.ID)
-	}); err != nil {
+	if err := h.createItemDefinitionTx(homeID, &def); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create item definition")})
 		logger.Log.Error("Failed to create item definition", zap.Error(err))
 		return
@@ -190,4 +173,13 @@ func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Item definition deleted successfully")})
+}
+
+func (h *ItemDefinitionHandler) createItemDefinitionTx(homeID uuid.UUID, def *models.ItemDefinition) error {
+	return h.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(def).Error; err != nil {
+			return err
+		}
+		return utils.UpdateShoppingListForDefinition(tx, homeID, def.ID)
+	})
 }
