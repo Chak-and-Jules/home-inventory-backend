@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -217,5 +218,27 @@ func TestGetProductLookup(t *testing.T) {
 		handler.GetProductLookup(c)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("SSRF Unsanitized Barcode", func(t *testing.T) {
+		maliciousBarcode := "123/../../malicious"
+		encodedBarcode := url.PathEscape(maliciousBarcode)
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// r.URL.Path automatically unescapes the path, so we use r.URL.RawPath to check the actual encoded path
+			assert.Equal(t, fmt.Sprintf("/api/v2/product/%s.json", encodedBarcode), r.URL.RawPath)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(offResponse{Status: 0})
+		}))
+		defer server.Close()
+
+		handler := &ProductHandler{BaseURL: server.URL}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/api/v1/products/lookup?barcode="+maliciousBarcode, nil)
+
+		handler.GetProductLookup(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
 	})
 }
