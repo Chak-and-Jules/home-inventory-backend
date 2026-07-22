@@ -126,6 +126,17 @@ var Translations = map[string]map[string]string{
 		"Account not found":              "Hesap bulunamadı",
 		"Failed to delete account":       "Hesap silinemedi",
 		"Account deleted successfully":   "Hesap başarıyla silindi",
+		"You are out of %s. Based on your usage, you consume %.2f daily.":                                   "Bu üründen (%s) tükendi. Kullanımınıza göre günlük %.2f tüketiyorsunuz.",
+		"Based on your usage of %s, you consume %.2f daily. Your current stock of %.2f will run out on %s.": "%s kullanımınıza göre günlük %.2f tüketiyorsunuz. Mevcut %.2f stoğunuz %s tarihinde tükenecek.",
+		"Maintenance task '%s' scheduled on %s requires %.2f units, but you will only have %.2f units.":     "%s tarihindeki '%s' bakım görevi %.2f birim gerektiriyor, ancak yalnızca %.2f biriminiz olacak.",
+		"Failed to fetch inventory transactions":                                                            "Envanter işlemleri getirilemedi",
+		"Item is not a predictive suggestion":                                                               "Öğe bir tahmini öneri değil",
+		"Failed to accept suggestion":                                                                       "Öneri kabul edilemedi",
+		"Failed to dismiss suggestion":                                                                      "Öneri reddedilemedi",
+		"Shopping list suggestion accepted successfully":                                                    "Alışveriş listesi önerisi başarıyla kabul edildi",
+		"Shopping list suggestion dismissed successfully":                                                   "Alışveriş listesi önerisi başarıyla reddedildi",
+		"Restock window must be a non-negative integer":                                                     "Yeniden stoklama penceresi negatif olmayan bir tamsayı olmalıdır",
+		"Invalid restock window":                                                                            "Geçersiz yeniden stoklama penceresi",
 	},
 }
 

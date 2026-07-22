@@ -30,6 +30,38 @@ func setupShoppingListTest(t *testing.T) (*ShoppingListHandler, sqlmock.Sqlmock)
 	return handler, mock
 }
 
+func expectGeneratePredictiveSuggestions(mock sqlmock.Sqlmock, userID, homeID uuid.UUID) {
+	// 1. Profile select
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "restock_window" FROM "profiles" WHERE id = $1 ORDER BY "profiles"."id" LIMIT $2`)).
+		WithArgs(userID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"restock_window"}).AddRow(7))
+
+	// 2. Inventory transaction query
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT item_definition_id, SUM(-quantity_change) as total_consumed, MIN(created_at) as first_tx_time, MAX(created_at) as last_tx_time FROM "inventory_transactions"`)).
+		WithArgs(homeID, sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"item_definition_id", "total_consumed", "first_tx_time", "last_tx_time"}))
+
+	// 3. Item definition query
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE home_id = $1`)).
+		WithArgs(homeID).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	// 4. Inventory items query
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "inventory_items" WHERE home_id = $1`)).
+		WithArgs(homeID).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	// 5. Maintenance tasks query
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "maintenance_tasks" WHERE home_id = $1 AND is_completed = $2`)).
+		WithArgs(homeID, false).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	// 6. Shopping list items query
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND is_bought = $2`)).
+		WithArgs(homeID, false).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+}
+
 func expectProfileLookupSL(mock sqlmock.Sqlmock, userID uuid.UUID) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "id","language_id" FROM "profiles" WHERE id = $1 ORDER BY "profiles"."id" LIMIT $2`)).
 		WithArgs(userID, 1).
@@ -76,10 +108,11 @@ func TestGetShoppingList(t *testing.T) {
 		c.Set("userID", userID)
 
 		expectHomeReadAccessSL(mock, userID, homeID, true)
+		expectGeneratePredictiveSuggestions(mock, userID, homeID)
 
 		itemDefID := uuid.New()
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 ORDER BY is_bought ASC, created_at DESC`)).
-			WithArgs(homeID).
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND is_dismissed = $2 ORDER BY is_bought ASC, created_at DESC`)).
+			WithArgs(homeID, false).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "name", "quantity", "is_bought", "is_auto_generated"}).
 				AddRow(uuid.New(), homeID, &itemDefID, "Milk", 2.0, false, true))
 
@@ -118,9 +151,10 @@ func TestGetShoppingList(t *testing.T) {
 		c.Set("userID", userID)
 
 		expectHomeReadAccessSL(mock, userID, homeID, true)
+		expectGeneratePredictiveSuggestions(mock, userID, homeID)
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 ORDER BY is_bought ASC, created_at DESC`)).
-			WithArgs(homeID).
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND is_dismissed = $2 ORDER BY is_bought ASC, created_at DESC`)).
+			WithArgs(homeID, false).
 			WillReturnError(errors.New("db error"))
 
 		expectProfileLookupSL(mock, userID)
@@ -168,6 +202,110 @@ func TestGetShoppingList(t *testing.T) {
 
 		handler.GetShoppingList(c)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestAcceptShoppingListSuggestion(t *testing.T) {
+	logger.InitLogger()
+	gin.SetMode(gin.TestMode)
+
+	t.Run("success accepting suggestion", func(t *testing.T) {
+		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
+		itemID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		req, _ := http.NewRequest(http.MethodPost, "/shopping-list/"+itemID.String()+"/accept", nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+		c.Params = gin.Params{{Key: "id", Value: itemID.String()}}
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE "shopping_list_items"."id" = $1 ORDER BY "shopping_list_items"."id" LIMIT $2`)).
+			WithArgs(itemID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_predictive", "is_dismissed"}).AddRow(itemID, homeID, true, false))
+
+		expectHomeWriteAccessSL(mock, userID, homeID, true)
+
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "shopping_list_items" SET "is_dismissed"=$1,"is_predictive"=$2,"updated_at"=$3 WHERE "id" = $4`)).
+			WithArgs(false, false, sqlmock.AnyArg(), itemID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		handler.AcceptShoppingListSuggestion(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "Shopping list suggestion accepted successfully")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("not a predictive suggestion", func(t *testing.T) {
+		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
+		itemID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		req, _ := http.NewRequest(http.MethodPost, "/shopping-list/"+itemID.String()+"/accept", nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+		c.Params = gin.Params{{Key: "id", Value: itemID.String()}}
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE "shopping_list_items"."id" = $1 ORDER BY "shopping_list_items"."id" LIMIT $2`)).
+			WithArgs(itemID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_predictive", "is_dismissed"}).AddRow(itemID, homeID, false, false))
+
+		expectHomeWriteAccessSL(mock, userID, homeID, true)
+		expectProfileLookupSL(mock, userID)
+
+		handler.AcceptShoppingListSuggestion(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Item is not a predictive suggestion")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestDismissShoppingListSuggestion(t *testing.T) {
+	logger.InitLogger()
+	gin.SetMode(gin.TestMode)
+
+	t.Run("success dismissing suggestion", func(t *testing.T) {
+		handler, mock := setupShoppingListTest(t)
+		userID := uuid.New()
+		homeID := uuid.New()
+		itemID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		req, _ := http.NewRequest(http.MethodPost, "/shopping-list/"+itemID.String()+"/dismiss", nil)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+		c.Params = gin.Params{{Key: "id", Value: itemID.String()}}
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE "shopping_list_items"."id" = $1 ORDER BY "shopping_list_items"."id" LIMIT $2`)).
+			WithArgs(itemID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "is_predictive", "is_dismissed"}).AddRow(itemID, homeID, true, false))
+
+		expectHomeWriteAccessSL(mock, userID, homeID, true)
+
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "shopping_list_items" SET "is_dismissed"=$1,"updated_at"=$2 WHERE "id" = $3`)).
+			WithArgs(true, sqlmock.AnyArg(), itemID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		handler.DismissShoppingListSuggestion(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "Shopping list suggestion dismissed successfully")
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }

@@ -107,7 +107,7 @@ func (h *ProfileHandler) GetProfile(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
 
 	var profile models.Profile
-	if err := h.DB.Select("web_theme", "mobile_theme", "language_id").Where("id = ?", userID).First(&profile).Error; err != nil {
+	if err := h.DB.Select("web_theme", "mobile_theme", "language_id", "restock_window").Where("id = ?", userID).First(&profile).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Profile not found")})
 			return
@@ -117,10 +117,17 @@ func (h *ProfileHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
+	// Default to 7 if RestockWindow is nil
+	restockWindow := 7
+	if profile.RestockWindow != nil {
+		restockWindow = *profile.RestockWindow
+	}
+
 	response := gin.H{
-		"web_theme":    profile.WebTheme,
-		"mobile_theme": profile.MobileTheme,
-		"language_id":  profile.LanguageID,
+		"web_theme":      profile.WebTheme,
+		"mobile_theme":   profile.MobileTheme,
+		"language_id":    profile.LanguageID,
+		"restock_window": restockWindow,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -144,6 +151,30 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 	}
 	if languageID, ok := payload["language_id"]; ok {
 		updates["language_id"] = languageID
+	}
+	if restockWindow, ok := payload["restock_window"]; ok {
+		if restockWindow == nil {
+			updates["restock_window"] = nil
+		} else {
+			switch val := restockWindow.(type) {
+			case float64:
+				if val < 0 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Restock window must be a non-negative integer")})
+					return
+				}
+				intVal := int(val)
+				updates["restock_window"] = &intVal
+			case int:
+				if val < 0 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Restock window must be a non-negative integer")})
+					return
+				}
+				updates["restock_window"] = &val
+			default:
+				c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid restock window")})
+				return
+			}
+		}
 	}
 
 	if len(updates) == 0 {
