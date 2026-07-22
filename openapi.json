@@ -670,6 +670,7 @@
             "type": "string"
           },
           "Frequency": {
+            "description": "Repeat frequency: Once, Daily, Weekly, Monthly, Every 3 Months, Every 6 Months, Yearly, or Custom (e.g. 'Every 40 Days', 'Every 3 Weeks')",
             "type": "string"
           },
           "HomeID": {
@@ -714,6 +715,7 @@
             "type": "string"
           },
           "frequency": {
+            "description": "Repeat frequency: Once, Daily, Weekly, Monthly, Every 3 Months, Every 6 Months, Yearly, or Custom (e.g. 'Every 40 Days', 'Every 3 Weeks')",
             "type": "string"
           },
           "inventory_item_id": {

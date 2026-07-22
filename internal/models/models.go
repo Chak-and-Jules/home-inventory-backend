@@ -166,7 +166,7 @@ type MaintenanceTask struct {
 	InventoryItemID *uuid.UUID `gorm:"type:uuid;index"`
 	Description     string     `gorm:"type:varchar(255);not null"`
 	ScheduledDate   time.Time  `gorm:"type:timestamp with time zone;not null;index"`
-	Frequency       string     `gorm:"type:varchar(50)"` // e.g., "once", "monthly", "yearly"
+	Frequency       string     `gorm:"type:varchar(50)"` // e.g., "Once", "Daily", "Weekly", "Monthly", "Every 3 Months", "Every 6 Months", "Yearly", or custom like "Every 40 Days", "Every 3 Weeks"
 	IsCompleted     bool       `gorm:"default:false"`
 	CompletedAt     *time.Time `gorm:"type:timestamp with time zone"`
 	CreatedAt       time.Time

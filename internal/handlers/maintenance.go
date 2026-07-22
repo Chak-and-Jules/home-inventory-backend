@@ -3,6 +3,8 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -117,6 +119,11 @@ func (h *MaintenanceTaskHandler) CreateMaintenanceTask(c *gin.Context) {
 		return
 	}
 
+	if !isValidFrequency(req.Frequency) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid repeat frequency format")})
+		return
+	}
+
 	if req.InventoryItemID != nil {
 		var item models.InventoryItem
 		if err := h.DB.First(&item, req.InventoryItemID).Error; err != nil {
@@ -197,6 +204,11 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 	var req MaintenanceTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+
+	if !isValidFrequency(req.Frequency) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid repeat frequency format")})
 		return
 	}
 
@@ -389,4 +401,71 @@ func (h *MaintenanceTaskHandler) CompleteMaintenanceTask(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Maintenance task completed successfully")})
+}
+
+var (
+	daysRegex  = regexp.MustCompile(`^(?i)every\s+(\d+)\s+days?$`)
+	weeksRegex = regexp.MustCompile(`^(?i)every\s+(\d+)\s+weeks?$`)
+)
+
+func isValidFrequency(freq string) bool {
+	f := strings.TrimSpace(freq)
+	if f == "" {
+		return true // treated as "Once"
+	}
+
+	lf := strings.ToLower(f)
+	switch lf {
+	case "once", "daily", "weekly", "monthly", "every 3 months", "every 6 months", "yearly":
+		return true
+	}
+
+	if matches := daysRegex.FindStringSubmatch(f); matches != nil {
+		val, err := strconv.Atoi(matches[1])
+		return err == nil && val > 0
+	}
+
+	if matches := weeksRegex.FindStringSubmatch(f); matches != nil {
+		val, err := strconv.Atoi(matches[1])
+		return err == nil && val > 0
+	}
+
+	return false
+}
+
+func parseFrequencyAndAdvance(current time.Time, freq string) (time.Time, bool) {
+	f := strings.TrimSpace(freq)
+	lf := strings.ToLower(f)
+
+	switch lf {
+	case "once", "":
+		return current, false
+	case "daily":
+		return current.AddDate(0, 0, 1), true
+	case "weekly":
+		return current.AddDate(0, 0, 7), true
+	case "monthly":
+		return current.AddDate(0, 1, 0), true
+	case "every 3 months":
+		return current.AddDate(0, 3, 0), true
+	case "every 6 months":
+		return current.AddDate(0, 6, 0), true
+	case "yearly":
+		return current.AddDate(1, 0, 0), true
+	}
+
+	if matches := daysRegex.FindStringSubmatch(f); matches != nil {
+		if days, err := strconv.Atoi(matches[1]); err == nil && days > 0 {
+			return current.AddDate(0, 0, days), true
+		}
+	}
+
+	if matches := weeksRegex.FindStringSubmatch(f); matches != nil {
+		if weeks, err := strconv.Atoi(matches[1]); err == nil && weeks > 0 {
+			return current.AddDate(0, 0, weeks*7), true
+		}
+	}
+
+	// Unrecognized/Invalid treats as "once" and does not repeat
+	return current, false
 }

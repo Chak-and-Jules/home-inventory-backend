@@ -540,6 +540,32 @@ func TestCreateMaintenanceTask(t *testing.T) {
 		handler.CreateMaintenanceTask(c)
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
+
+	t.Run("invalid repeat frequency format", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		body := MaintenanceTaskRequest{
+			Description:   "Invalid Freq",
+			ScheduledDate: time.Now(),
+			Frequency:     "Every 0 Days", // Invalid
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPost, "/maintenance-tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("X-Home-Id", homeID.String())
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.CreateMaintenanceTask(c)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid repeat frequency format")
+	})
 }
 
 func TestUpdateMaintenanceTask(t *testing.T) {
@@ -961,6 +987,34 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 
 		handler.UpdateMaintenanceTask(c)
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("invalid repeat frequency format", func(t *testing.T) {
+		handler, mock := setupMaintenanceTest(t)
+		i18n.InvalidateUserLanguageCache(userID)
+		body := MaintenanceTaskRequest{
+			Description:   "Invalid Freq",
+			ScheduledDate: time.Now(),
+			Frequency:     "Every 0 Days", // Invalid
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPut, "/maintenance-tasks/"+taskID.String(), bytes.NewBuffer(jsonBody))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = gin.Params{{Key: "id", Value: taskID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`(?i)SELECT .* FROM "maintenance_tasks" WHERE .*id.* = \$1.*`).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id"}).AddRow(taskID, homeID))
+		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes".*`).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+		expectMaintenanceI18nQuery(mock, userID)
+
+		handler.UpdateMaintenanceTask(c)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid repeat frequency format")
 	})
 }
 
