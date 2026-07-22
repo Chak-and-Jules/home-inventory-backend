@@ -3,8 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -26,12 +24,14 @@ type TaskItemDependencyRequest struct {
 }
 
 type MaintenanceTaskRequest struct {
-	InventoryItemID *uuid.UUID                  `json:"inventory_item_id"`
-	Description     string                      `json:"description" binding:"required"`
-	ScheduledDate   time.Time                   `json:"scheduled_date" binding:"required"`
-	Frequency       string                      `json:"frequency"`
-	IsCompleted     bool                        `json:"is_completed"`
-	Dependencies    []TaskItemDependencyRequest `json:"dependencies"`
+	InventoryItemID       *uuid.UUID                  `json:"inventory_item_id"`
+	Description           string                      `json:"description" binding:"required"`
+	ScheduledDate         time.Time                   `json:"scheduled_date" binding:"required"`
+	Frequency             string                      `json:"frequency"`
+	CustomFrequency       *float64                    `json:"custom_frequency"`
+	CustomFrequencyMetric *string                     `json:"custom_frequency_metric"`
+	IsCompleted           bool                        `json:"is_completed"`
+	Dependencies          []TaskItemDependencyRequest `json:"dependencies"`
 }
 
 func (h *MaintenanceTaskHandler) GetMaintenanceTasks(c *gin.Context) {
@@ -124,6 +124,11 @@ func (h *MaintenanceTaskHandler) CreateMaintenanceTask(c *gin.Context) {
 		return
 	}
 
+	if errMsg := validateMaintenanceTaskRequest(req); errMsg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, errMsg)})
+		return
+	}
+
 	if req.InventoryItemID != nil {
 		var item models.InventoryItem
 		if err := h.DB.First(&item, req.InventoryItemID).Error; err != nil {
@@ -141,12 +146,14 @@ func (h *MaintenanceTaskHandler) CreateMaintenanceTask(c *gin.Context) {
 	}
 
 	task := models.MaintenanceTask{
-		HomeID:          homeID,
-		InventoryItemID: req.InventoryItemID,
-		Description:     req.Description,
-		ScheduledDate:   req.ScheduledDate,
-		Frequency:       req.Frequency,
-		IsCompleted:     false, // ⚡ Bolt: Always create as incomplete to enforce inventory deduction via the dedicated /complete endpoint.
+		HomeID:                homeID,
+		InventoryItemID:       req.InventoryItemID,
+		Description:           req.Description,
+		ScheduledDate:         req.ScheduledDate,
+		Frequency:             req.Frequency,
+		CustomFrequency:       req.CustomFrequency,
+		CustomFrequencyMetric: req.CustomFrequencyMetric,
+		IsCompleted:           false, // ⚡ Bolt: Always create as incomplete to enforce inventory deduction via the dedicated /complete endpoint.
 	}
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
@@ -212,6 +219,11 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 		return
 	}
 
+	if errMsg := validateMaintenanceTaskRequest(req); errMsg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, errMsg)})
+		return
+	}
+
 	if req.InventoryItemID != nil {
 		var item models.InventoryItem
 		if err := h.DB.First(&item, req.InventoryItemID).Error; err != nil {
@@ -229,10 +241,12 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{
-		"inventory_item_id": req.InventoryItemID,
-		"description":       req.Description,
-		"scheduled_date":    req.ScheduledDate,
-		"frequency":         req.Frequency,
+		"inventory_item_id":       req.InventoryItemID,
+		"description":             req.Description,
+		"scheduled_date":          req.ScheduledDate,
+		"frequency":               req.Frequency,
+		"custom_frequency":        req.CustomFrequency,
+		"custom_frequency_metric": req.CustomFrequencyMetric,
 	}
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
@@ -403,11 +417,6 @@ func (h *MaintenanceTaskHandler) CompleteMaintenanceTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Maintenance task completed successfully")})
 }
 
-var (
-	daysRegex  = regexp.MustCompile(`^(?i)every\s+(\d+)\s+days?$`)
-	weeksRegex = regexp.MustCompile(`^(?i)every\s+(\d+)\s+weeks?$`)
-)
-
 func isValidFrequency(freq string) bool {
 	f := strings.TrimSpace(freq)
 	if f == "" {
@@ -416,25 +425,43 @@ func isValidFrequency(freq string) bool {
 
 	lf := strings.ToLower(f)
 	switch lf {
-	case "once", "daily", "weekly", "monthly", "every 3 months", "every 6 months", "yearly":
+	case "once", "daily", "weekly", "monthly", "every 3 months", "every 6 months", "yearly", "custom":
 		return true
 	}
-
-	if matches := daysRegex.FindStringSubmatch(f); matches != nil {
-		val, err := strconv.Atoi(matches[1])
-		return err == nil && val > 0
-	}
-
-	if matches := weeksRegex.FindStringSubmatch(f); matches != nil {
-		val, err := strconv.Atoi(matches[1])
-		return err == nil && val > 0
-	}
-
 	return false
 }
 
-func parseFrequencyAndAdvance(current time.Time, freq string) (time.Time, bool) {
-	f := strings.TrimSpace(freq)
+func validateMaintenanceTaskRequest(req MaintenanceTaskRequest) string {
+	freq := strings.ToLower(strings.TrimSpace(req.Frequency))
+
+	if freq == "custom" {
+		if req.CustomFrequency == nil {
+			return "Custom frequency must be a positive number"
+		}
+		if *req.CustomFrequency <= 0 {
+			return "Custom frequency must be a positive number"
+		}
+		if req.CustomFrequencyMetric == nil || strings.TrimSpace(*req.CustomFrequencyMetric) == "" {
+			return "Custom frequency metric is required"
+		}
+		metric := strings.ToLower(strings.TrimSpace(*req.CustomFrequencyMetric))
+		if metric != "day" && metric != "week" && metric != "month" && metric != "year" {
+			return "Custom frequency metric must be day, week, month, or year"
+		}
+	} else {
+		// If frequency is not custom, then custom_ fields should not be provided
+		if req.CustomFrequency != nil {
+			return "Custom frequency and metric should not be provided for non-custom frequencies"
+		}
+		if req.CustomFrequencyMetric != nil && strings.TrimSpace(*req.CustomFrequencyMetric) != "" {
+			return "Custom frequency and metric should not be provided for non-custom frequencies"
+		}
+	}
+	return ""
+}
+
+func parseFrequencyAndAdvance(current time.Time, task models.MaintenanceTask) (time.Time, bool) {
+	f := strings.TrimSpace(task.Frequency)
 	lf := strings.ToLower(f)
 
 	switch lf {
@@ -452,17 +479,25 @@ func parseFrequencyAndAdvance(current time.Time, freq string) (time.Time, bool) 
 		return current.AddDate(0, 6, 0), true
 	case "yearly":
 		return current.AddDate(1, 0, 0), true
-	}
-
-	if matches := daysRegex.FindStringSubmatch(f); matches != nil {
-		if days, err := strconv.Atoi(matches[1]); err == nil && days > 0 {
-			return current.AddDate(0, 0, days), true
+	case "custom":
+		if task.CustomFrequency == nil || *task.CustomFrequency <= 0 || task.CustomFrequencyMetric == nil {
+			return current, false
 		}
-	}
+		metric := strings.ToLower(strings.TrimSpace(*task.CustomFrequencyMetric))
+		val := int(*task.CustomFrequency)
+		if val <= 0 {
+			return current, false
+		}
 
-	if matches := weeksRegex.FindStringSubmatch(f); matches != nil {
-		if weeks, err := strconv.Atoi(matches[1]); err == nil && weeks > 0 {
-			return current.AddDate(0, 0, weeks*7), true
+		switch metric {
+		case "day":
+			return current.AddDate(0, 0, val), true
+		case "week":
+			return current.AddDate(0, 0, val*7), true
+		case "month":
+			return current.AddDate(0, val, 0), true
+		case "year":
+			return current.AddDate(val, 0, 0), true
 		}
 	}
 

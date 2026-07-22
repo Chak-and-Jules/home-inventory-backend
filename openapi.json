@@ -670,8 +670,19 @@
             "type": "string"
           },
           "Frequency": {
-            "description": "Repeat frequency: Once, Daily, Weekly, Monthly, Every 3 Months, Every 6 Months, Yearly, or Custom (e.g. 'Every 40 Days', 'Every 3 Weeks')",
+            "description": "Repeat frequency: Once, Daily, Weekly, Monthly, Every 3 Months, Every 6 Months, Yearly, Custom",
             "type": "string"
+          },
+          "custom_frequency": {
+            "description": "Custom repeat frequency numeric value",
+            "type": "number",
+            "nullable": true
+          },
+          "custom_frequency_metric": {
+            "description": "Custom repeat frequency metric (day, week, month, year)",
+            "type": "string",
+            "enum": ["day", "week", "month", "year"],
+            "nullable": true
           },
           "HomeID": {
             "format": "uuid",
@@ -715,8 +726,19 @@
             "type": "string"
           },
           "frequency": {
-            "description": "Repeat frequency: Once, Daily, Weekly, Monthly, Every 3 Months, Every 6 Months, Yearly, or Custom (e.g. 'Every 40 Days', 'Every 3 Weeks')",
+            "description": "Repeat frequency: Once, Daily, Weekly, Monthly, Every 3 Months, Every 6 Months, Yearly, Custom",
             "type": "string"
+          },
+          "custom_frequency": {
+            "description": "Custom repeat frequency numeric value",
+            "type": "number",
+            "nullable": true
+          },
+          "custom_frequency_metric": {
+            "description": "Custom repeat frequency metric (day, week, month, year)",
+            "type": "string",
+            "enum": ["day", "week", "month", "year"],
+            "nullable": true
           },
           "inventory_item_id": {
             "format": "uuid",

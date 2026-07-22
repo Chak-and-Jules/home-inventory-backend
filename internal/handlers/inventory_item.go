@@ -623,7 +623,7 @@ func (h *InventoryItemHandler) projectDepletion(
 				description:      task.Description,
 			})
 
-			nextDate, repeats := parseFrequencyAndAdvance(occDate, task.Frequency)
+			nextDate, repeats := parseFrequencyAndAdvance(occDate, task)
 			if !repeats {
 				break
 			}

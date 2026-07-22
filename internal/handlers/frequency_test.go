@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,26 +30,12 @@ func TestIsValidFrequency(t *testing.T) {
 		{"every 6 months", true},
 		{"Yearly", true},
 		{"yearly", true},
+		{"Custom", true},
+		{"custom", true},
 
-		// Custom valid
-		{"Every 1 Days", true},
-		{"Every 1 Day", true},
-		{"Every 40 Days", true},
-		{"every 10 days", true},
-		{"Every 3 Weeks", true},
-		{"Every 1 Week", true},
-		{"every 12 weeks", true},
-
-		// Custom invalid
-		{"Every 0 Days", false},
-		{"Every -5 Days", false},
-		{"Every 0 Weeks", false},
-		{"Every Days", false},
-		{"Every abc Days", false},
-		{"Every 2.5 Days", false},
-		{"Every 3 Years", false},
-		{"Every 6 Months Extra", false},
-		{"RandomString", false},
+		// No longer valid since Custom is its own option now
+		{"Every 1 Days", false},
+		{"Every 40 Days", false},
 	}
 
 	for _, tt := range tests {
@@ -58,33 +45,164 @@ func TestIsValidFrequency(t *testing.T) {
 	}
 }
 
-func TestParseFrequencyAndAdvance(t *testing.T) {
-	baseTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+func TestValidateMaintenanceTaskRequest(t *testing.T) {
+	floatPtr := func(f float64) *float64 { return &f }
+	strPtr := func(s string) *string { return &s }
 
 	tests := []struct {
-		name         string
-		freq         string
-		expectedTime time.Time
-		expectedRep  bool
+		name     string
+		req      MaintenanceTaskRequest
+		expected string
 	}{
-		{"Once", "Once", baseTime, false},
-		{"Empty", "", baseTime, false},
-		{"Daily", "Daily", baseTime.AddDate(0, 0, 1), true},
-		{"Weekly", "Weekly", baseTime.AddDate(0, 0, 7), true},
-		{"Monthly", "Monthly", baseTime.AddDate(0, 1, 0), true},
-		{"Every 3 Months", "Every 3 Months", baseTime.AddDate(0, 3, 0), true},
-		{"Every 6 Months", "Every 6 Months", baseTime.AddDate(0, 6, 0), true},
-		{"Yearly", "Yearly", baseTime.AddDate(1, 0, 0), true},
-		{"Every 40 Days", "Every 40 Days", baseTime.AddDate(0, 0, 40), true},
-		{"Every 1 Day", "Every 1 Day", baseTime.AddDate(0, 0, 1), true},
-		{"Every 3 Weeks", "Every 3 Weeks", baseTime.AddDate(0, 0, 21), true},
-		{"Every 1 Week", "Every 1 Week", baseTime.AddDate(0, 0, 7), true},
-		{"Invalid", "InvalidFrequency", baseTime, false},
+		{
+			"valid standard Once",
+			MaintenanceTaskRequest{Frequency: "Once"},
+			"",
+		},
+		{
+			"valid standard custom day",
+			MaintenanceTaskRequest{
+				Frequency:             "Custom",
+				CustomFrequency:       floatPtr(15),
+				CustomFrequencyMetric: strPtr("day"),
+			},
+			"",
+		},
+		{
+			"valid standard custom Week capitalized",
+			MaintenanceTaskRequest{
+				Frequency:             "custom",
+				CustomFrequency:       floatPtr(3),
+				CustomFrequencyMetric: strPtr("Week"),
+			},
+			"",
+		},
+		{
+			"missing custom frequency",
+			MaintenanceTaskRequest{
+				Frequency:             "Custom",
+				CustomFrequencyMetric: strPtr("day"),
+			},
+			"Custom frequency must be a positive number",
+		},
+		{
+			"negative custom frequency",
+			MaintenanceTaskRequest{
+				Frequency:             "Custom",
+				CustomFrequency:       floatPtr(-5),
+				CustomFrequencyMetric: strPtr("day"),
+			},
+			"Custom frequency must be a positive number",
+		},
+		{
+			"missing custom metric",
+			MaintenanceTaskRequest{
+				Frequency:       "Custom",
+				CustomFrequency: floatPtr(5),
+			},
+			"Custom frequency metric is required",
+		},
+		{
+			"empty custom metric",
+			MaintenanceTaskRequest{
+				Frequency:             "Custom",
+				CustomFrequency:       floatPtr(5),
+				CustomFrequencyMetric: strPtr(""),
+			},
+			"Custom frequency metric is required",
+		},
+		{
+			"invalid custom metric",
+			MaintenanceTaskRequest{
+				Frequency:             "Custom",
+				CustomFrequency:       floatPtr(5),
+				CustomFrequencyMetric: strPtr("hour"),
+			},
+			"Custom frequency metric must be day, week, month, or year",
+		},
+		{
+			"non-custom frequency with custom_frequency provided",
+			MaintenanceTaskRequest{
+				Frequency:       "Monthly",
+				CustomFrequency: floatPtr(5),
+			},
+			"Custom frequency and metric should not be provided for non-custom frequencies",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotTime, gotRep := parseFrequencyAndAdvance(baseTime, tt.freq)
+			got := validateMaintenanceTaskRequest(tt.req)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestParseFrequencyAndAdvance(t *testing.T) {
+	baseTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+	floatPtr := func(f float64) *float64 { return &f }
+	strPtr := func(s string) *string { return &s }
+
+	tests := []struct {
+		name          string
+		task          models.MaintenanceTask
+		expectedTime  time.Time
+		expectedRep   bool
+	}{
+		{"Once", models.MaintenanceTask{Frequency: "Once"}, baseTime, false},
+		{"Empty", models.MaintenanceTask{Frequency: ""}, baseTime, false},
+		{"Daily", models.MaintenanceTask{Frequency: "Daily"}, baseTime.AddDate(0, 0, 1), true},
+		{"Weekly", models.MaintenanceTask{Frequency: "Weekly"}, baseTime.AddDate(0, 0, 7), true},
+		{"Monthly", models.MaintenanceTask{Frequency: "Monthly"}, baseTime.AddDate(0, 1, 0), true},
+		{"Every 3 Months", models.MaintenanceTask{Frequency: "Every 3 Months"}, baseTime.AddDate(0, 3, 0), true},
+		{"Every 6 Months", models.MaintenanceTask{Frequency: "Every 6 Months"}, baseTime.AddDate(0, 6, 0), true},
+		{"Yearly", models.MaintenanceTask{Frequency: "Yearly"}, baseTime.AddDate(1, 0, 0), true},
+		{
+			"Custom 40 days",
+			models.MaintenanceTask{
+				Frequency:             "Custom",
+				CustomFrequency:       floatPtr(40),
+				CustomFrequencyMetric: strPtr("day"),
+			},
+			baseTime.AddDate(0, 0, 40),
+			true,
+		},
+		{
+			"Custom 3 weeks",
+			models.MaintenanceTask{
+				Frequency:             "custom",
+				CustomFrequency:       floatPtr(3),
+				CustomFrequencyMetric: strPtr("week"),
+			},
+			baseTime.AddDate(0, 0, 21),
+			true,
+		},
+		{
+			"Custom 2 months",
+			models.MaintenanceTask{
+				Frequency:             "custom",
+				CustomFrequency:       floatPtr(2),
+				CustomFrequencyMetric: strPtr("month"),
+			},
+			baseTime.AddDate(0, 2, 0),
+			true,
+		},
+		{
+			"Custom 5 years",
+			models.MaintenanceTask{
+				Frequency:             "custom",
+				CustomFrequency:       floatPtr(5),
+				CustomFrequencyMetric: strPtr("year"),
+			},
+			baseTime.AddDate(5, 0, 0),
+			true,
+		},
+		{"Invalid", models.MaintenanceTask{Frequency: "InvalidFrequency"}, baseTime, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotTime, gotRep := parseFrequencyAndAdvance(baseTime, tt.task)
 			assert.Equal(t, tt.expectedRep, gotRep)
 			assert.True(t, gotTime.Equal(tt.expectedTime), "expected %v, got %v", tt.expectedTime, gotTime)
 		})
