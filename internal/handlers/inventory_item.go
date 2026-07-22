@@ -623,15 +623,11 @@ func (h *InventoryItemHandler) projectDepletion(
 				description:      task.Description,
 			})
 
-			if task.Frequency == "once" || task.Frequency == "" {
-				break
-			} else if task.Frequency == "monthly" {
-				occDate = occDate.AddDate(0, 1, 0)
-			} else if task.Frequency == "yearly" {
-				occDate = occDate.AddDate(1, 0, 0)
-			} else {
+			nextDate, repeats := parseFrequencyAndAdvance(occDate, task)
+			if !repeats {
 				break
 			}
+			occDate = nextDate
 		}
 	}
 
