@@ -567,3 +567,261 @@ func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) {
 
 	c.JSON(http.StatusOK, item)
 }
+
+type RestockInsightResponse struct {
+	ItemDefinition          models.ItemDefinition `json:"item_definition"`
+	CurrentStock            float64               `json:"current_stock"`
+	AverageDailyConsumption float64               `json:"average_daily_consumption"`
+	PredictedDepletionDate  *time.Time            `json:"predicted_depletion_date"`
+	DaysLeft                *int                  `json:"days_left,omitempty"`
+	Reason                  string                `json:"reason"`
+}
+
+type projectedOccurrence struct {
+	date             time.Time
+	quantityRequired float64
+	description      string
+}
+
+func (h *InventoryItemHandler) projectDepletion(
+	c *gin.Context,
+	now time.Time,
+	currentStock float64,
+	adc float64,
+	tasks []models.MaintenanceTask,
+	itemDefID uuid.UUID,
+	itemName string,
+) (*time.Time, string) {
+	// Project occurrences for the next 90 days
+	var occurrences []projectedOccurrence
+	ninetyDaysFromNow := now.AddDate(0, 0, 90)
+
+	for _, task := range tasks {
+		var reqQty float64
+		for _, dep := range task.Dependencies {
+			if dep.ItemDefinitionID == itemDefID {
+				reqQty = dep.QuantityRequired
+				break
+			}
+		}
+		if reqQty <= 0 {
+			continue
+		}
+
+		// First occurrence is the task's ScheduledDate
+		occDate := task.ScheduledDate
+		// If ScheduledDate is in the past and task is incomplete, treat it as overdue (occurring now)
+		if occDate.Before(now) {
+			occDate = now
+		}
+
+		// Generate occurrences within 90 days
+		for occDate.Before(ninetyDaysFromNow) {
+			occurrences = append(occurrences, projectedOccurrence{
+				date:             occDate,
+				quantityRequired: reqQty,
+				description:      task.Description,
+			})
+
+			if task.Frequency == "once" || task.Frequency == "" {
+				break
+			} else if task.Frequency == "monthly" {
+				occDate = occDate.AddDate(0, 1, 0)
+			} else if task.Frequency == "yearly" {
+				occDate = occDate.AddDate(1, 0, 0)
+			} else {
+				break
+			}
+		}
+	}
+
+	// Sort occurrences by date ascending
+	for i := 0; i < len(occurrences); i++ {
+		for j := i + 1; j < len(occurrences); j++ {
+			if occurrences[i].date.After(occurrences[j].date) {
+				occurrences[i], occurrences[j] = occurrences[j], occurrences[i]
+			}
+		}
+	}
+
+	// Simulate day-by-day for 90 days
+	stock := currentStock
+	var firstDepletionDate *time.Time
+	var depletionReason string
+
+	for d := 0; d <= 90; d++ {
+		currentDate := now.AddDate(0, 0, d)
+		if d > 0 {
+			stock -= adc
+		}
+
+		// Check task occurrences on this day
+		for _, occ := range occurrences {
+			if occ.date.Year() == currentDate.Year() && occ.date.YearDay() == currentDate.YearDay() {
+				if stock < occ.quantityRequired {
+					if firstDepletionDate == nil {
+						depDate := currentDate
+						firstDepletionDate = &depDate
+						template := i18n.TranslateDB(h.DB, c, "Maintenance task '%s' scheduled on %s requires %.2f units, but you will only have %.2f units.")
+						depletionReason = fmt.Sprintf(
+							template,
+							occ.description,
+							occ.date.Format("2006-01-02"),
+							occ.quantityRequired,
+							stock,
+						)
+					}
+				}
+				stock -= occ.quantityRequired
+			}
+		}
+
+		if stock <= 0 {
+			if firstDepletionDate == nil {
+				depDate := currentDate
+				firstDepletionDate = &depDate
+				if currentStock == 0 {
+					template := i18n.TranslateDB(h.DB, c, "You are out of %s. Based on your usage, you consume %.2f daily.")
+					depletionReason = fmt.Sprintf(
+						template,
+						itemName,
+						adc,
+					)
+				} else {
+					template := i18n.TranslateDB(h.DB, c, "Based on your usage of %s, you consume %.2f daily. Your current stock of %.2f will run out on %s.")
+					depletionReason = fmt.Sprintf(
+						template,
+						itemName,
+						adc,
+						currentStock,
+						currentDate.Format("2006-01-02"),
+					)
+				}
+			}
+			break
+		}
+	}
+
+	return firstDepletionDate, depletionReason
+}
+
+func (h *InventoryItemHandler) GetPredictiveRestockInsights(c *gin.Context) {
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+	if !ok {
+		return
+	}
+
+	if !utils.VerifyHomeAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+		return
+	}
+
+	now := time.Now()
+	ninetyDaysAgo := now.AddDate(0, 0, -90)
+
+	// Usage stats over last 90 days
+	type ConsumptionStat struct {
+		ItemDefinitionID uuid.UUID
+		TotalConsumed    float64
+		FirstTxTime      time.Time
+		LastTxTime       time.Time
+	}
+	var consumptionStats []ConsumptionStat
+	if err := h.DB.Model(&models.InventoryTransaction{}).
+		Select("item_definition_id, SUM(-quantity_change) as total_consumed, MIN(created_at) as first_tx_time, MAX(created_at) as last_tx_time").
+		Where("home_id = ? AND quantity_change < 0 AND created_at >= ?", homeID, ninetyDaysAgo).
+		Group("item_definition_id").
+		Find(&consumptionStats).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory transactions")})
+		return
+	}
+	statsByDef := make(map[uuid.UUID]ConsumptionStat)
+	for _, stat := range consumptionStats {
+		statsByDef[stat.ItemDefinitionID] = stat
+	}
+
+	// All item definitions
+	var itemDefs []models.ItemDefinition
+	if err := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID).Find(&itemDefs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch item definitions")})
+		return
+	}
+
+	// All inventory items for stock calculation (N+1 query avoided)
+	var allItems []models.InventoryItem
+	if err := h.DB.Where("home_id = ?", homeID).Find(&allItems).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
+		return
+	}
+	itemsByDef := make(map[uuid.UUID][]models.InventoryItem)
+	for _, item := range allItems {
+		itemsByDef[item.ItemDefinitionID] = append(itemsByDef[item.ItemDefinitionID], item)
+	}
+
+	// All maintenance tasks
+	var maintenanceTasks []models.MaintenanceTask
+	if err := h.DB.Preload("Dependencies").Where("home_id = ? AND is_completed = ?", homeID, false).Find(&maintenanceTasks).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch maintenance tasks")})
+		return
+	}
+	tasksByDef := make(map[uuid.UUID][]models.MaintenanceTask)
+	for _, task := range maintenanceTasks {
+		for _, dep := range task.Dependencies {
+			tasksByDef[dep.ItemDefinitionID] = append(tasksByDef[dep.ItemDefinitionID], task)
+		}
+	}
+
+	var results []RestockInsightResponse
+	for _, def := range itemDefs {
+		stat, hasStats := statsByDef[def.ID]
+		tasks := tasksByDef[def.ID]
+
+		var adc float64
+		if hasStats && stat.TotalConsumed > 0 && !stat.FirstTxTime.IsZero() {
+			daysDiff := now.Sub(stat.FirstTxTime).Hours() / 24
+			if daysDiff < 1 {
+				daysDiff = 1
+			}
+			if daysDiff > 90 {
+				daysDiff = 90
+			}
+			adc = stat.TotalConsumed / daysDiff
+		}
+
+		// Skip if there's no consumption and no maintenance tasks
+		if adc == 0 && len(tasks) == 0 {
+			continue
+		}
+
+		// Calculate current stock (excluding expired items)
+		items := itemsByDef[def.ID]
+		var currentStock float64
+		for _, item := range items {
+			if item.ExpirationDate == nil || item.ExpirationDate.After(now) {
+				currentStock += item.Quantity
+			}
+		}
+
+		depDate, reason := h.projectDepletion(c, now, currentStock, adc, tasks, def.ID, def.Name)
+		if depDate != nil {
+			daysLeft := int(depDate.Sub(now).Hours() / 24)
+			if daysLeft < 0 {
+				daysLeft = 0
+			}
+
+			// Return items predicted to deplete within the next 14 days
+			if daysLeft <= 14 {
+				results = append(results, RestockInsightResponse{
+					ItemDefinition:          def,
+					CurrentStock:            currentStock,
+					AverageDailyConsumption: adc,
+					PredictedDepletionDate:  depDate,
+					DaysLeft:                &daysLeft,
+					Reason:                  reason,
+				})
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, results)
+}

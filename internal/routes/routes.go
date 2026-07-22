@@ -108,6 +108,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			inventory.GET("", inventoryItemHandler.GetInventoryItems)
 			inventory.GET("/almost-finished", inventoryItemHandler.GetAlmostFinishedItems)
 			inventory.GET("/expiring", inventoryItemHandler.GetExpiringItems)
+			inventory.GET("/insights/restock", inventoryItemHandler.GetPredictiveRestockInsights)
 			inventory.POST("", inventoryItemHandler.CreateInventoryItem)
 			inventory.PUT("/:id", inventoryItemHandler.UpdateInventoryItem)
 			inventory.PATCH("/:id/quantity", inventoryItemHandler.UpdateInventoryItemQuantity)
@@ -129,6 +130,8 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			shoppingList.PUT("/:id", shoppingListHandler.UpdateShoppingListItem)
 			shoppingList.PATCH("/:id/toggle-bought", shoppingListHandler.ToggleShoppingListItemBought)
 			shoppingList.DELETE("/:id", shoppingListHandler.DeleteShoppingListItem)
+			shoppingList.POST("/:id/accept", shoppingListHandler.AcceptShoppingListSuggestion)
+			shoppingList.POST("/:id/dismiss", shoppingListHandler.DismissShoppingListSuggestion)
 		}
 
 		// Maintenance Tasks

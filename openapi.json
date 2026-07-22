@@ -345,6 +345,10 @@
           "web_theme": {
             "nullable": true,
             "type": "string"
+          },
+          "restock_window": {
+            "type": "integer",
+            "nullable": true
           }
         },
         "type": "object"
@@ -363,6 +367,9 @@
           "web_theme": {
             "nullable": true,
             "type": "string"
+          },
+          "restock_window": {
+            "type": "integer"
           }
         },
         "type": "object"
@@ -580,6 +587,12 @@
           "IsBought": {
             "type": "boolean"
           },
+          "is_predictive": {
+            "type": "boolean"
+          },
+          "is_dismissed": {
+            "type": "boolean"
+          },
           "ItemDefinition": {
             "$ref": "#/components/schemas/ItemDefinition"
           },
@@ -777,6 +790,31 @@
           }
         },
         "type": "object"
+      },
+      "RestockInsightResponse": {
+        "properties": {
+          "item_definition": {
+            "$ref": "#/components/schemas/ItemDefinition"
+          },
+          "current_stock": {
+            "type": "number"
+          },
+          "average_daily_consumption": {
+            "type": "number"
+          },
+          "predicted_depletion_date": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "days_left": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -832,6 +870,96 @@
         "summary": "Request account deletion",
         "tags": [
           "Account"
+        ]
+      }
+    },
+    "/shopping-list/{id}/accept": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Accept a predictive suggestion and convert it to a regular shopping list item",
+        "tags": [
+          "Shopping List"
+        ]
+      }
+    },
+    "/shopping-list/{id}/dismiss": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Dismiss a predictive suggestion from being shown on the shopping list",
+        "tags": [
+          "Shopping List"
+        ]
+      }
+    },
+    "/inventory/insights/restock": {
+      "get": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RestockInsightResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Get predictive restock insights for items predicted to deplete within 14 days",
+        "tags": [
+          "Inventory Items"
         ]
       }
     },
