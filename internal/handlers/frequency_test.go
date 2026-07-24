@@ -144,10 +144,10 @@ func TestParseFrequencyAndAdvance(t *testing.T) {
 	strPtr := func(s string) *string { return &s }
 
 	tests := []struct {
-		name          string
-		task          models.MaintenanceTask
-		expectedTime  time.Time
-		expectedRep   bool
+		name         string
+		task         models.MaintenanceTask
+		expectedTime time.Time
+		expectedRep  bool
 	}{
 		{"Once", models.MaintenanceTask{Frequency: "Once"}, baseTime, false},
 		{"Empty", models.MaintenanceTask{Frequency: ""}, baseTime, false},

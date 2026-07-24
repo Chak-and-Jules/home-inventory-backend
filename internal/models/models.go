@@ -161,18 +161,18 @@ type InventoryTransaction struct {
 
 // MaintenanceTask represents a recurring or one-time maintenance task
 type MaintenanceTask struct {
-	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	HomeID          uuid.UUID  `gorm:"type:uuid;not null;index"`
-	InventoryItemID *uuid.UUID `gorm:"type:uuid;index"`
-	Description     string     `gorm:"type:varchar(255);not null"`
-	ScheduledDate   time.Time  `gorm:"type:timestamp with time zone;not null;index"`
-	Frequency       string     `gorm:"type:varchar(50)"` // e.g., "Once", "Daily", "Weekly", "Monthly", "Every 3 Months", "Every 6 Months", "Yearly", "Custom"
+	ID                    uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	HomeID                uuid.UUID  `gorm:"type:uuid;not null;index"`
+	InventoryItemID       *uuid.UUID `gorm:"type:uuid;index"`
+	Description           string     `gorm:"type:varchar(255);not null"`
+	ScheduledDate         time.Time  `gorm:"type:timestamp with time zone;not null;index"`
+	Frequency             string     `gorm:"type:varchar(50)"` // e.g., "Once", "Daily", "Weekly", "Monthly", "Every 3 Months", "Every 6 Months", "Yearly", "Custom"
 	CustomFrequency       *float64   `gorm:"type:numeric" json:"custom_frequency"`
 	CustomFrequencyMetric *string    `gorm:"type:varchar(50)" json:"custom_frequency_metric"`
-	IsCompleted     bool       `gorm:"default:false"`
-	CompletedAt     *time.Time `gorm:"type:timestamp with time zone"`
-	CreatedAt       time.Time
-	UpdatedAt       time.Time `gorm:"index"`
+	IsCompleted           bool       `gorm:"default:false"`
+	CompletedAt           *time.Time `gorm:"type:timestamp with time zone"`
+	CreatedAt             time.Time
+	UpdatedAt             time.Time `gorm:"index"`
 
 	// Relations
 	Home          Home                 `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`

@@ -196,6 +196,9 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 }
 
 func (h *ProfileHandler) DeleteAccount(c *gin.Context) {
+	authUserID := c.MustGet("userID").(uuid.UUID)
+	authEmail := c.MustGet("email").(string)
+
 	var req DeleteAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
@@ -205,6 +208,16 @@ func (h *ProfileHandler) DeleteAccount(c *gin.Context) {
 	userID, err := uuid.Parse(req.UserID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+
+	if userID != authUserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized account deletion"})
+		return
+	}
+
+	if !strings.EqualFold(req.Email, authEmail) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized account deletion"})
 		return
 	}
 

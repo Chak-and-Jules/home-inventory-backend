@@ -35,12 +35,6 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	productHandler := &handlers.ProductHandler{DB: db}
 	maintenanceHandler := &handlers.MaintenanceTaskHandler{DB: db}
 
-	// Public endpoints (no authentication required)
-	public := r.Group("/api/v1")
-	{
-		public.POST("/account/delete-request", profileHandler.DeleteAccount)
-	}
-
 	// API v1 group
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.SupabaseAuthMiddleware())
@@ -51,6 +45,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			profiles.GET("", profileHandler.GetProfile)
 			profiles.PUT("", profileHandler.UpdateProfile)
 			profiles.POST("/sync", profileHandler.SyncProfile)
+			profiles.POST("/delete-account", profileHandler.DeleteAccount)
 		}
 
 		// Homes
