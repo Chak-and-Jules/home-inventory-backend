@@ -115,12 +115,13 @@ func TestGetPredictiveRestockInsights(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("success handling maintenance task dependencies", func(t *testing.T) {
+	t.Run("success handling maintenance task dependencies with sorting", func(t *testing.T) {
 		handler, mock := setupPredictiveRestockTest(t)
 		userID := uuid.New()
 		homeID := uuid.New()
 		itemDefID := uuid.New()
-		taskID := uuid.New()
+		taskID1 := uuid.New()
+		taskID2 := uuid.New()
 		i18n.InvalidateUserLanguageCache(userID)
 
 		req, _ := http.NewRequest(http.MethodGet, "/inventory/insights/restock", nil)
@@ -149,17 +150,23 @@ func TestGetPredictiveRestockInsights(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"}).
 				AddRow(uuid.New(), homeID, itemDefID, 1.0))
 
-		// 4. Mock MaintenanceTask select with dependency requiring 2 HVAC Filters in 3 days
-		scheduledDate := time.Now().AddDate(0, 0, 3)
+		// 4. Mock MaintenanceTask select with dependencies requiring HVAC Filters in 3 and 2 days
+		// Test multiple tasks to explicitly test the `sort.Slice` logic in `projectDepletion`
+		scheduledDate1 := time.Now().AddDate(0, 0, 3)
+		scheduledDate2 := time.Now().AddDate(0, 0, 2)
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "maintenance_tasks" WHERE home_id = $1 AND is_completed = $2`)).
 			WithArgs(homeID, false).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "description", "scheduled_date", "frequency", "is_completed"}).
-				AddRow(taskID, homeID, "Change HVAC Filter", scheduledDate, "once", false))
+				AddRow(taskID1, homeID, "Change HVAC Filter Later", scheduledDate1, "once", false).
+				AddRow(taskID2, homeID, "Change HVAC Filter Sooner", scheduledDate2, "once", false))
 
-		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "task_item_dependencies" WHERE "task_item_dependencies"."maintenance_task_id" = $1`)).
-			WithArgs(taskID).
+		// 5. Mock MaintenanceTask Preload("Dependencies")
+		// GORM IN clause logic for preloads queries them together using an IN clause.
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "task_item_dependencies" WHERE "task_item_dependencies"."maintenance_task_id" IN ($1,$2)`)).
+			WithArgs(taskID1, taskID2).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "maintenance_task_id", "item_definition_id", "quantity_required"}).
-				AddRow(uuid.New(), taskID, itemDefID, 2.0))
+				AddRow(uuid.New(), taskID1, itemDefID, 2.0).
+				AddRow(uuid.New(), taskID2, itemDefID, 2.0))
 
 		// Expect profile language lookup due to TranslateDB calls
 		expectProfileLookupPR(mock, userID)
@@ -177,8 +184,8 @@ func TestGetPredictiveRestockInsights(t *testing.T) {
 		assert.Equal(t, 1.0, res[0].CurrentStock)
 		assert.Equal(t, 0.0, res[0].AverageDailyConsumption)
 		assert.NotNil(t, res[0].PredictedDepletionDate)
-		assert.Equal(t, 3, *res[0].DaysLeft)
-		assert.Contains(t, res[0].Reason, "Change HVAC Filter")
+		assert.Equal(t, 2, *res[0].DaysLeft)
+		assert.Contains(t, res[0].Reason, "Change HVAC Filter Sooner")
 
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
