@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
@@ -631,14 +632,11 @@ func (h *InventoryItemHandler) projectDepletion(
 		}
 	}
 
+	// ⚡ Bolt: Replaced O(n²) bubble sort with Go's optimized O(n log n) sort.Slice
 	// Sort occurrences by date ascending
-	for i := 0; i < len(occurrences); i++ {
-		for j := i + 1; j < len(occurrences); j++ {
-			if occurrences[i].date.After(occurrences[j].date) {
-				occurrences[i], occurrences[j] = occurrences[j], occurrences[i]
-			}
-		}
-	}
+	sort.Slice(occurrences, func(i, j int) bool {
+		return occurrences[i].date.Before(occurrences[j].date)
+	})
 
 	// Simulate day-by-day for 90 days
 	stock := currentStock
