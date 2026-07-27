@@ -37,3 +37,7 @@
 ## 2026-07-12 - [N+1 Query Elimination in RefreshAllShoppingLists]
 **Learning:** Found an N+1 query problem in `RefreshAllShoppingLists` where it was doing multiple DB queries inside a loop over expiring inventory items (one to fetch the item's definition for each expiring item). This would have degraded performance significantly for a scheduled batch job running across many items.
 **Action:** Used `Preload("ItemDefinition")` to pre-fetch the item definition data in the initial database call, thereby avoiding database calls within the loop entirely. Always check for database queries happening inside a loop when iterating over large datasets.
+
+## 2026-07-26 - Replace O(n²) Bubble Sort with Built-in sort.Slice
+**Learning:** Found a custom, nested-loop bubble sort implementation (O(n²)) in `inventory_item.go` used for sorting projected depletion occurrences by date. In an array that could grow to a decent size over 90 days with many daily/frequent tasks, this scales poorly.
+**Action:** Replace custom sorting loops with Go's `sort.Slice` (O(n log n)) to improve performance and code readability, especially when sorting slices of structs.
