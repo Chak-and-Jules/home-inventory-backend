@@ -1,0 +1,82 @@
+{
+  "url": "https://api.github.com/repos/Chak-and-Jules/home-inventory-mobile/issues/113",
+  "repository_url": "https://api.github.com/repos/Chak-and-Jules/home-inventory-mobile",
+  "labels_url": "https://api.github.com/repos/Chak-and-Jules/home-inventory-mobile/issues/113/labels{/name}",
+  "comments_url": "https://api.github.com/repos/Chak-and-Jules/home-inventory-mobile/issues/113/comments",
+  "events_url": "https://api.github.com/repos/Chak-and-Jules/home-inventory-mobile/issues/113/events",
+  "html_url": "https://github.com/Chak-and-Jules/home-inventory-mobile/issues/113",
+  "id": 5003458838,
+  "node_id": "I_kwDOSSW2dM8AAAABKjq5Fg",
+  "number": 113,
+  "title": "Feature: Smart Recipe Recommendations based on Expiring Inventory",
+  "user": {
+    "login": "chakian",
+    "id": 7403677,
+    "node_id": "MDQ6VXNlcjc0MDM2Nzc=",
+    "avatar_url": "https://avatars.githubusercontent.com/u/7403677?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/chakian",
+    "html_url": "https://github.com/chakian",
+    "followers_url": "https://api.github.com/users/chakian/followers",
+    "following_url": "https://api.github.com/users/chakian/following{/other_user}",
+    "gists_url": "https://api.github.com/users/chakian/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/chakian/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/chakian/subscriptions",
+    "organizations_url": "https://api.github.com/users/chakian/orgs",
+    "repos_url": "https://api.github.com/users/chakian/repos",
+    "events_url": "https://api.github.com/users/chakian/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/chakian/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "labels": [
+
+  ],
+  "state": "open",
+  "locked": false,
+  "assignees": [
+
+  ],
+  "milestone": null,
+  "comments": 0,
+  "created_at": "2026-07-28T22:20:39Z",
+  "updated_at": "2026-07-28T22:20:39Z",
+  "closed_at": null,
+  "assignee": null,
+  "author_association": "MEMBER",
+  "issue_field_values": [
+
+  ],
+  "type": null,
+  "active_lock_reason": null,
+  "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+  },
+  "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 0,
+    "blocking": 0,
+    "total_blocking": 0
+  },
+  "body": "Blocked by https://github.com/Chak-and-Jules/home-inventory-backend/issues/108\n\n### Competitor Analysis\n* **Grocy**: Excellent self-hosted solution for groceries and chores. Lacks modern predictive insights and automated external recipe matching out-of-the-box.\n* **KitchenPal**: Mobile-first, good at suggesting recipes based on pantry items, but lacks comprehensive home maintenance tracking.\n* **Homebox**: Great modern UI for general inventory, but less focused on consumable food items and lacks smart shopping lists or recipe integrations.\n* **PantryCheck**: Good expiry tracking but lacks smart calculations for maintenance or advanced budgeting.\n\n### Feature Proposal: Smart Recipe Recommendations based on Expiring Inventory\n\n**Business Need:**\nUsers often forget what they have in their inventory and let items expire, leading to food waste. By providing smart recipe recommendations based on items that are expiring soon (within 3-7 days), we can encourage consumption before expiration, saving users money and reducing waste.\n\n**Acceptance Criteria:**\n- [ ] System automatically identifies inventory items expiring within a configurable window (e.g., 7 days).\n- [ ] Backend provides an endpoint `GET /api/v1/inventory/insights/recipes` that returns recipe suggestions utilizing these expiring items.\n- [ ] The engine prioritizes recipes that use the highest quantity of expiring items.\n- [ ] Frontend apps (Web/Mobile) display a \"Suggested Recipes to reduce waste\" widget on the dashboard.\n- [ ] Users can click a recipe to see instructions and which inventory items it will consume.\n- [ ] Users can mark a recipe as \"Cooked\", which triggers an automatic deduction of the required item quantities from their inventory (using FEFO).",
+  "closed_by": null,
+  "reactions": {
+    "url": "https://api.github.com/repos/Chak-and-Jules/home-inventory-mobile/issues/113/reactions",
+    "total_count": 0,
+    "+1": 0,
+    "-1": 0,
+    "laugh": 0,
+    "hooray": 0,
+    "confused": 0,
+    "heart": 0,
+    "rocket": 0,
+    "eyes": 0
+  },
+  "timeline_url": "https://api.github.com/repos/Chak-and-Jules/home-inventory-mobile/issues/113/timeline",
+  "performed_via_github_app": null,
+  "state_reason": null,
+  "pinned_comment": null
+}
