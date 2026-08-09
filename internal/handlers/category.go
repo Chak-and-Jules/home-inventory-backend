@@ -34,9 +34,23 @@ func (h *CategoryHandler) GetCategories(c *gin.Context) {
 	}
 
 	var categories []models.Category
-	if err := h.DB.Preload("Parent").Where("home_id = ?", homeID).Find(&categories).Error; err != nil {
+	// ⚡ Bolt: Removed Preload("Parent") to avoid a second query. Since we fetch all categories for the home,
+	// all parents are guaranteed to be in the result set. We can stitch them in memory in O(N) time.
+	if err := h.DB.Where("home_id = ?", homeID).Find(&categories).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch categories")})
 		return
+	}
+
+	categoryMap := make(map[uuid.UUID]*models.Category, len(categories))
+	for i := range categories {
+		categoryMap[categories[i].ID] = &categories[i]
+	}
+	for i := range categories {
+		if categories[i].ParentID != nil {
+			if parent, ok := categoryMap[*categories[i].ParentID]; ok {
+				categories[i].Parent = parent
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, categories)
