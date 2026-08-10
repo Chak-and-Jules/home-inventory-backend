@@ -315,6 +315,33 @@ func TestGetCategories(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
+	t.Run("success with parent", func(t *testing.T) {
+		handler, mock := setupCategoryTest(t)
+		expectCategoryAccess(mock, userID, homeID, models.RoleViewer)
+
+		parentID := uuid.New()
+		childID := uuid.New()
+
+		mock.ExpectQuery(`SELECT \* FROM "categories" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "parent_id", "created_at", "updated_at"}).
+				AddRow(parentID, homeID, "Parent", nil, time.Now(), time.Now()).
+				AddRow(childID, homeID, "Child", parentID, time.Now(), time.Now()))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, err := http.NewRequest(http.MethodGet, "/categories", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Home-Id", homeID.String())
+		c.Request = req
+		c.Set("userID", userID)
+
+		handler.GetCategories(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
 	t.Run("access denied", func(t *testing.T) {
 		handler, mock := setupCategoryTest(t)
 
