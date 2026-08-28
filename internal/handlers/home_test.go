@@ -327,6 +327,34 @@ func TestRemoveHomeUser(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("editor cannot remove owner", func(t *testing.T) {
+		handler, mock := setupTest(t)
+		req, err := http.NewRequest(http.MethodDelete, "/homes/"+homeID.String()+"/users/"+targetUserID.String(), nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{
+			{Key: "id", Value: homeID.String()},
+			{Key: "userId", Value: targetUserID.String()},
+		}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(targetUserID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(targetUserID, homeID, models.RoleOwner))
+
+		handler.RemoveHomeUser(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestUpdateHomeUserRole(t *testing.T) {
@@ -379,6 +407,60 @@ func TestUpdateHomeUserRole(t *testing.T) {
 		handler.UpdateHomeUserRole(c)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("editor cannot grant owner role", func(t *testing.T) {
+		handler, mock := setupTest(t)
+		reqBody := `{"role": "owner"}`
+		req, err := http.NewRequest(http.MethodPut, "/homes/"+homeID.String()+"/users/"+targetUserID.String()+"/role", strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{
+			{Key: "id", Value: homeID.String()},
+			{Key: "userId", Value: targetUserID.String()},
+		}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
+
+		handler.UpdateHomeUserRole(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("editor cannot modify owner role", func(t *testing.T) {
+		handler, mock := setupTest(t)
+		reqBody := `{"role": "viewer"}`
+		req, err := http.NewRequest(http.MethodPut, "/homes/"+homeID.String()+"/users/"+targetUserID.String()+"/role", strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{
+			{Key: "id", Value: homeID.String()},
+			{Key: "userId", Value: targetUserID.String()},
+		}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(targetUserID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(targetUserID, homeID, models.RoleOwner))
+
+		handler.UpdateHomeUserRole(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -664,6 +746,30 @@ func TestAddHomeUser(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("editor cannot add owner", func(t *testing.T) {
+		handler, mock := setupTest(t)
+		reqBody := `{"email": "newowner@example.com", "role": "owner"}`
+		req, err := http.NewRequest(http.MethodPost, "/homes/"+homeID.String()+"/users", strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Params = []gin.Param{{Key: "id", Value: homeID.String()}}
+		c.Set("userID", userID)
+
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id = \$2 ORDER BY "user_homes"\."user_id" LIMIT \$3`).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, models.RoleEditor))
+
+		handler.AddHomeUser(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Contains(t, w.Body.String(), "Editors cannot add owners")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
 
 	t.Run("insufficient permissions", func(t *testing.T) {
 		handler, mock := setupTest(t)
