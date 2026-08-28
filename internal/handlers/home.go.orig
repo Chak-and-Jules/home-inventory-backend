@@ -65,13 +65,8 @@ func (h *HomeHandler) UpdateHomeUserRole(c *gin.Context) {
 	}
 
 	// RBAC: Only owners and editors can update roles
-	hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
 	if !hasAccess {
-		return
-	}
-
-	if requesterHome.Role == models.RoleEditor && req.Role == models.RoleOwner {
-		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot grant owner role")})
 		return
 	}
 
@@ -83,11 +78,6 @@ func (h *HomeHandler) UpdateHomeUserRole(c *gin.Context) {
 			logger.Log.Error("Failed to find user in home", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user in home")})
 		}
-		return
-	}
-
-	if requesterHome.Role == models.RoleEditor && userHome.Role == models.RoleOwner {
-		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot modify owner roles")})
 		return
 	}
 
@@ -112,7 +102,7 @@ func (h *HomeHandler) RemoveHomeUser(c *gin.Context) {
 	}
 
 	// RBAC: Only owners and editors can remove users
-	hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
 	if !hasAccess {
 		return
 	}
@@ -125,11 +115,6 @@ func (h *HomeHandler) RemoveHomeUser(c *gin.Context) {
 			logger.Log.Error("Failed to find user in home", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user in home")})
 		}
-		return
-	}
-
-	if requesterHome.Role == models.RoleEditor && userHome.Role == models.RoleOwner {
-		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot remove owners")})
 		return
 	}
 
@@ -156,13 +141,8 @@ func (h *HomeHandler) AddHomeUser(c *gin.Context) {
 	}
 
 	// RBAC: Only owners and editors can add users
-	hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
 	if !hasAccess {
-		return
-	}
-
-	if requesterHome.Role == models.RoleEditor && req.Role == models.RoleOwner {
-		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot add owners")})
 		return
 	}
 

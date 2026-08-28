@@ -1,0 +1,29 @@
+--- internal/handlers/home.go
++++ internal/handlers/home.go
+@@ -65,7 +65,7 @@
+	}
+
+	// RBAC: Only owners and editors can update roles
+-	hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
++	hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	if !hasAccess {
+		return
+	}
+@@ -102,7 +102,7 @@
+	}
+
+	// RBAC: Only owners and editors can remove users
+-	hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
++	hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	if !hasAccess {
+		return
+	}
+@@ -141,7 +141,7 @@
+	}
+
+	// RBAC: Only owners and editors can add users
+-	hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
++	hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	if !hasAccess {
+		return
+	}
