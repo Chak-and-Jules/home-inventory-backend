@@ -142,6 +142,14 @@ var Translations = map[string]map[string]string{
 		"Shopping list suggestion dismissed successfully":                                                   "Alışveriş listesi önerisi başarıyla reddedildi",
 		"Restock window must be a non-negative integer":                                                     "Yeniden stoklama penceresi negatif olmayan bir tamsayı olmalıdır",
 		"Invalid restock window":                                                                            "Geçersiz yeniden stoklama penceresi",
+		"Receipt image or document is required":                                                             "Fiş görseli veya belgesi gereklidir",
+		"Unsupported file format. Please upload JPEG, PNG, or PDF":                                          "Desteklenmeyen dosya formatı. Lütfen JPEG, PNG veya PDF yükleyin",
+		"Failed to read receipt file":                                                                       "Fiş dosyası okunamadı",
+		"Failed to create receipt processing job":                                                           "Fiş işleme görevi oluşturulamadı",
+		"Receipt uploaded successfully and is being processed":                                              "Fiş başarıyla yüklendi ve işleniyor",
+		"Invalid receipt job ID":                                                                            "Geçersiz fiş görevi ID",
+		"Receipt job not found":                                                                             "Fiş görevi bulunamadı",
+		"Receipt items confirmed and added to inventory successfully":                                       "Fiş öğeleri başarıyla onaylandı ve envantere eklendi",
 	},
 }
 
