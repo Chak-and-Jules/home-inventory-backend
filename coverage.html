@@ -1,0 +1,3212 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>handlers: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+
+				<option value="file0">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/category.go (93.8%)</option>
+
+				<option value="file1">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/home.go (87.0%)</option>
+
+				<option value="file2">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/inventory_item.go (79.8%)</option>
+
+				<option value="file3">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/item_definition.go (93.2%)</option>
+
+				<option value="file4">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/language.go (100.0%)</option>
+
+				<option value="file5">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/maintenance.go (88.7%)</option>
+
+				<option value="file6">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/product.go (97.6%)</option>
+
+				<option value="file7">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/profile.go (79.5%)</option>
+
+				<option value="file8">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/shopping_list.go (65.9%)</option>
+
+				<option value="file9">github.com/Chak-and-Jules/home-inventory-backend/internal/handlers/size_unit.go (100.0%)</option>
+
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+
+			</div>
+		</div>
+		<div id="content">
+
+		<pre class="file" id="file0" style="display: none">package handlers
+
+import (
+        "net/http"
+        "strings"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "gorm.io/gorm"
+)
+
+type CategoryHandler struct {
+        DB *gorm.DB
+}
+
+type CategoryRequest struct {
+        Name     string     `json:"name" binding:"required"`
+        ParentID *uuid.UUID `json:"parent_id"` // Optional
+}
+
+func (h *CategoryHandler) GetCategories(c *gin.Context) <span class="cov8" title="1">{
+        // ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var categories []models.Category
+        // ⚡ Bolt: Removed Preload("Parent") to avoid a second query. Since we fetch all categories for the home,
+        // all parents are guaranteed to be in the result set. We can stitch them in memory in O(N) time.
+        if err := h.DB.Where("home_id = ?", homeID).Find(&amp;categories).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch categories")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">categoryMap := make(map[uuid.UUID]*models.Category, len(categories))
+        for i := range categories </span><span class="cov8" title="1">{
+                categoryMap[categories[i].ID] = &amp;categories[i]
+        }</span>
+        <span class="cov8" title="1">for i := range categories </span><span class="cov8" title="1">{
+                if categories[i].ParentID != nil </span><span class="cov8" title="1">{
+                        if parent, ok := categoryMap[*categories[i].ParentID]; ok </span><span class="cov8" title="1">{
+                                categories[i].Parent = parent
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, categories)</span>
+}
+
+func (h *CategoryHandler) CreateCategory(c *gin.Context) <span class="cov8" title="1">{
+        // ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) </span><span class="cov0" title="0">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req CategoryRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        // If parent_id is provided, verify it belongs to the same home
+        <span class="cov8" title="1">if req.ParentID != nil </span><span class="cov8" title="1">{
+                var parent models.Category
+                if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&amp;parent).Error; err != nil </span><span class="cov8" title="1">{
+                        if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
+                        }</span> else<span class="cov8" title="1"> {
+                                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
+                        }</span>
+                        <span class="cov8" title="1">return</span>
+                }
+                <span class="cov8" title="1">if parent.HomeID != homeID </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
+                        return
+                }</span>
+        }
+
+        // Check for unique name in the same hierarchy level (case-insensitive and ignoring whitespace)
+        <span class="cov8" title="1">var count int64
+        normalizedName := strings.ToLower(strings.ReplaceAll(req.Name, " ", ""))
+        query := h.DB.Model(&amp;models.Category{}).Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ?", homeID, normalizedName)
+        if req.ParentID == nil </span><span class="cov8" title="1">{
+                query = query.Where("parent_id IS NULL")
+        }</span> else<span class="cov8" title="1"> {
+                query = query.Where("parent_id = ?", req.ParentID)
+        }</span>
+        <span class="cov8" title="1">if err := query.Count(&amp;count).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to validate category uniqueness")})
+                return
+        }</span>
+        <span class="cov8" title="1">if count &gt; 0 </span><span class="cov8" title="1">{
+                c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category with this name already exists at this level")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">category := models.Category{
+                HomeID:   homeID,
+                Name:     req.Name,
+                ParentID: req.ParentID,
+        }
+
+        if err := h.DB.Create(&amp;category).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create category")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusCreated, category)</span>
+}
+
+func (h *CategoryHandler) UpdateCategory(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid category ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var category models.Category
+        if err := h.DB.First(&amp;category, id).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Category not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, category.HomeID) </span><span class="cov0" title="0">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req CategoryRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        // If parent_id is provided, verify it belongs to the same home
+        <span class="cov8" title="1">if req.ParentID != nil </span><span class="cov8" title="1">{
+                // Prevent self-parenting
+                if *req.ParentID == id </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category cannot be its own parent")})
+                        return
+                }</span>
+
+                <span class="cov8" title="1">var parent models.Category
+                if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&amp;parent).Error; err != nil </span><span class="cov8" title="1">{
+                        if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
+                        }</span> else<span class="cov8" title="1"> {
+                                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
+                        }</span>
+                        <span class="cov8" title="1">return</span>
+                }
+                <span class="cov8" title="1">if parent.HomeID != category.HomeID </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
+                        return
+                }</span>
+        }
+
+        // Check for unique name in the same hierarchy level (case-insensitive and ignoring whitespace)
+        <span class="cov8" title="1">var count int64
+        normalizedName := strings.ToLower(strings.ReplaceAll(req.Name, " ", ""))
+        query := h.DB.Model(&amp;models.Category{}).Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ? AND id != ?", category.HomeID, normalizedName, id)
+        if req.ParentID == nil </span><span class="cov8" title="1">{
+                query = query.Where("parent_id IS NULL")
+        }</span> else<span class="cov8" title="1"> {
+                query = query.Where("parent_id = ?", req.ParentID)
+        }</span>
+        <span class="cov8" title="1">if err := query.Count(&amp;count).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to validate category uniqueness")})
+                return
+        }</span>
+        <span class="cov8" title="1">if count &gt; 0 </span><span class="cov8" title="1">{
+                c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category with this name already exists at this level")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Model(&amp;category).Updates(map[string]interface{}{
+                "name":      req.Name,
+                "parent_id": req.ParentID,
+        }).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update category")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Category updated successfully")})</span>
+}
+
+func (h *CategoryHandler) DeleteCategory(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid category ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var category models.Category
+        if err := h.DB.First(&amp;category, id).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Category not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, category.HomeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Delete(&amp;models.Category{}, id).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete category")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Category deleted successfully")})</span>
+}
+</pre>
+
+		<pre class="file" id="file1" style="display: none">package handlers
+
+import (
+        "net/http"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "go.uber.org/zap"
+        "gorm.io/gorm"
+)
+
+type HomeHandler struct {
+        DB *gorm.DB
+}
+
+type CreateHomeRequest struct {
+        Name string `json:"name" binding:"required"`
+}
+
+type UpdateHomeRequest struct {
+        Name string `json:"name" binding:"required"`
+}
+
+type AddHomeUserRequest struct {
+        Email string `json:"email" binding:"required,email"`
+        Role  string `json:"role" binding:"required,oneof=owner editor viewer"`
+}
+
+type UpdateHomeUserRoleRequest struct {
+        Role string `json:"role" binding:"required,oneof=owner editor viewer"`
+}
+
+func (h *HomeHandler) GetHomes(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+
+        var userHomes []models.UserHome
+        if err := h.DB.Preload("Home").Where("user_id = ?", userID).Find(&amp;userHomes).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to fetch homes", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch homes")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, userHomes)</span>
+}
+
+func (h *HomeHandler) UpdateHomeUserRole(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+        homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+        <span class="cov8" title="1">targetUserID, ok := utils.ParseUUIDParam(c, h.DB, "userId", "Invalid user ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req UpdateHomeUserRoleRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        // RBAC: Only owners and editors can update roles
+        <span class="cov8" title="1">hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+        if !hasAccess </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if requesterHome.Role == models.RoleEditor &amp;&amp; req.Role == models.RoleOwner </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot grant owner role")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var userHome models.UserHome
+        if err := h.DB.Where("user_id = ? AND home_id = ?", targetUserID, homeID).First(&amp;userHome).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "User not found in home")})
+                }</span> else<span class="cov0" title="0"> {
+                        logger.Log.Error("Failed to find user in home", zap.Error(err))
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user in home")})
+                }</span>
+                <span class="cov8" title="1">return</span>
+        }
+
+        <span class="cov8" title="1">if requesterHome.Role == models.RoleEditor &amp;&amp; userHome.Role == models.RoleOwner </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot modify owner roles")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Model(&amp;userHome).Update("role", req.Role).Error; err != nil </span><span class="cov0" title="0">{
+                logger.Log.Error("Failed to update user role", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update user role")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "User role updated successfully")})</span>
+}
+
+func (h *HomeHandler) RemoveHomeUser(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+        homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+        <span class="cov8" title="1">targetUserID, ok := utils.ParseUUIDParam(c, h.DB, "userId", "Invalid user ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        // RBAC: Only owners and editors can remove users
+        <span class="cov8" title="1">hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+        if !hasAccess </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var userHome models.UserHome
+        if err := h.DB.Where("user_id = ? AND home_id = ?", targetUserID, homeID).First(&amp;userHome).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "User not found in home")})
+                }</span> else<span class="cov0" title="0"> {
+                        logger.Log.Error("Failed to find user in home", zap.Error(err))
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user in home")})
+                }</span>
+                <span class="cov8" title="1">return</span>
+        }
+
+        <span class="cov8" title="1">if requesterHome.Role == models.RoleEditor &amp;&amp; userHome.Role == models.RoleOwner </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot remove owners")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Where("user_id = ? AND home_id = ?", targetUserID, homeID).Delete(&amp;models.UserHome{}).Error; err != nil </span><span class="cov0" title="0">{
+                logger.Log.Error("Failed to remove user from home", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to remove user from home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "User removed from home successfully")})</span>
+}
+
+func (h *HomeHandler) AddHomeUser(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+        homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req AddHomeUserRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        // RBAC: Only owners and editors can add users
+        <span class="cov8" title="1">hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+        if !hasAccess </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if requesterHome.Role == models.RoleEditor &amp;&amp; req.Role == models.RoleOwner </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot add owners")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var profile models.Profile
+        if err := h.DB.Where("email = ?", req.Email).First(&amp;profile).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "User not found")})
+                }</span> else<span class="cov0" title="0"> {
+                        logger.Log.Error("Failed to find user profile", zap.Error(err))
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user profile")})
+                }</span>
+                <span class="cov8" title="1">return</span>
+        }
+
+        // Check if user is already in the home
+        <span class="cov8" title="1">var count int64
+        h.DB.Model(&amp;models.UserHome{}).Where("user_id = ? AND home_id = ?", profile.ID, homeID).Count(&amp;count)
+        if count &gt; 0 </span><span class="cov8" title="1">{
+                c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "User is already a member of this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">userHome := models.UserHome{
+                UserID: profile.ID,
+                HomeID: homeID,
+                Role:   req.Role,
+        }
+
+        if err := h.DB.Create(&amp;userHome).Error; err != nil </span><span class="cov0" title="0">{
+                logger.Log.Error("Failed to add user to home", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to add user to home")})
+                return
+        }</span>
+
+        // Preload User for the response
+        <span class="cov8" title="1">h.DB.Preload("User").First(&amp;userHome)
+
+        c.JSON(http.StatusCreated, userHome)</span>
+}
+
+// requireHomeRole retrieves the user's home access record and checks if they have one of the allowed roles.
+// It handles sending the appropriate 404 or 403 error response.
+func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, allowedRoles ...string) (bool, *models.UserHome) <span class="cov8" title="1">{
+        var userHome models.UserHome
+        if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&amp;userHome).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Warn("Home not found or access denied", zap.Error(err))
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Home not found or access denied")})
+                return false, nil
+        }</span>
+
+        <span class="cov8" title="1">if len(allowedRoles) == 0 </span><span class="cov8" title="1">{
+                return true, &amp;userHome
+        }</span>
+
+        <span class="cov8" title="1">for _, role := range allowedRoles </span><span class="cov8" title="1">{
+                if userHome.Role == role </span><span class="cov8" title="1">{
+                        return true, &amp;userHome
+                }</span>
+        }
+
+        // Custom error messages based on the missing role
+        <span class="cov8" title="1">if len(allowedRoles) == 1 &amp;&amp; allowedRoles[0] == models.RoleOwner </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Only owners can delete homes")})
+        }</span> else<span class="cov8" title="1"> {
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient permissions to update home")})
+        }</span>
+        <span class="cov8" title="1">return false, nil</span>
+}
+
+func (h *HomeHandler) CreateHome(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+        var req CreateHomeRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">home := models.Home{Name: req.Name}
+
+        err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                if err := tx.Create(&amp;home).Error; err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">userHome := models.UserHome{
+                        UserID:    userID,
+                        HomeID:    home.ID,
+                        Role:      models.RoleOwner,
+                        IsDefault: false,
+                }
+                if err := tx.Create(&amp;userHome).Error; err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">return nil</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to create home", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusCreated, home)</span>
+}
+
+func (h *HomeHandler) UpdateHome(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+        homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req UpdateHomeRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+        if !hasAccess </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Model(&amp;models.Home{}).Where("id = ?", homeID).Update("name", req.Name).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to update home", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Home updated successfully")})</span>
+}
+
+func (h *HomeHandler) DeleteHome(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+        homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        // RBAC: Only owners can delete homes
+        <span class="cov8" title="1">hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner)
+        if !hasAccess </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var userHome models.UserHome
+        if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&amp;userHome).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Warn("User home association not found", zap.Error(err))
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Home not found or access denied")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var count int64
+        if err := h.DB.Model(&amp;models.UserHome{}).Where("user_id = ?", userID).Count(&amp;count).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to count user homes", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if count &lt;= 1 </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Cannot delete your only home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">approved := c.Query("approved") == "true"
+        if userHome.IsDefault &amp;&amp; !approved </span><span class="cov8" title="1">{
+                c.JSON(http.StatusConflict, gin.H{"warning": i18n.TranslateDB(h.DB, c, "This is your default home. Please confirm deletion.")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                // Delete the home - this will cascade delete UserHome records
+                if err := tx.Delete(&amp;models.Home{}, homeID).Error; err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">if userHome.IsDefault </span><span class="cov8" title="1">{
+                        var oldestHome models.UserHome
+                        if err := tx.Where("user_id = ?", userID).Order("created_at asc").First(&amp;oldestHome).Error; err != nil </span><span class="cov8" title="1">{
+                                return err
+                        }</span>
+                        <span class="cov8" title="1">if err := tx.Model(&amp;oldestHome).Update("is_default", true).Error; err != nil </span><span class="cov8" title="1">{
+                                return err
+                        }</span>
+                }
+                <span class="cov8" title="1">return nil</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to delete home", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Home deleted successfully")})</span>
+}
+
+func (h *HomeHandler) SetDefaultHome(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+        homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        // Verify user has access to this home
+        <span class="cov8" title="1">hasAccess, _ := h.requireHomeRole(c, userID, homeID)
+        if !hasAccess </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var err error
+        err = h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                // Unset all default homes for the user
+                if err := tx.Model(&amp;models.UserHome{}).Where("user_id = ?", userID).Update("is_default", false).Error; err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+                // Set the selected home as default
+                <span class="cov8" title="1">if err := tx.Model(&amp;models.UserHome{}).Where("user_id = ? AND home_id = ?", userID, homeID).Update("is_default", true).Error; err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">return nil</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to set default home", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to set default home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Default home updated successfully")})</span>
+}
+
+func (h *HomeHandler) GetHomeUsers(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+        homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        // RBAC: Verify user has access to this home
+        <span class="cov8" title="1">hasAccess, _ := h.requireHomeRole(c, userID, homeID)
+        if !hasAccess </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var userHomes []models.UserHome
+        if err := h.DB.Preload("User").Where("home_id = ?", homeID).Find(&amp;userHomes).Error; err != nil </span><span class="cov0" title="0">{
+                logger.Log.Error("Failed to fetch home users", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch home users")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, userHomes)</span>
+}
+</pre>
+
+		<pre class="file" id="file2" style="display: none">package handlers
+
+import (
+        "fmt"
+        "net/http"
+        "sort"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "gorm.io/gorm"
+)
+
+type InventoryItemHandler struct {
+        DB *gorm.DB
+}
+
+type CreateInventoryItemRequest struct {
+        ItemDefinitionID uuid.UUID  `json:"item_definition_id" binding:"required"`
+        Quantity         *float64   `json:"quantity" binding:"required"`
+        ExpirationDate   *time.Time `json:"expiry_date"`
+}
+
+type UpdateInventoryItemRequest struct {
+        Quantity       *float64   `json:"quantity" binding:"required"`
+        ExpirationDate *time.Time `json:"expiry_date"`
+}
+
+type UpdateQuantityRequest struct {
+        Quantity *float64 `json:"quantity" binding:"required"`
+}
+
+type ScanInventoryRequest struct {
+        Barcode string   `json:"barcode" binding:"required"`
+        Change  *float64 `json:"change" binding:"required"` // e.g. 1 to increment, -1 to decrement, 60 for a pack
+}
+
+func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) <span class="cov8" title="1">{
+        // ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">query := h.DB.Preload("ItemDefinition.Category").Preload("ItemDefinition.SizeUnit").Where("home_id = ?", homeID)
+
+        // Filter
+        filter := c.Query("filter")
+        now := time.Now()
+        if filter == "expired" </span><span class="cov0" title="0">{
+                query = query.Where("expiration_date &lt;= ?", now)
+        }</span> else<span class="cov8" title="1"> if filter == "expiring_soon" </span><span class="cov8" title="1">{
+                threeDaysFromNow := now.AddDate(0, 0, 3)
+                query = query.Where("expiration_date &gt; ? AND expiration_date &lt;= ?", now, threeDaysFromNow)
+        }</span>
+
+        <span class="cov8" title="1">expiringBefore := c.Query("expiring_before")
+        if expiringBefore != "" </span><span class="cov8" title="1">{
+                t, err := time.Parse(time.RFC3339, expiringBefore)
+                if err != nil </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid date format for expiring_before. Use RFC3339 (e.g. 2023-01-02T15:04:05Z)")})
+                        return
+                }</span>
+                <span class="cov8" title="1">query = query.Where("expiration_date &lt;= ?", t)</span>
+        }
+
+        // Sort
+        <span class="cov8" title="1">sort := c.Query("sort")
+        if sort == "expiry" </span><span class="cov0" title="0">{
+                query = query.Order("expiration_date ASC NULLS LAST")
+        }</span> else<span class="cov8" title="1"> {
+                query = query.Order("created_at DESC")
+        }</span>
+
+        <span class="cov8" title="1">var items []models.InventoryItem
+        if err := query.Find(&amp;items).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
+                return
+        }</span>
+        <span class="cov8" title="1">c.JSON(http.StatusOK, items)</span>
+}
+
+func (h *InventoryItemHandler) GetExpiringItems(c *gin.Context) <span class="cov8" title="1">{
+        // ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">now := time.Now()
+        sevenDaysFromNow := now.AddDate(0, 0, 7)
+
+        var items []models.InventoryItem
+        if err := h.DB.Preload("ItemDefinition.Category").Preload("ItemDefinition.SizeUnit").
+                Where("home_id = ? AND expiration_date &gt; ? AND expiration_date &lt;= ?", homeID, now, sevenDaysFromNow).
+                Order("expiration_date ASC").
+                Find(&amp;items).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, items)</span>
+}
+
+func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) <span class="cov8" title="1">{
+        // ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) </span><span class="cov0" title="0">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req CreateInventoryItemRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.Quantity == nil || *req.Quantity &lt; 0 </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">item := models.InventoryItem{
+                HomeID:           homeID,
+                ItemDefinitionID: req.ItemDefinitionID,
+                Quantity:         *req.Quantity,
+                ExpirationDate:   req.ExpirationDate,
+        }
+
+        if err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                if err := tx.Create(&amp;item).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">if item.Quantity &gt; 0 </span><span class="cov8" title="1">{
+                        txLog := models.InventoryTransaction{
+                                HomeID:           homeID,
+                                ItemDefinitionID: req.ItemDefinitionID,
+                                InventoryItemID:  item.ID,
+                                QuantityChange:   item.Quantity,
+                        }
+                        if err := tx.Create(&amp;txLog).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+                <span class="cov8" title="1">return utils.UpdateShoppingListForDefinition(tx, homeID, item.ItemDefinitionID)</span>
+        }); err != nil <span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create inventory item")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusCreated, item)</span>
+}
+
+func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid inventory item ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        // First find the item to check its home_id
+        <span class="cov8" title="1">var item models.InventoryItem
+        if err := h.DB.First(&amp;item, id).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) </span><span class="cov0" title="0">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req UpdateInventoryItemRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.Quantity == nil || *req.Quantity &lt; 0 </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        // Log transaction if quantity changed
+        <span class="cov8" title="1">quantityChange := *req.Quantity - item.Quantity
+
+        err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                updates := map[string]interface{}{
+                        "quantity":        *req.Quantity,
+                        "expiration_date": req.ExpirationDate,
+                }
+
+                if err := tx.Model(&amp;item).Updates(updates).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">if quantityChange != 0 </span><span class="cov8" title="1">{
+                        txLog := models.InventoryTransaction{
+                                HomeID:           item.HomeID,
+                                ItemDefinitionID: item.ItemDefinitionID,
+                                InventoryItemID:  item.ID,
+                                QuantityChange:   quantityChange,
+                        }
+                        if err := tx.Create(&amp;txLog).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+                <span class="cov8" title="1">return utils.UpdateShoppingListForDefinition(tx, item.HomeID, item.ItemDefinitionID)</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update inventory item")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Inventory item updated successfully")})</span>
+}
+
+func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid inventory item ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var item models.InventoryItem
+        if err := h.DB.First(&amp;item, id).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) </span><span class="cov0" title="0">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req UpdateQuantityRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.Quantity == nil || *req.Quantity &lt; 0 </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        // Log transaction if quantity changed
+        <span class="cov8" title="1">quantityChange := *req.Quantity - item.Quantity
+
+        err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                if err := tx.Model(&amp;item).Update("quantity", *req.Quantity).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">if quantityChange != 0 </span><span class="cov8" title="1">{
+                        txLog := models.InventoryTransaction{
+                                HomeID:           item.HomeID,
+                                ItemDefinitionID: item.ItemDefinitionID,
+                                InventoryItemID:  item.ID,
+                                QuantityChange:   quantityChange,
+                        }
+                        if err := tx.Create(&amp;txLog).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+                <span class="cov8" title="1">return utils.UpdateShoppingListForDefinition(tx, item.HomeID, item.ItemDefinitionID)</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update quantity")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Quantity updated successfully")})</span>
+}
+
+func (h *InventoryItemHandler) DeleteInventoryItem(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid inventory item ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var item models.InventoryItem
+        if err := h.DB.First(&amp;item, id).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) </span><span class="cov0" title="0">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                if item.Quantity &gt; 0 </span><span class="cov8" title="1">{
+                        txLog := models.InventoryTransaction{
+                                HomeID:           item.HomeID,
+                                ItemDefinitionID: item.ItemDefinitionID,
+                                InventoryItemID:  item.ID,
+                                QuantityChange:   -item.Quantity,
+                        }
+                        if err := tx.Create(&amp;txLog).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if err := tx.Delete(&amp;models.InventoryItem{}, id).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">return utils.UpdateShoppingListForDefinition(tx, item.HomeID, item.ItemDefinitionID)</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete inventory item")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Inventory item deleted successfully")})</span>
+}
+
+type AlmostFinishedItemResponse struct {
+        ItemDefinition    models.ItemDefinition `json:"item_definition"`
+        TotalQuantity     float64               `json:"total_quantity"`
+        Reason            string                `json:"reason"` // "low_stock", "expiring_soon", "threshold_met"
+        EstimatedDaysLeft *int                  `json:"estimated_days_left,omitempty"`
+}
+
+func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) <span class="cov8" title="1">{
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+                return
+        }</span>
+
+        // 1. Fetch all Item Definitions with their inventory items and size unit / category
+        <span class="cov8" title="1">var itemDefs []models.ItemDefinition
+        if err := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID).Find(&amp;itemDefs).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch item definitions")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var results []AlmostFinishedItemResponse
+        now := time.Now()
+        sixMonthsAgo := now.AddDate(0, -6, 0)
+
+        threeDaysFromNow := now.AddDate(0, 0, 3)
+
+        // ⚡ Bolt: Pre-fetch all inventory items for this home to avoid N+1 queries in the loop
+        var allItems []models.InventoryItem
+        if err := h.DB.Where("home_id = ?", homeID).Find(&amp;allItems).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
+                return
+        }</span>
+        <span class="cov8" title="1">itemsByDef := make(map[uuid.UUID][]models.InventoryItem)
+        for _, item := range allItems </span><span class="cov8" title="1">{
+                itemsByDef[item.ItemDefinitionID] = append(itemsByDef[item.ItemDefinitionID], item)
+        }</span>
+
+        // ⚡ Bolt: Offload inventory transaction aggregations (SUM, MIN, MAX) to the database to reduce memory allocation,
+        // GC pressure, and CPU overhead from looping over thousands of individual records in Go space.
+        <span class="cov8" title="1">type ConsumptionStat struct {
+                ItemDefinitionID uuid.UUID
+                TotalConsumed    float64
+                FirstTxTime      time.Time
+                LastTxTime       time.Time
+        }
+        var consumptionStats []ConsumptionStat
+        if err := h.DB.Model(&amp;models.InventoryTransaction{}).
+                Select("item_definition_id, SUM(-quantity_change) as total_consumed, MIN(created_at) as first_tx_time, MAX(created_at) as last_tx_time").
+                Where("home_id = ? AND quantity_change &lt; 0 AND created_at &gt;= ?", homeID, sixMonthsAgo).
+                Group("item_definition_id").
+                Find(&amp;consumptionStats).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory transactions")})
+                return
+        }</span>
+        <span class="cov8" title="1">statsByDef := make(map[uuid.UUID]ConsumptionStat)
+        for _, stat := range consumptionStats </span><span class="cov8" title="1">{
+                statsByDef[stat.ItemDefinitionID] = stat
+        }</span>
+
+        <span class="cov8" title="1">for _, def := range itemDefs </span><span class="cov8" title="1">{
+                // Calculate total quantity and check for expiring items
+                items := itemsByDef[def.ID]
+
+                var usableQuantity float64
+                var totalQuantity float64
+                hasExpiringSoon := false
+
+                for _, item := range items </span><span class="cov8" title="1">{
+                        totalQuantity += item.Quantity
+                        if item.ExpirationDate == nil || item.ExpirationDate.After(now) </span><span class="cov8" title="1">{
+                                usableQuantity += item.Quantity
+                                if item.ExpirationDate != nil &amp;&amp; item.Quantity &gt; 0 &amp;&amp; item.ExpirationDate.Before(threeDaysFromNow) </span><span class="cov8" title="1">{
+                                        hasExpiringSoon = true
+                                }</span>
+                        }
+                }
+
+                // Check if threshold is set and met
+                <span class="cov8" title="1">if def.LowStockThreshold != nil </span><span class="cov0" title="0">{
+                        if usableQuantity &lt;= *def.LowStockThreshold </span><span class="cov0" title="0">{
+                                results = append(results, AlmostFinishedItemResponse{
+                                        ItemDefinition: def,
+                                        TotalQuantity:  usableQuantity,
+                                        Reason:         "threshold_met",
+                                })
+                                continue</span>
+                        }
+                }
+
+                // If it's expiring soon, flag it
+                <span class="cov8" title="1">if hasExpiringSoon </span><span class="cov8" title="1">{
+                        results = append(results, AlmostFinishedItemResponse{
+                                ItemDefinition: def,
+                                TotalQuantity:  usableQuantity,
+                                Reason:         "expiring_soon",
+                        })
+                        continue</span>
+                }
+
+                // If no threshold, or threshold not met, and not expiring soon, calculate based on consumption
+                // Fetch consumption in the last 6 months (negative quantity changes)
+                <span class="cov8" title="1">stat, hasStats := statsByDef[def.ID]
+
+                // Only calculate if we have meaningful consumption data
+                if hasStats &amp;&amp; stat.TotalConsumed &gt; 0 &amp;&amp; !stat.FirstTxTime.IsZero() &amp;&amp; !stat.LastTxTime.IsZero() </span><span class="cov8" title="1">{
+                        totalConsumed := stat.TotalConsumed
+                        firstTxTime := stat.FirstTxTime
+
+                        // Calculate days between first and last transaction, or fallback to days since first tx to now
+                        daysDiff := now.Sub(firstTxTime).Hours() / 24
+
+                        // We need a minimum window to calculate a realistic rate, let's say 7 days, unless it's the only data we have.
+                        if daysDiff &lt; 1 </span><span class="cov8" title="1">{
+                                daysDiff = 1 // Avoid division by zero
+                        }</span>
+
+                        <span class="cov8" title="1">dailyConsumptionRate := totalConsumed / daysDiff
+
+                        if dailyConsumptionRate &gt; 0 </span><span class="cov8" title="1">{
+                                daysLeft := int(usableQuantity / dailyConsumptionRate)
+
+                                if daysLeft &lt;= 28 </span><span class="cov8" title="1">{
+                                        results = append(results, AlmostFinishedItemResponse{
+                                                ItemDefinition:    def,
+                                                TotalQuantity:     usableQuantity,
+                                                Reason:            "low_stock",
+                                                EstimatedDaysLeft: &amp;daysLeft,
+                                        })
+                                }</span>
+                        }
+                } else<span class="cov8" title="1"> if usableQuantity == 0 &amp;&amp; def.LowStockThreshold == nil </span>{<span class="cov8" title="1">
+                        // If we have 0 quantity and no data and no threshold, might want to include it?
+                        // But maybe the user just doesn't want to track it. Let's omit for now unless threshold is set.
+                }</span>
+        }
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, results)</span>
+}
+
+func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) <span class="cov8" title="1">{
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req ScanInventoryRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        // 1. Find ItemDefinition by barcode
+        <span class="cov8" title="1">var itemDef models.ItemDefinition
+        if err := h.DB.Where("home_id = ? AND barcode = ?", homeID, req.Barcode).First(&amp;itemDef).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item definition not found")})
+                        return
+                }</span>
+                <span class="cov0" title="0">c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch item definition")})
+                return</span>
+        }
+
+        // 2. Find or create InventoryItem for this definition
+        <span class="cov8" title="1">var item models.InventoryItem
+        err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                err := tx.Where("home_id = ? AND item_definition_id = ?", homeID, itemDef.ID).
+                        Order("expiration_date ASC NULLS LAST").
+                        First(&amp;item).Error
+
+                if err != nil &amp;&amp; err != gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        if *req.Change &lt; 0 </span><span class="cov8" title="1">{
+                                return fmt.Errorf("insufficient stock")
+                        }</span>
+                        <span class="cov8" title="1">item = models.InventoryItem{
+                                HomeID:           homeID,
+                                ItemDefinitionID: itemDef.ID,
+                                Quantity:         *req.Change,
+                        }
+                        if err := tx.Create(&amp;item).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                } else<span class="cov8" title="1"> {
+                        newQuantity := item.Quantity + *req.Change
+                        if newQuantity &lt; 0 </span><span class="cov8" title="1">{
+                                newQuantity = 0
+                        }</span>
+
+                        <span class="cov8" title="1">if err := tx.Model(&amp;item).Update("quantity", newQuantity).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov8" title="1">item.Quantity = newQuantity</span>
+                }
+
+                // Log transaction
+                <span class="cov8" title="1">txLog := models.InventoryTransaction{
+                        HomeID:           homeID,
+                        ItemDefinitionID: itemDef.ID,
+                        InventoryItemID:  item.ID,
+                        QuantityChange:   *req.Change,
+                }
+                if err := tx.Create(&amp;txLog).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">return utils.UpdateShoppingListForDefinition(tx, homeID, itemDef.ID)</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                if err.Error() == "insufficient stock" </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient stock")})
+                        return
+                }</span>
+                <span class="cov8" title="1">c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update inventory via scan")})
+                return</span>
+        }
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, item)</span>
+}
+
+type RestockInsightResponse struct {
+        ItemDefinition          models.ItemDefinition `json:"item_definition"`
+        CurrentStock            float64               `json:"current_stock"`
+        AverageDailyConsumption float64               `json:"average_daily_consumption"`
+        PredictedDepletionDate  *time.Time            `json:"predicted_depletion_date"`
+        DaysLeft                *int                  `json:"days_left,omitempty"`
+        Reason                  string                `json:"reason"`
+}
+
+type projectedOccurrence struct {
+        date             time.Time
+        quantityRequired float64
+        description      string
+}
+
+func (h *InventoryItemHandler) projectDepletion(
+        c *gin.Context,
+        now time.Time,
+        currentStock float64,
+        adc float64,
+        tasks []models.MaintenanceTask,
+        itemDefID uuid.UUID,
+        itemName string,
+) (*time.Time, string) <span class="cov8" title="1">{
+        // Project occurrences for the next 90 days
+        var occurrences []projectedOccurrence
+        ninetyDaysFromNow := now.AddDate(0, 0, 90)
+
+        for _, task := range tasks </span><span class="cov8" title="1">{
+                var reqQty float64
+                for _, dep := range task.Dependencies </span><span class="cov8" title="1">{
+                        if dep.ItemDefinitionID == itemDefID </span><span class="cov8" title="1">{
+                                reqQty = dep.QuantityRequired
+                                break</span>
+                        }
+                }
+                <span class="cov8" title="1">if reqQty &lt;= 0 </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                // First occurrence is the task's ScheduledDate
+                <span class="cov8" title="1">occDate := task.ScheduledDate
+                // If ScheduledDate is in the past and task is incomplete, treat it as overdue (occurring now)
+                if occDate.Before(now) </span><span class="cov0" title="0">{
+                        occDate = now
+                }</span>
+
+                // Generate occurrences within 90 days
+                <span class="cov8" title="1">for occDate.Before(ninetyDaysFromNow) </span><span class="cov8" title="1">{
+                        occurrences = append(occurrences, projectedOccurrence{
+                                date:             occDate,
+                                quantityRequired: reqQty,
+                                description:      task.Description,
+                        })
+
+                        nextDate, repeats := parseFrequencyAndAdvance(occDate, task)
+                        if !repeats </span><span class="cov8" title="1">{
+                                break</span>
+                        }
+                        <span class="cov0" title="0">occDate = nextDate</span>
+                }
+        }
+
+        // ⚡ Bolt: Replaced O(n²) bubble sort with Go's optimized O(n log n) sort.Slice
+        // Sort occurrences by date ascending
+        <span class="cov8" title="1">sort.Slice(occurrences, func(i, j int) bool </span><span class="cov8" title="1">{
+                return occurrences[i].date.Before(occurrences[j].date)
+        }</span>)
+
+        // Simulate day-by-day for 90 days
+        <span class="cov8" title="1">stock := currentStock
+        var firstDepletionDate *time.Time
+        var depletionReason string
+
+        for d := 0; d &lt;= 90; d++ </span><span class="cov8" title="1">{
+                currentDate := now.AddDate(0, 0, d)
+                if d &gt; 0 </span><span class="cov8" title="1">{
+                        stock -= adc
+                }</span>
+
+                // Check task occurrences on this day
+                <span class="cov8" title="1">for _, occ := range occurrences </span><span class="cov8" title="1">{
+                        if occ.date.Year() == currentDate.Year() &amp;&amp; occ.date.YearDay() == currentDate.YearDay() </span><span class="cov8" title="1">{
+                                if stock &lt; occ.quantityRequired </span><span class="cov8" title="1">{
+                                        if firstDepletionDate == nil </span><span class="cov8" title="1">{
+                                                depDate := currentDate
+                                                firstDepletionDate = &amp;depDate
+                                                template := i18n.TranslateDB(h.DB, c, "Maintenance task '%s' scheduled on %s requires %.2f units, but you will only have %.2f units.")
+                                                depletionReason = fmt.Sprintf(
+                                                        template,
+                                                        occ.description,
+                                                        occ.date.Format("2006-01-02"),
+                                                        occ.quantityRequired,
+                                                        stock,
+                                                )
+                                        }</span>
+                                }
+                                <span class="cov8" title="1">stock -= occ.quantityRequired</span>
+                        }
+                }
+
+                <span class="cov8" title="1">if stock &lt;= 0 </span><span class="cov8" title="1">{
+                        if firstDepletionDate == nil </span><span class="cov8" title="1">{
+                                depDate := currentDate
+                                firstDepletionDate = &amp;depDate
+                                if currentStock == 0 </span><span class="cov0" title="0">{
+                                        template := i18n.TranslateDB(h.DB, c, "You are out of %s. Based on your usage, you consume %.2f daily.")
+                                        depletionReason = fmt.Sprintf(
+                                                template,
+                                                itemName,
+                                                adc,
+                                        )
+                                }</span> else<span class="cov8" title="1"> {
+                                        template := i18n.TranslateDB(h.DB, c, "Based on your usage of %s, you consume %.2f daily. Your current stock of %.2f will run out on %s.")
+                                        depletionReason = fmt.Sprintf(
+                                                template,
+                                                itemName,
+                                                adc,
+                                                currentStock,
+                                                currentDate.Format("2006-01-02"),
+                                        )
+                                }</span>
+                        }
+                        <span class="cov8" title="1">break</span>
+                }
+        }
+
+        <span class="cov8" title="1">return firstDepletionDate, depletionReason</span>
+}
+
+func (h *InventoryItemHandler) GetPredictiveRestockInsights(c *gin.Context) <span class="cov8" title="1">{
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">now := time.Now()
+        ninetyDaysAgo := now.AddDate(0, 0, -90)
+
+        // Usage stats over last 90 days
+        type ConsumptionStat struct {
+                ItemDefinitionID uuid.UUID
+                TotalConsumed    float64
+                FirstTxTime      time.Time
+                LastTxTime       time.Time
+        }
+        var consumptionStats []ConsumptionStat
+        if err := h.DB.Model(&amp;models.InventoryTransaction{}).
+                Select("item_definition_id, SUM(-quantity_change) as total_consumed, MIN(created_at) as first_tx_time, MAX(created_at) as last_tx_time").
+                Where("home_id = ? AND quantity_change &lt; 0 AND created_at &gt;= ?", homeID, ninetyDaysAgo).
+                Group("item_definition_id").
+                Find(&amp;consumptionStats).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory transactions")})
+                return
+        }</span>
+        <span class="cov8" title="1">statsByDef := make(map[uuid.UUID]ConsumptionStat)
+        for _, stat := range consumptionStats </span><span class="cov8" title="1">{
+                statsByDef[stat.ItemDefinitionID] = stat
+        }</span>
+
+        // All item definitions
+        <span class="cov8" title="1">var itemDefs []models.ItemDefinition
+        if err := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID).Find(&amp;itemDefs).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch item definitions")})
+                return
+        }</span>
+
+        // All inventory items for stock calculation (N+1 query avoided)
+        <span class="cov8" title="1">var allItems []models.InventoryItem
+        if err := h.DB.Where("home_id = ?", homeID).Find(&amp;allItems).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory items")})
+                return
+        }</span>
+        <span class="cov8" title="1">itemsByDef := make(map[uuid.UUID][]models.InventoryItem)
+        for _, item := range allItems </span><span class="cov8" title="1">{
+                itemsByDef[item.ItemDefinitionID] = append(itemsByDef[item.ItemDefinitionID], item)
+        }</span>
+
+        // All maintenance tasks
+        <span class="cov8" title="1">var maintenanceTasks []models.MaintenanceTask
+        if err := h.DB.Preload("Dependencies").Where("home_id = ? AND is_completed = ?", homeID, false).Find(&amp;maintenanceTasks).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch maintenance tasks")})
+                return
+        }</span>
+        <span class="cov8" title="1">tasksByDef := make(map[uuid.UUID][]models.MaintenanceTask)
+        for _, task := range maintenanceTasks </span><span class="cov8" title="1">{
+                for _, dep := range task.Dependencies </span><span class="cov8" title="1">{
+                        tasksByDef[dep.ItemDefinitionID] = append(tasksByDef[dep.ItemDefinitionID], task)
+                }</span>
+        }
+
+        <span class="cov8" title="1">var results []RestockInsightResponse
+        for _, def := range itemDefs </span><span class="cov8" title="1">{
+                stat, hasStats := statsByDef[def.ID]
+                tasks := tasksByDef[def.ID]
+
+                var adc float64
+                if hasStats &amp;&amp; stat.TotalConsumed &gt; 0 &amp;&amp; !stat.FirstTxTime.IsZero() </span><span class="cov8" title="1">{
+                        daysDiff := now.Sub(stat.FirstTxTime).Hours() / 24
+                        if daysDiff &lt; 1 </span><span class="cov0" title="0">{
+                                daysDiff = 1
+                        }</span>
+                        <span class="cov8" title="1">if daysDiff &gt; 90 </span><span class="cov0" title="0">{
+                                daysDiff = 90
+                        }</span>
+                        <span class="cov8" title="1">adc = stat.TotalConsumed / daysDiff</span>
+                }
+
+                // Skip if there's no consumption and no maintenance tasks
+                <span class="cov8" title="1">if adc == 0 &amp;&amp; len(tasks) == 0 </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                // Calculate current stock (excluding expired items)
+                <span class="cov8" title="1">items := itemsByDef[def.ID]
+                var currentStock float64
+                for _, item := range items </span><span class="cov8" title="1">{
+                        if item.ExpirationDate == nil || item.ExpirationDate.After(now) </span><span class="cov8" title="1">{
+                                currentStock += item.Quantity
+                        }</span>
+                }
+
+                <span class="cov8" title="1">depDate, reason := h.projectDepletion(c, now, currentStock, adc, tasks, def.ID, def.Name)
+                if depDate != nil </span><span class="cov8" title="1">{
+                        daysLeft := int(depDate.Sub(now).Hours() / 24)
+                        if daysLeft &lt; 0 </span><span class="cov0" title="0">{
+                                daysLeft = 0
+                        }</span>
+
+                        // Return items predicted to deplete within the next 14 days
+                        <span class="cov8" title="1">if daysLeft &lt;= 14 </span><span class="cov8" title="1">{
+                                results = append(results, RestockInsightResponse{
+                                        ItemDefinition:          def,
+                                        CurrentStock:            currentStock,
+                                        AverageDailyConsumption: adc,
+                                        PredictedDepletionDate:  depDate,
+                                        DaysLeft:                &amp;daysLeft,
+                                        Reason:                  reason,
+                                })
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, results)</span>
+}
+</pre>
+
+		<pre class="file" id="file3" style="display: none">package handlers
+
+import (
+        "net/http"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "go.uber.org/zap"
+        "gorm.io/gorm"
+)
+
+type ItemDefinitionHandler struct {
+        DB *gorm.DB
+}
+
+type ItemDefinitionRequest struct {
+        Name              string     `json:"name" binding:"required"`
+        Description       string     `json:"description"`
+        CategoryID        *uuid.UUID `json:"category_id"`
+        SizeUnitID        *uuid.UUID `json:"size_unit_id" binding:"required"`
+        IsExpirable       bool       `json:"is_expirable"`
+        LowStockThreshold *float64   `json:"low_stock_threshold"`
+        TargetQuantity    *float64   `json:"target_quantity"`
+        Priority          string     `json:"priority"`
+        ImageURL          string     `json:"image_url"`
+        Barcode           *string    `json:"barcode"`
+}
+
+func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) <span class="cov8" title="1">{
+        // ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">query := h.DB.Preload("Category").Preload("SizeUnit").Where("home_id = ?", homeID)
+
+        barcode := c.Query("barcode")
+        if barcode != "" </span><span class="cov8" title="1">{
+                query = query.Where("barcode = ?", barcode)
+        }</span>
+
+        <span class="cov8" title="1">var defs []models.ItemDefinition
+        if err := query.Find(&amp;defs).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch item definitions")})
+                logger.Log.Error("Failed to fetch item definitions", zap.Error(err))
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, defs)</span>
+}
+
+func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) <span class="cov8" title="1">{
+        // ⚡ Bolt: Pass Canonical MIME header key (X-Home-Id instead of x-home-id) to avoid runtime string allocations during normalization
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req ItemDefinitionRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">def := models.ItemDefinition{
+                HomeID:            homeID,
+                Name:              req.Name,
+                Description:       req.Description,
+                CategoryID:        req.CategoryID,
+                SizeUnitID:        req.SizeUnitID,
+                IsExpirable:       req.IsExpirable,
+                LowStockThreshold: req.LowStockThreshold,
+                TargetQuantity:    req.TargetQuantity,
+                Priority:          req.Priority,
+                ImageURL:          req.ImageURL,
+                Barcode:           req.Barcode,
+        }
+        if err := h.createItemDefinitionTx(homeID, &amp;def); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create item definition")})
+                logger.Log.Error("Failed to create item definition", zap.Error(err))
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusCreated, def)</span>
+}
+
+func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid item definition ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var itemDef models.ItemDefinition
+        if err := h.DB.First(&amp;itemDef, id).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item definition not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, itemDef.HomeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req ItemDefinitionRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">updates := map[string]interface{}{
+                "name":                req.Name,
+                "description":         req.Description,
+                "category_id":         req.CategoryID,
+                "size_unit_id":        req.SizeUnitID,
+                "is_expirable":        req.IsExpirable,
+                "low_stock_threshold": req.LowStockThreshold,
+                "target_quantity":     req.TargetQuantity,
+                "priority":            req.Priority,
+                "image_url":           req.ImageURL,
+                "barcode":             req.Barcode,
+        }
+
+        if err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                if err := tx.Model(&amp;itemDef).Updates(updates).Error; err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">return utils.UpdateShoppingListForDefinition(tx, itemDef.HomeID, itemDef.ID)</span>
+        }); err != nil <span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update item definition")})
+                logger.Log.Error("Failed to update item definition", zap.Error(err))
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Item definition updated successfully")})</span>
+}
+
+func (h *ItemDefinitionHandler) DeleteItemDefinition(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid item definition ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var itemDef models.ItemDefinition
+        if err := h.DB.First(&amp;itemDef, id).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item definition not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, itemDef.HomeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Delete(&amp;models.ItemDefinition{}, id).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete item definition (it might be in use)")})
+                logger.Log.Error("Failed to delete item definition", zap.Error(err))
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Item definition deleted successfully")})</span>
+}
+
+func (h *ItemDefinitionHandler) createItemDefinitionTx(homeID uuid.UUID, def *models.ItemDefinition) error <span class="cov8" title="1">{
+        return h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                if err := tx.Create(def).Error; err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">return utils.UpdateShoppingListForDefinition(tx, homeID, def.ID)</span>
+        })
+}
+</pre>
+
+		<pre class="file" id="file4" style="display: none">package handlers
+
+import (
+        "net/http"
+        "sync/atomic"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/gin-gonic/gin"
+        "gorm.io/gorm"
+)
+
+type LanguageHandler struct {
+        DB    *gorm.DB
+        cache atomic.Value // ⚡ Bolt: Lock-free cache for completely replaced global data
+}
+
+func (h *LanguageHandler) GetLanguages(c *gin.Context) <span class="cov8" title="1">{
+        if cached := h.cache.Load(); cached != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusOK, cached.([]models.Language))
+                return
+        }</span>
+
+        <span class="cov8" title="1">var languages []models.Language
+        if err := h.DB.Find(&amp;languages).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch languages")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">h.cache.Store(languages)
+
+        c.JSON(http.StatusOK, languages)</span>
+}
+</pre>
+
+		<pre class="file" id="file5" style="display: none">package handlers
+
+import (
+        "fmt"
+        "net/http"
+        "strings"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "gorm.io/gorm"
+)
+
+type MaintenanceTaskHandler struct {
+        DB *gorm.DB
+}
+
+type TaskItemDependencyRequest struct {
+        ItemDefinitionID uuid.UUID `json:"item_definition_id" binding:"required"`
+        QuantityRequired float64   `json:"quantity_required" binding:"required"`
+}
+
+type MaintenanceTaskRequest struct {
+        InventoryItemID       *uuid.UUID                  `json:"inventory_item_id"`
+        Description           string                      `json:"description" binding:"required"`
+        ScheduledDate         time.Time                   `json:"scheduled_date" binding:"required"`
+        Frequency             string                      `json:"frequency"`
+        CustomFrequency       *float64                    `json:"custom_frequency"`
+        CustomFrequencyMetric *string                     `json:"custom_frequency_metric"`
+        IsCompleted           bool                        `json:"is_completed"`
+        Dependencies          []TaskItemDependencyRequest `json:"dependencies"`
+}
+
+func (h *MaintenanceTaskHandler) GetMaintenanceTasks(c *gin.Context) <span class="cov8" title="1">{
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">query := h.DB.Preload("InventoryItem.ItemDefinition").Preload("Dependencies.ItemDefinition").Where("home_id = ?", homeID)
+
+        inventoryItemIDStr := c.Query("inventory_item_id")
+        if inventoryItemIDStr != "" </span><span class="cov8" title="1">{
+                inventoryItemID, err := uuid.Parse(inventoryItemIDStr)
+                if err != nil </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid inventory item ID")})
+                        return
+                }</span>
+
+                // Verify inventory item belongs to home
+                <span class="cov8" title="1">var item models.InventoryItem
+                if err := h.DB.Where("id = ? AND home_id = ?", inventoryItemID, homeID).First(&amp;item).Error; err != nil </span><span class="cov8" title="1">{
+                        if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
+                        }</span> else<span class="cov0" title="0"> {
+                                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory item")})
+                        }</span>
+                        <span class="cov8" title="1">return</span>
+                }
+
+                <span class="cov8" title="1">query = query.Where("inventory_item_id = ?", inventoryItemID)</span>
+        }
+
+        <span class="cov8" title="1">var tasks []models.MaintenanceTask
+        if err := query.Order("scheduled_date ASC").Find(&amp;tasks).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch maintenance tasks")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, tasks)</span>
+}
+
+func (h *MaintenanceTaskHandler) GetMaintenanceTask(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid maintenance task ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var task models.MaintenanceTask
+        if err := h.DB.Preload("InventoryItem.ItemDefinition").Preload("Dependencies.ItemDefinition").First(&amp;task, id).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
+                }</span> else<span class="cov8" title="1"> {
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch maintenance task")})
+                }</span>
+                <span class="cov8" title="1">return</span>
+        }
+
+        <span class="cov8" title="1">if !utils.VerifyHomeAccess(c, h.DB, task.HomeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, task)</span>
+}
+
+func (h *MaintenanceTaskHandler) CreateMaintenanceTask(c *gin.Context) <span class="cov8" title="1">{
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req MaintenanceTaskRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !isValidFrequency(req.Frequency) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid repeat frequency format")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if errMsg := validateMaintenanceTaskRequest(req); errMsg != "" </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, errMsg)})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.InventoryItemID != nil </span><span class="cov8" title="1">{
+                var item models.InventoryItem
+                if err := h.DB.First(&amp;item, req.InventoryItemID).Error; err != nil </span><span class="cov8" title="1">{
+                        if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
+                        }</span> else<span class="cov0" title="0"> {
+                                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory item")})
+                        }</span>
+                        <span class="cov8" title="1">return</span>
+                }
+                <span class="cov8" title="1">if item.HomeID != homeID </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item does not belong to this home")})
+                        return
+                }</span>
+        }
+
+        <span class="cov8" title="1">task := models.MaintenanceTask{
+                HomeID:                homeID,
+                InventoryItemID:       req.InventoryItemID,
+                Description:           req.Description,
+                ScheduledDate:         req.ScheduledDate,
+                Frequency:             req.Frequency,
+                CustomFrequency:       req.CustomFrequency,
+                CustomFrequencyMetric: req.CustomFrequencyMetric,
+                IsCompleted:           false, // ⚡ Bolt: Always create as incomplete to enforce inventory deduction via the dedicated /complete endpoint.
+        }
+
+        err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                if err := tx.Create(&amp;task).Error; err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">for _, dep := range req.Dependencies </span><span class="cov8" title="1">{
+                        dependency := models.TaskItemDependency{
+                                MaintenanceTaskID: task.ID,
+                                ItemDefinitionID:  dep.ItemDefinitionID,
+                                QuantityRequired:  dep.QuantityRequired,
+                        }
+                        if err := tx.Create(&amp;dependency).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                <span class="cov8" title="1">return nil</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create maintenance task")})
+                return
+        }</span>
+
+        // Reload to include dependencies
+        <span class="cov8" title="1">var result models.MaintenanceTask
+        h.DB.Preload("Dependencies.ItemDefinition").First(&amp;result, task.ID)
+
+        c.JSON(http.StatusCreated, result)</span>
+}
+
+func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid maintenance task ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var task models.MaintenanceTask
+        if err := h.DB.First(&amp;task, id).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
+                }</span> else<span class="cov0" title="0"> {
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update maintenance task")})
+                }</span>
+                <span class="cov8" title="1">return</span>
+        }
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, task.HomeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req MaintenanceTaskRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !isValidFrequency(req.Frequency) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid repeat frequency format")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if errMsg := validateMaintenanceTaskRequest(req); errMsg != "" </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, errMsg)})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.InventoryItemID != nil </span><span class="cov8" title="1">{
+                var item models.InventoryItem
+                if err := h.DB.First(&amp;item, req.InventoryItemID).Error; err != nil </span><span class="cov8" title="1">{
+                        if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
+                        }</span> else<span class="cov0" title="0"> {
+                                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch inventory item")})
+                        }</span>
+                        <span class="cov8" title="1">return</span>
+                }
+                <span class="cov8" title="1">if item.HomeID != task.HomeID </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item does not belong to this home")})
+                        return
+                }</span>
+        }
+
+        <span class="cov8" title="1">updates := map[string]interface{}{
+                "inventory_item_id":       req.InventoryItemID,
+                "description":             req.Description,
+                "scheduled_date":          req.ScheduledDate,
+                "frequency":               req.Frequency,
+                "custom_frequency":        req.CustomFrequency,
+                "custom_frequency_metric": req.CustomFrequencyMetric,
+        }
+
+        err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                if err := tx.Model(&amp;task).Updates(updates).Error; err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+
+                // ⚡ Bolt: Only update dependencies if they are provided in the request to support partial updates and avoid data loss.
+                <span class="cov8" title="1">if req.Dependencies != nil </span><span class="cov8" title="1">{
+                        // Update dependencies: simple approach, delete existing and recreate
+                        if err := tx.Where("maintenance_task_id = ?", task.ID).Delete(&amp;models.TaskItemDependency{}).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov8" title="1">for _, dep := range req.Dependencies </span><span class="cov8" title="1">{
+                                dependency := models.TaskItemDependency{
+                                        MaintenanceTaskID: task.ID,
+                                        ItemDefinitionID:  dep.ItemDefinitionID,
+                                        QuantityRequired:  dep.QuantityRequired,
+                                }
+                                if err := tx.Create(&amp;dependency).Error; err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+                        }
+                }
+
+                <span class="cov8" title="1">return nil</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update maintenance task")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Maintenance task updated successfully")})</span>
+}
+
+func (h *MaintenanceTaskHandler) DeleteMaintenanceTask(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid maintenance task ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var task models.MaintenanceTask
+        if err := h.DB.First(&amp;task, id).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
+                }</span> else<span class="cov8" title="1"> {
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch maintenance task")})
+                }</span>
+                <span class="cov8" title="1">return</span>
+        }
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, task.HomeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Delete(&amp;models.MaintenanceTask{}, id).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete maintenance task")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Maintenance task deleted successfully")})</span>
+}
+
+func (h *MaintenanceTaskHandler) CompleteMaintenanceTask(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid maintenance task ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var task models.MaintenanceTask
+        if err := h.DB.Preload("Dependencies").First(&amp;task, id).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
+                }</span> else<span class="cov0" title="0"> {
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch maintenance task")})
+                }</span>
+                <span class="cov8" title="1">return</span>
+        }
+
+        <span class="cov8" title="1">if task.IsCompleted </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task already completed")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, task.HomeID) </span><span class="cov0" title="0">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                now := time.Now()
+                updates := map[string]interface{}{
+                        "is_completed": true,
+                        "completed_at": &amp;now,
+                }
+
+                if err := tx.Model(&amp;models.MaintenanceTask{}).Where("id = ?", task.ID).Updates(updates).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">for _, dep := range task.Dependencies </span><span class="cov8" title="1">{
+                        remainingToDeduct := dep.QuantityRequired
+
+                        var items []models.InventoryItem
+                        if err := tx.Where("home_id = ? AND item_definition_id = ?", task.HomeID, dep.ItemDefinitionID).
+                                Order("expiration_date ASC NULLS LAST").
+                                Find(&amp;items).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov8" title="1">var totalAvailable float64
+                        for _, item := range items </span><span class="cov8" title="1">{
+                                totalAvailable += item.Quantity
+                        }</span>
+
+                        <span class="cov8" title="1">if totalAvailable &lt; dep.QuantityRequired </span><span class="cov8" title="1">{
+                                return fmt.Errorf("insufficient stock for item %s", dep.ItemDefinitionID)
+                        }</span>
+
+                        <span class="cov8" title="1">for _, item := range items </span><span class="cov8" title="1">{
+                                if remainingToDeduct &lt;= 0 </span><span class="cov0" title="0">{
+                                        break</span>
+                                }
+
+                                <span class="cov8" title="1">deduction := item.Quantity
+                                if deduction &gt; remainingToDeduct </span><span class="cov8" title="1">{
+                                        deduction = remainingToDeduct
+                                }</span>
+
+                                <span class="cov8" title="1">if err := tx.Model(&amp;item).Update("quantity", item.Quantity-deduction).Error; err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+
+                                // Log transaction
+                                <span class="cov8" title="1">txLog := models.InventoryTransaction{
+                                        HomeID:           task.HomeID,
+                                        ItemDefinitionID: dep.ItemDefinitionID,
+                                        InventoryItemID:  item.ID,
+                                        QuantityChange:   -deduction,
+                                }
+                                if err := tx.Create(&amp;txLog).Error; err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+
+                                <span class="cov8" title="1">remainingToDeduct -= deduction</span>
+                        }
+
+                        <span class="cov8" title="1">if err := utils.UpdateShoppingListForDefinition(tx, task.HomeID, dep.ItemDefinitionID); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                <span class="cov8" title="1">return nil</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                if strings.HasPrefix(err.Error(), "insufficient stock") </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient stock for task dependencies")})
+                }</span> else<span class="cov0" title="0"> {
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to complete maintenance task")})
+                }</span>
+                <span class="cov8" title="1">return</span>
+        }
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Maintenance task completed successfully")})</span>
+}
+
+func isValidFrequency(freq string) bool <span class="cov8" title="1">{
+        f := strings.TrimSpace(freq)
+        if f == "" </span><span class="cov8" title="1">{
+                return true // treated as "Once"
+        }</span>
+
+        <span class="cov8" title="1">lf := strings.ToLower(f)
+        switch lf </span>{
+        case "once", "daily", "weekly", "monthly", "every 3 months", "every 6 months", "yearly", "custom":<span class="cov8" title="1">
+                return true</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
+func validateMaintenanceTaskRequest(req MaintenanceTaskRequest) string <span class="cov8" title="1">{
+        freq := strings.ToLower(strings.TrimSpace(req.Frequency))
+
+        if freq == "custom" </span><span class="cov8" title="1">{
+                if req.CustomFrequency == nil </span><span class="cov8" title="1">{
+                        return "Custom frequency must be a positive number"
+                }</span>
+                <span class="cov8" title="1">if *req.CustomFrequency &lt;= 0 </span><span class="cov8" title="1">{
+                        return "Custom frequency must be a positive number"
+                }</span>
+                <span class="cov8" title="1">if req.CustomFrequencyMetric == nil || strings.TrimSpace(*req.CustomFrequencyMetric) == "" </span><span class="cov8" title="1">{
+                        return "Custom frequency metric is required"
+                }</span>
+                <span class="cov8" title="1">metric := strings.ToLower(strings.TrimSpace(*req.CustomFrequencyMetric))
+                if metric != "day" &amp;&amp; metric != "week" &amp;&amp; metric != "month" &amp;&amp; metric != "year" </span><span class="cov8" title="1">{
+                        return "Custom frequency metric must be day, week, month, or year"
+                }</span>
+        } else<span class="cov8" title="1"> {
+                // If frequency is not custom, then custom_ fields should not be provided
+                if req.CustomFrequency != nil </span><span class="cov8" title="1">{
+                        return "Custom frequency and metric should not be provided for non-custom frequencies"
+                }</span>
+                <span class="cov8" title="1">if req.CustomFrequencyMetric != nil &amp;&amp; strings.TrimSpace(*req.CustomFrequencyMetric) != "" </span><span class="cov0" title="0">{
+                        return "Custom frequency and metric should not be provided for non-custom frequencies"
+                }</span>
+        }
+        <span class="cov8" title="1">return ""</span>
+}
+
+func parseFrequencyAndAdvance(current time.Time, task models.MaintenanceTask) (time.Time, bool) <span class="cov8" title="1">{
+        f := strings.TrimSpace(task.Frequency)
+        lf := strings.ToLower(f)
+
+        switch lf </span>{
+        case "once", "":<span class="cov8" title="1">
+                return current, false</span>
+        case "daily":<span class="cov8" title="1">
+                return current.AddDate(0, 0, 1), true</span>
+        case "weekly":<span class="cov8" title="1">
+                return current.AddDate(0, 0, 7), true</span>
+        case "monthly":<span class="cov8" title="1">
+                return current.AddDate(0, 1, 0), true</span>
+        case "every 3 months":<span class="cov8" title="1">
+                return current.AddDate(0, 3, 0), true</span>
+        case "every 6 months":<span class="cov8" title="1">
+                return current.AddDate(0, 6, 0), true</span>
+        case "yearly":<span class="cov8" title="1">
+                return current.AddDate(1, 0, 0), true</span>
+        case "custom":<span class="cov8" title="1">
+                if task.CustomFrequency == nil || *task.CustomFrequency &lt;= 0 || task.CustomFrequencyMetric == nil </span><span class="cov0" title="0">{
+                        return current, false
+                }</span>
+                <span class="cov8" title="1">metric := strings.ToLower(strings.TrimSpace(*task.CustomFrequencyMetric))
+                val := int(*task.CustomFrequency)
+                if val &lt;= 0 </span><span class="cov0" title="0">{
+                        return current, false
+                }</span>
+
+                <span class="cov8" title="1">switch metric </span>{
+                case "day":<span class="cov8" title="1">
+                        return current.AddDate(0, 0, val), true</span>
+                case "week":<span class="cov8" title="1">
+                        return current.AddDate(0, 0, val*7), true</span>
+                case "month":<span class="cov8" title="1">
+                        return current.AddDate(0, val, 0), true</span>
+                case "year":<span class="cov8" title="1">
+                        return current.AddDate(val, 0, 0), true</span>
+                }
+        }
+
+        // Unrecognized/Invalid treats as "once" and does not repeat
+        <span class="cov8" title="1">return current, false</span>
+}
+</pre>
+
+		<pre class="file" id="file6" style="display: none">package handlers
+
+import (
+        "encoding/json"
+        "fmt"
+        "net/http"
+        "net/url"
+        "sync"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+        "github.com/gin-gonic/gin"
+        "go.uber.org/zap"
+        "gorm.io/gorm"
+)
+
+type ProductHandler struct {
+        DB      *gorm.DB
+        BaseURL string
+        cache   sync.Map
+}
+
+type ProductLookupResponse struct {
+        Barcode  string `json:"barcode"`
+        Name     string `json:"name"`
+        Category string `json:"category"`
+        ImageURL string `json:"image_url"`
+}
+
+type offResponse struct {
+        Status  int `json:"status"`
+        Product struct {
+                ProductName string `json:"product_name"`
+                Categories  string `json:"categories"`
+                ImageURL    string `json:"image_url"`
+        } `json:"product"`
+}
+
+type cachedProduct struct {
+        product   ProductLookupResponse
+        expiresAt time.Time
+}
+
+func (h *ProductHandler) GetProductLookup(c *gin.Context) <span class="cov8" title="1">{
+        barcode := c.Query("barcode")
+        if barcode == "" </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "barcode query parameter is required")})
+                return
+        }</span>
+
+        // Check cache
+        <span class="cov8" title="1">if val, ok := h.cache.Load(barcode); ok </span><span class="cov8" title="1">{
+                cp := val.(cachedProduct)
+                if time.Now().Before(cp.expiresAt) </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusOK, cp.product)
+                        return
+                }</span>
+                <span class="cov8" title="1">h.cache.Delete(barcode)</span>
+        }
+
+        // Fetch from Open Food Facts
+        <span class="cov8" title="1">baseURL := h.BaseURL
+        if baseURL == "" </span><span class="cov0" title="0">{
+                baseURL = "https://world.openfoodfacts.org"
+        }</span>
+
+        <span class="cov8" title="1">encodedBarcode := url.PathEscape(barcode)
+        if barcode != encodedBarcode </span><span class="cov8" title="1">{
+                logger.Log.Warn("Potentially malicious barcode input detected and sanitized", zap.String("original", barcode), zap.String("sanitized", encodedBarcode))
+        }</span>
+
+        <span class="cov8" title="1">reqURL := fmt.Sprintf("%s/api/v2/product/%s.json", baseURL, encodedBarcode)
+
+        // ⚡ Sentinel: Use custom http.Client with timeout to prevent goroutine exhaustion
+        client := &amp;http.Client{
+                Timeout: 10 * time.Second,
+        }
+
+        resp, err := client.Get(reqURL)
+        if err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to fetch product from Open Food Facts", zap.String("barcode", barcode), zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch product info")})
+                return
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov8" title="1">{
+                if resp.StatusCode == http.StatusNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Product not found")})
+                        return
+                }</span>
+                <span class="cov8" title="1">logger.Log.Error("Open Food Facts returned non-200 status", zap.String("barcode", barcode), zap.Int("status", resp.StatusCode))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch product info")})
+                return</span>
+        }
+
+        <span class="cov8" title="1">var off offResponse
+        if err := json.NewDecoder(resp.Body).Decode(&amp;off); err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to decode Open Food Facts response", zap.String("barcode", barcode), zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch product info")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if off.Status == 0 </span><span class="cov8" title="1">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Product not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">product := ProductLookupResponse{
+                Barcode:  barcode,
+                Name:     off.Product.ProductName,
+                Category: off.Product.Categories,
+                ImageURL: off.Product.ImageURL,
+        }
+
+        // Cache the result for 24 hours
+        h.cache.Store(barcode, cachedProduct{
+                product:   product,
+                expiresAt: time.Now().Add(24 * time.Hour),
+        })
+
+        c.JSON(http.StatusOK, product)</span>
+}
+</pre>
+
+		<pre class="file" id="file7" style="display: none">package handlers
+
+import (
+        "fmt"
+        "net/http"
+        "os"
+        "strings"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "go.uber.org/zap"
+        "gorm.io/gorm"
+        "gorm.io/gorm/clause"
+)
+
+type ProfileHandler struct {
+        DB *gorm.DB
+}
+
+type ProfileSyncRequest struct {
+        User ProfileSyncUser `json:"profile" binding:"required"`
+}
+
+type ProfileSyncUser struct {
+        ID    uuid.UUID `json:"id" binding:"required"`
+        Email string    `json:"email" binding:"required,email"`
+}
+
+type DeleteAccountRequest struct {
+        Email  string `json:"email" binding:"required,email"`
+        UserID string `json:"user_id" binding:"required"`
+}
+
+func (h *ProfileHandler) SyncProfile(c *gin.Context) <span class="cov8" title="1">{
+        authUserID := c.MustGet("userID").(uuid.UUID)
+        authEmail := c.MustGet("email").(string)
+
+        var req ProfileSyncRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.User.ID != authUserID </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Profile user ID does not match authenticated user")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !strings.EqualFold(req.User.Email, authEmail) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Profile email does not match authenticated user")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">profile := models.Profile{
+                ID:    req.User.ID,
+                Email: req.User.Email,
+        }
+
+        if err := h.DB.Clauses(clause.OnConflict{
+                Columns:   []clause.Column{{Name: "id"}},
+                DoUpdates: clause.AssignmentColumns([]string{"updated_at"}),
+        }).Create(&amp;profile).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to sync profile", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to sync profile")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var exists int
+        if err := h.DB.Model(&amp;models.UserHome{}).Select("1").Where("user_id = ?", authUserID).Limit(1).Find(&amp;exists).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to check homes", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to check homes")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if exists == 0 </span><span class="cov8" title="1">{
+                home := models.Home{Name: "My Home"}
+
+                err := h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                        if err := tx.Create(&amp;home).Error; err != nil </span><span class="cov8" title="1">{
+                                return err
+                        }</span>
+
+                        <span class="cov8" title="1">userHome := models.UserHome{
+                                UserID:    authUserID,
+                                HomeID:    home.ID,
+                                Role:      models.RoleOwner,
+                                IsDefault: true,
+                        }
+                        return tx.Create(&amp;userHome).Error</span>
+                })
+
+                <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                        logger.Log.Error("Failed to create default home", zap.Error(err))
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create default home")})
+                        return
+                }</span>
+        }
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, profile)</span>
+}
+
+func (h *ProfileHandler) GetProfile(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+
+        var profile models.Profile
+        if err := h.DB.Select("web_theme", "mobile_theme", "language_id", "restock_window").Where("id = ?", userID).First(&amp;profile).Error; err != nil </span><span class="cov8" title="1">{
+                if err == gorm.ErrRecordNotFound </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Profile not found")})
+                        return
+                }</span>
+                <span class="cov8" title="1">logger.Log.Error("Failed to fetch profile", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch profile")})
+                return</span>
+        }
+
+        // Default to 7 if RestockWindow is nil
+        <span class="cov8" title="1">restockWindow := 7
+        if profile.RestockWindow != nil </span><span class="cov8" title="1">{
+                restockWindow = *profile.RestockWindow
+        }</span>
+
+        <span class="cov8" title="1">response := gin.H{
+                "web_theme":      profile.WebTheme,
+                "mobile_theme":   profile.MobileTheme,
+                "language_id":    profile.LanguageID,
+                "restock_window": restockWindow,
+        }
+
+        c.JSON(http.StatusOK, response)</span>
+}
+
+func (h *ProfileHandler) UpdateProfile(c *gin.Context) <span class="cov8" title="1">{
+        userID := c.MustGet("userID").(uuid.UUID)
+
+        var payload map[string]interface{}
+        if err := c.ShouldBindJSON(&amp;payload); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">updates := make(map[string]interface{})
+        if webTheme, ok := payload["web_theme"]; ok </span><span class="cov8" title="1">{
+                updates["web_theme"] = webTheme
+        }</span>
+        <span class="cov8" title="1">if mobileTheme, ok := payload["mobile_theme"]; ok </span><span class="cov8" title="1">{
+                updates["mobile_theme"] = mobileTheme
+        }</span>
+        <span class="cov8" title="1">if languageID, ok := payload["language_id"]; ok </span><span class="cov8" title="1">{
+                updates["language_id"] = languageID
+        }</span>
+        <span class="cov8" title="1">if restockWindow, ok := payload["restock_window"]; ok </span><span class="cov8" title="1">{
+                if restockWindow == nil </span><span class="cov0" title="0">{
+                        updates["restock_window"] = nil
+                }</span> else<span class="cov8" title="1"> {
+                        switch val := restockWindow.(type) </span>{
+                        case float64:<span class="cov8" title="1">
+                                if val &lt; 0 </span><span class="cov8" title="1">{
+                                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Restock window must be a non-negative integer")})
+                                        return
+                                }</span>
+                                <span class="cov8" title="1">intVal := int(val)
+                                updates["restock_window"] = &amp;intVal</span>
+                        case int:<span class="cov0" title="0">
+                                if val &lt; 0 </span><span class="cov0" title="0">{
+                                        c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Restock window must be a non-negative integer")})
+                                        return
+                                }</span>
+                                <span class="cov0" title="0">updates["restock_window"] = &amp;val</span>
+                        default:<span class="cov0" title="0">
+                                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid restock window")})
+                                return</span>
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">if len(updates) == 0 </span><span class="cov8" title="1">{
+                c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "No valid fields to update")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Model(&amp;models.Profile{}).Where("id = ?", userID).Updates(updates).Error; err != nil </span><span class="cov8" title="1">{
+                logger.Log.Error("Failed to update profile", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update profile")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if _, ok := payload["language_id"]; ok </span><span class="cov8" title="1">{
+                i18n.InvalidateUserLanguageCache(userID)
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Profile updated successfully")})</span>
+}
+
+func (h *ProfileHandler) DeleteAccount(c *gin.Context) <span class="cov8" title="1">{
+        authUserID := c.MustGet("userID").(uuid.UUID)
+        authEmail := c.MustGet("email").(string)
+
+        var req DeleteAccountRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">userID, err := uuid.Parse(req.UserID)
+        if err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if userID != authUserID </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized account deletion"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !strings.EqualFold(req.Email, authEmail) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized account deletion"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var profile models.Profile
+        if err := h.DB.Where("id = ? AND email = ?", userID, req.Email).First(&amp;profile).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": "Account not found"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">err = h.DB.Transaction(func(tx *gorm.DB) error </span><span class="cov8" title="1">{
+                var userHomes []models.UserHome
+                if err := tx.Where("user_id = ? AND role = ?", userID, models.RoleOwner).Find(&amp;userHomes).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">var homesToDelete []uuid.UUID
+                for _, uh := range userHomes </span><span class="cov8" title="1">{
+                        var otherOwnersCount int64
+                        if err := tx.Model(&amp;models.UserHome{}).Where("home_id = ? AND role = ? AND user_id != ?", uh.HomeID, models.RoleOwner, userID).Count(&amp;otherOwnersCount).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov8" title="1">if otherOwnersCount == 0 </span><span class="cov8" title="1">{
+                                homesToDelete = append(homesToDelete, uh.HomeID)
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if len(homesToDelete) &gt; 0 </span><span class="cov8" title="1">{
+                        if err := tx.Where("id IN ?", homesToDelete).Delete(&amp;models.Home{}).Error; err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if err := tx.Where("user_id = ?", userID).Delete(&amp;models.UserHome{}).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">if err := tx.Where("id = ?", userID).Delete(&amp;models.Profile{}).Error; err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">return nil</span>
+        })
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                logger.Log.Error("Failed to delete account from database", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+                return
+        }</span>
+
+        <span class="cov8" title="1">supabaseURL := os.Getenv("SUPABASE_URL")
+        serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+        if supabaseURL != "" &amp;&amp; serviceKey != "" </span><span class="cov0" title="0">{
+                reqURL := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, userID.String())
+                httpReq, err := http.NewRequest(http.MethodDelete, reqURL, nil)
+                if err == nil </span><span class="cov0" title="0">{
+                        httpReq.Header.Set("Authorization", "Bearer "+serviceKey)
+                        httpReq.Header.Set("apikey", serviceKey)
+
+                        client := &amp;http.Client{Timeout: 10 * time.Second}
+                        resp, err := client.Do(httpReq)
+                        if err != nil </span><span class="cov0" title="0">{
+                                logger.Log.Error("Failed to delete user from Supabase auth", zap.Error(err))
+                        }</span> else<span class="cov0" title="0"> {
+                                defer resp.Body.Close()
+                                if resp.StatusCode &gt;= 400 </span><span class="cov0" title="0">{
+                                        logger.Log.Error("Supabase auth deletion returned error status", zap.Int("status", resp.StatusCode))
+                                }</span>
+                        }
+                } else<span class="cov0" title="0"> {
+                        logger.Log.Error("Failed to create request for Supabase auth deletion", zap.Error(err))
+                }</span>
+        }
+
+        <span class="cov8" title="1">i18n.InvalidateUserLanguageCache(userID)
+
+        c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})</span>
+}
+</pre>
+
+		<pre class="file" id="file8" style="display: none">package handlers
+
+import (
+        "net/http"
+        "time"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
+        "github.com/gin-gonic/gin"
+        "github.com/google/uuid"
+        "gorm.io/gorm"
+)
+
+type ShoppingListHandler struct {
+        DB *gorm.DB
+}
+
+type ShoppingListItemRequest struct {
+        ItemDefinitionID *uuid.UUID `json:"item_definition_id"`
+        Name             string     `json:"name"`
+        Quantity         float64    `json:"quantity" binding:"required,gte=0"`
+}
+
+type UpdateShoppingListItemRequest struct {
+        Quantity float64 `json:"quantity" binding:"required,gte=0"`
+        IsBought bool    `json:"is_bought"`
+}
+
+func (h *ShoppingListHandler) generatePredictiveSuggestions(c *gin.Context, homeID uuid.UUID) <span class="cov8" title="1">{
+        userID, ok := c.Get("userID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+        <span class="cov8" title="1">userUUID, ok := userID.(uuid.UUID)
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var profile models.Profile
+        restockWindow := 7
+        if err := h.DB.Select("restock_window").Where("id = ?", userUUID).First(&amp;profile).Error; err == nil </span><span class="cov8" title="1">{
+                if profile.RestockWindow != nil </span><span class="cov8" title="1">{
+                        restockWindow = *profile.RestockWindow
+                }</span>
+        }
+
+        <span class="cov8" title="1">now := time.Now()
+        ninetyDaysAgo := now.AddDate(0, 0, -90)
+
+        // Usage stats over last 90 days
+        type ConsumptionStat struct {
+                ItemDefinitionID uuid.UUID
+                TotalConsumed    float64
+                FirstTxTime      time.Time
+                LastTxTime       time.Time
+        }
+        var consumptionStats []ConsumptionStat
+        h.DB.Model(&amp;models.InventoryTransaction{}).
+                Select("item_definition_id, SUM(-quantity_change) as total_consumed, MIN(created_at) as first_tx_time, MAX(created_at) as last_tx_time").
+                Where("home_id = ? AND quantity_change &lt; 0 AND created_at &gt;= ?", homeID, ninetyDaysAgo).
+                Group("item_definition_id").
+                Find(&amp;consumptionStats)
+
+        statsByDef := make(map[uuid.UUID]ConsumptionStat)
+        for _, stat := range consumptionStats </span><span class="cov0" title="0">{
+                statsByDef[stat.ItemDefinitionID] = stat
+        }</span>
+
+        // All item definitions
+        <span class="cov8" title="1">var itemDefs []models.ItemDefinition
+        h.DB.Where("home_id = ?", homeID).Find(&amp;itemDefs)
+
+        // ⚡ Bolt: Offload current stock calculation to the database (O(1) memory allocation vs O(N) memory allocation)
+        type StockStat struct {
+                ItemDefinitionID uuid.UUID
+                CurrentStock     float64
+        }
+        var stockStats []StockStat
+        h.DB.Model(&amp;models.InventoryItem{}).
+                Select("item_definition_id, SUM(quantity) as current_stock").
+                Where("home_id = ? AND (expiration_date IS NULL OR expiration_date &gt; ?)", homeID, now).
+                Group("item_definition_id").
+                Find(&amp;stockStats)
+
+        stockByDef := make(map[uuid.UUID]float64, len(stockStats))
+        for _, stat := range stockStats </span><span class="cov0" title="0">{
+                stockByDef[stat.ItemDefinitionID] = stat.CurrentStock
+        }</span>
+
+        // All maintenance tasks
+        <span class="cov8" title="1">var maintenanceTasks []models.MaintenanceTask
+        h.DB.Preload("Dependencies").Where("home_id = ? AND is_completed = ?", homeID, false).Find(&amp;maintenanceTasks)
+        tasksByDef := make(map[uuid.UUID][]models.MaintenanceTask)
+        for _, task := range maintenanceTasks </span><span class="cov0" title="0">{
+                for _, dep := range task.Dependencies </span><span class="cov0" title="0">{
+                        tasksByDef[dep.ItemDefinitionID] = append(tasksByDef[dep.ItemDefinitionID], task)
+                }</span>
+        }
+
+        // All existing non-bought shopping list items
+        <span class="cov8" title="1">var existingListItems []models.ShoppingListItem
+        h.DB.Where("home_id = ? AND is_bought = ?", homeID, false).Find(&amp;existingListItems)
+        listItemsByDef := make(map[uuid.UUID][]models.ShoppingListItem)
+        for _, item := range existingListItems </span><span class="cov0" title="0">{
+                if item.ItemDefinitionID != nil </span><span class="cov0" title="0">{
+                        listItemsByDef[*item.ItemDefinitionID] = append(listItemsByDef[*item.ItemDefinitionID], item)
+                }</span>
+        }
+
+        <span class="cov8" title="1">invHandler := &amp;InventoryItemHandler{DB: h.DB}
+
+        for _, def := range itemDefs </span><span class="cov0" title="0">{
+                stat, hasStats := statsByDef[def.ID]
+                tasks := tasksByDef[def.ID]
+
+                var adc float64
+                if hasStats &amp;&amp; stat.TotalConsumed &gt; 0 &amp;&amp; !stat.FirstTxTime.IsZero() </span><span class="cov0" title="0">{
+                        daysDiff := now.Sub(stat.FirstTxTime).Hours() / 24
+                        if daysDiff &lt; 1 </span><span class="cov0" title="0">{
+                                daysDiff = 1
+                        }</span>
+                        <span class="cov0" title="0">if daysDiff &gt; 90 </span><span class="cov0" title="0">{
+                                daysDiff = 90
+                        }</span>
+                        <span class="cov0" title="0">adc = stat.TotalConsumed / daysDiff</span>
+                }
+
+                // Calculate current stock (excluding expired items)
+                <span class="cov0" title="0">currentStock := stockByDef[def.ID]
+
+                // Clean up or create
+                if adc == 0 &amp;&amp; len(tasks) == 0 </span><span class="cov0" title="0">{
+                        // No predictive criteria, clean up active suggestions
+                        for _, item := range listItemsByDef[def.ID] </span><span class="cov0" title="0">{
+                                if item.IsPredictive &amp;&amp; !item.IsDismissed </span><span class="cov0" title="0">{
+                                        h.DB.Delete(&amp;item)
+                                }</span>
+                        }
+                        <span class="cov0" title="0">continue</span>
+                }
+
+                <span class="cov0" title="0">depDate, _ := invHandler.projectDepletion(c, now, currentStock, adc, tasks, def.ID, def.Name)
+                if depDate != nil </span><span class="cov0" title="0">{
+                        daysLeft := int(depDate.Sub(now).Hours() / 24)
+                        if daysLeft &lt; 0 </span><span class="cov0" title="0">{
+                                daysLeft = 0
+                        }</span>
+
+                        <span class="cov0" title="0">if daysLeft &lt;= restockWindow </span><span class="cov0" title="0">{
+                                // Should be suggested! Check if already on list
+                                hasActiveItem := false
+                                hasDismissedSuggestion := false
+                                for _, item := range listItemsByDef[def.ID] </span><span class="cov0" title="0">{
+                                        if !item.IsDismissed </span><span class="cov0" title="0">{
+                                                hasActiveItem = true
+                                        }</span> else<span class="cov0" title="0"> if item.IsPredictive &amp;&amp; item.IsDismissed </span><span class="cov0" title="0">{
+                                                hasDismissedSuggestion = true
+                                        }</span>
+                                }
+
+                                <span class="cov0" title="0">if !hasActiveItem &amp;&amp; !hasDismissedSuggestion </span><span class="cov0" title="0">{
+                                        // Suggest add!
+                                        neededQuantity := 1.0
+                                        if def.TargetQuantity != nil &amp;&amp; *def.TargetQuantity &gt; currentStock </span><span class="cov0" title="0">{
+                                                neededQuantity = *def.TargetQuantity - currentStock
+                                        }</span> else<span class="cov0" title="0"> if def.LowStockThreshold != nil &amp;&amp; *def.LowStockThreshold &gt; currentStock </span><span class="cov0" title="0">{
+                                                neededQuantity = *def.LowStockThreshold - currentStock
+                                                if neededQuantity &lt;= 0 </span><span class="cov0" title="0">{
+                                                        neededQuantity = 1.0
+                                                }</span>
+                                        }
+
+                                        <span class="cov0" title="0">newItem := models.ShoppingListItem{
+                                                HomeID:           homeID,
+                                                ItemDefinitionID: &amp;def.ID,
+                                                Name:             def.Name,
+                                                Quantity:         neededQuantity,
+                                                IsBought:         false,
+                                                IsAutoGenerated:  false,
+                                                IsPredictive:     true,
+                                                IsDismissed:      false,
+                                        }
+                                        h.DB.Create(&amp;newItem)</span>
+                                }
+                        } else<span class="cov0" title="0"> {
+                                // No longer within restock window, delete any active predictive suggestion
+                                for _, item := range listItemsByDef[def.ID] </span><span class="cov0" title="0">{
+                                        if item.IsPredictive &amp;&amp; !item.IsDismissed </span><span class="cov0" title="0">{
+                                                h.DB.Delete(&amp;item)
+                                        }</span>
+                                }
+                        }
+                } else<span class="cov0" title="0"> {
+                        // No depletion predicted, delete any active predictive suggestion
+                        for _, item := range listItemsByDef[def.ID] </span><span class="cov0" title="0">{
+                                if item.IsPredictive &amp;&amp; !item.IsDismissed </span><span class="cov0" title="0">{
+                                        h.DB.Delete(&amp;item)
+                                }</span>
+                        }
+                }
+        }
+}
+
+func (h *ShoppingListHandler) GetShoppingList(c *gin.Context) <span class="cov8" title="1">{
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+                return
+        }</span>
+
+        // Dynamically generate/update suggestions
+        <span class="cov8" title="1">h.generatePredictiveSuggestions(c, homeID)
+
+        var items []models.ShoppingListItem
+        if err := h.DB.Preload("ItemDefinition.SizeUnit").Preload("ItemDefinition.Category").Where("home_id = ? AND is_dismissed = ?", homeID, false).Order("is_bought ASC, created_at DESC").Find(&amp;items).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch shopping list items")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, items)</span>
+}
+
+func (h *ShoppingListHandler) CreateShoppingListItem(c *gin.Context) <span class="cov8" title="1">{
+        homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req ShoppingListItemRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if req.ItemDefinitionID == nil &amp;&amp; req.Name == "" </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item definition or name is required")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">name := req.Name
+        if req.ItemDefinitionID != nil </span><span class="cov8" title="1">{
+                var def models.ItemDefinition
+                if err := h.DB.First(&amp;def, *req.ItemDefinitionID).Error; err != nil </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item definition not found")})
+                        return
+                }</span>
+                <span class="cov8" title="1">if def.HomeID != homeID </span><span class="cov8" title="1">{
+                        c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item definition does not belong to this home")})
+                        return
+                }</span>
+                <span class="cov0" title="0">if name == "" </span><span class="cov0" title="0">{
+                        name = def.Name
+                }</span>
+        }
+
+        <span class="cov8" title="1">item := models.ShoppingListItem{
+                HomeID:           homeID,
+                ItemDefinitionID: req.ItemDefinitionID,
+                Name:             name,
+                Quantity:         req.Quantity,
+                IsBought:         false,
+                IsAutoGenerated:  false,
+        }
+
+        if err := h.DB.Create(&amp;item).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create shopping list item")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusCreated, item)</span>
+}
+
+func (h *ShoppingListHandler) UpdateShoppingListItem(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid shopping list item ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var item models.ShoppingListItem
+        if err := h.DB.First(&amp;item, id).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Shopping list item not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">var req UpdateShoppingListItemRequest
+        if err := c.ShouldBindJSON(&amp;req); err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">updates := map[string]interface{}{
+                "quantity":  req.Quantity,
+                "is_bought": req.IsBought,
+        }
+
+        if err := h.DB.Model(&amp;item).Updates(updates).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update shopping list item")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Shopping list item updated successfully")})</span>
+}
+
+func (h *ShoppingListHandler) ToggleShoppingListItemBought(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid shopping list item ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var item models.ShoppingListItem
+        if err := h.DB.First(&amp;item, id).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Shopping list item not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Model(&amp;item).Update("is_bought", !item.IsBought).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to toggle bought status")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Shopping list item status toggled successfully")})</span>
+}
+
+func (h *ShoppingListHandler) DeleteShoppingListItem(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid shopping list item ID")
+        if !ok </span><span class="cov8" title="1">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var item models.ShoppingListItem
+        if err := h.DB.First(&amp;item, id).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Shopping list item not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) </span><span class="cov8" title="1">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Delete(&amp;models.ShoppingListItem{}, id).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete shopping list item")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Shopping list item deleted successfully")})</span>
+}
+
+func (h *ShoppingListHandler) AcceptShoppingListSuggestion(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid shopping list item ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var item models.ShoppingListItem
+        if err := h.DB.First(&amp;item, id).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Shopping list item not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) </span><span class="cov0" title="0">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !item.IsPredictive </span><span class="cov8" title="1">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item is not a predictive suggestion")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Model(&amp;item).Updates(map[string]interface{}{
+                "is_predictive": false,
+                "is_dismissed":  false,
+        }).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to accept suggestion")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Shopping list suggestion accepted successfully")})</span>
+}
+
+func (h *ShoppingListHandler) DismissShoppingListSuggestion(c *gin.Context) <span class="cov8" title="1">{
+        id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid shopping list item ID")
+        if !ok </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">var item models.ShoppingListItem
+        if err := h.DB.First(&amp;item, id).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Shopping list item not found")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) </span><span class="cov0" title="0">{
+                c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if !item.IsPredictive </span><span class="cov0" title="0">{
+                c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item is not a predictive suggestion")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">if err := h.DB.Model(&amp;item).Update("is_dismissed", true).Error; err != nil </span><span class="cov0" title="0">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to dismiss suggestion")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Shopping list suggestion dismissed successfully")})</span>
+}
+</pre>
+
+		<pre class="file" id="file9" style="display: none">package handlers
+
+import (
+        "net/http"
+        "sync/atomic"
+
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+        "github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+        "github.com/gin-gonic/gin"
+        "gorm.io/gorm"
+)
+
+type SizeUnitHandler struct {
+        DB    *gorm.DB
+        cache atomic.Value // ⚡ Bolt: Lock-free cache for completely replaced global data
+}
+
+func (h *SizeUnitHandler) GetSizeUnits(c *gin.Context) <span class="cov8" title="1">{
+        if cached := h.cache.Load(); cached != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusOK, cached.([]models.SizeUnit))
+                return
+        }</span>
+
+        <span class="cov8" title="1">var units []models.SizeUnit
+        if err := h.DB.Find(&amp;units).Error; err != nil </span><span class="cov8" title="1">{
+                c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch size units")})
+                return
+        }</span>
+
+        <span class="cov8" title="1">h.cache.Store(units)
+
+        c.JSON(http.StatusOK, units)</span>
+}
+</pre>
+
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
