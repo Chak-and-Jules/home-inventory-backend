@@ -71,17 +71,17 @@ func (h *ReceiptHandler) ScanReceipt(c *gin.Context) {
 		return
 	}
 
-	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
-		return
-	}
-
 	userIDVal, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid user ID in token")})
 		return
 	}
 	userID := userIDVal.(uuid.UUID)
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+		return
+	}
 
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
