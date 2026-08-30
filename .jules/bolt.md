@@ -45,3 +45,7 @@
 ## 2026-08-09 - [In-memory stitching for self-referencing Preloads]
 **Learning:** When fetching all records of a hierarchical model (like Categories in a Home) where children reference parents within the same table, using GORM's `Preload("Parent")` executes a redundant secondary query. Since all records (including parents) are already fetched in the primary query, the secondary database roundtrip is wasteful.
 **Action:** Remove `Preload("Parent")` and stitch the relationships together in Go memory using a map in O(N) time.
+
+## 2026-08-30 - Offload large dataset sum aggregation to the database
+**Learning:** In `generatePredictiveSuggestions`, fetching all `InventoryItem` records into memory using `Find()` and iterating over them in Go to calculate the current stock `SUM()` creates an O(N) memory allocation and processing overhead bottleneck.
+**Action:** Replace full dataset fetches with database `Select("... SUM(...)")` and `Group()` clauses. Returning a single aggregated struct array to map in Go results in an O(1) memory footprint and pushes the fast-path computation to the Postgres execution engine.

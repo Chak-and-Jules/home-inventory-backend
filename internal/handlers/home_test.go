@@ -770,7 +770,6 @@ func TestAddHomeUser(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
-
 	t.Run("insufficient permissions", func(t *testing.T) {
 		handler, mock := setupTest(t)
 		reqBody := `{"email": "newuser@example.com", "role": "editor"}`

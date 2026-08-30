@@ -47,9 +47,9 @@ func expectGeneratePredictiveSuggestions(mock sqlmock.Sqlmock, userID, homeID uu
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
 	// 4. Inventory items query
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "inventory_items" WHERE home_id = $1`)).
-		WithArgs(homeID).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectQuery(`(?i).*SUM\(quantity\).*inventory_items.*`).
+		WithArgs(homeID, sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"item_definition_id", "current_stock"}))
 
 	// 5. Maintenance tasks query
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "maintenance_tasks" WHERE home_id = $1 AND is_completed = $2`)).

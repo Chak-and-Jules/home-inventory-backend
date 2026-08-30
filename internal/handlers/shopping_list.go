@@ -71,12 +71,21 @@ func (h *ShoppingListHandler) generatePredictiveSuggestions(c *gin.Context, home
 	var itemDefs []models.ItemDefinition
 	h.DB.Where("home_id = ?", homeID).Find(&itemDefs)
 
-	// All inventory items for stock calculation (N+1 query avoided)
-	var allItems []models.InventoryItem
-	h.DB.Where("home_id = ?", homeID).Find(&allItems)
-	itemsByDef := make(map[uuid.UUID][]models.InventoryItem)
-	for _, item := range allItems {
-		itemsByDef[item.ItemDefinitionID] = append(itemsByDef[item.ItemDefinitionID], item)
+	// ⚡ Bolt: Offload current stock calculation to the database (O(1) memory allocation vs O(N) memory allocation)
+	type StockStat struct {
+		ItemDefinitionID uuid.UUID
+		CurrentStock     float64
+	}
+	var stockStats []StockStat
+	h.DB.Model(&models.InventoryItem{}).
+		Select("item_definition_id, SUM(quantity) as current_stock").
+		Where("home_id = ? AND (expiration_date IS NULL OR expiration_date > ?)", homeID, now).
+		Group("item_definition_id").
+		Find(&stockStats)
+
+	stockByDef := make(map[uuid.UUID]float64, len(stockStats))
+	for _, stat := range stockStats {
+		stockByDef[stat.ItemDefinitionID] = stat.CurrentStock
 	}
 
 	// All maintenance tasks
@@ -118,13 +127,7 @@ func (h *ShoppingListHandler) generatePredictiveSuggestions(c *gin.Context, home
 		}
 
 		// Calculate current stock (excluding expired items)
-		items := itemsByDef[def.ID]
-		var currentStock float64
-		for _, item := range items {
-			if item.ExpirationDate == nil || item.ExpirationDate.After(now) {
-				currentStock += item.Quantity
-			}
-		}
+		currentStock := stockByDef[def.ID]
 
 		// Clean up or create
 		if adc == 0 && len(tasks) == 0 {
