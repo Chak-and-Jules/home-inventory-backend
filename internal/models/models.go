@@ -193,3 +193,36 @@ type TaskItemDependency struct {
 	MaintenanceTask *MaintenanceTask `gorm:"foreignKey:MaintenanceTaskID;constraint:OnDelete:CASCADE"`
 	ItemDefinition  ItemDefinition   `gorm:"foreignKey:ItemDefinitionID;constraint:OnDelete:RESTRICT"`
 }
+
+// ReceiptJob represents an asynchronous OCR receipt scanning job
+type ReceiptJob struct {
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	HomeID       uuid.UUID `gorm:"type:uuid;not null;index"`
+	UserID       uuid.UUID `gorm:"type:uuid;not null;index"`
+	Status       string    `gorm:"type:varchar(50);not null;default:'pending'"` // 'pending', 'processing', 'completed', 'failed'
+	ErrorMessage string    `gorm:"type:text"`
+	ImageURL     string    `gorm:"type:text"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+
+	// Relations
+	Home  Home             `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
+	User  Profile          `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	Items []ReceiptJobItem `gorm:"foreignKey:ReceiptJobID;constraint:OnDelete:CASCADE"`
+}
+
+// ReceiptJobItem represents a extracted line item from an OCR-scanned receipt
+type ReceiptJobItem struct {
+	ID                      uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ReceiptJobID            uuid.UUID  `gorm:"type:uuid;not null;index"`
+	RawName                 string     `gorm:"type:varchar(255);not null"`
+	Quantity                float64    `gorm:"type:numeric;not null;default:1"`
+	Price                   float64    `gorm:"type:numeric;not null;default:0"`
+	MatchedItemDefinitionID *uuid.UUID `gorm:"type:uuid;index"`
+	Confidence              float64    `gorm:"type:numeric;default:0"`
+	CreatedAt               time.Time
+
+	// Relations
+	ReceiptJob            *ReceiptJob     `gorm:"foreignKey:ReceiptJobID;constraint:OnDelete:CASCADE"`
+	MatchedItemDefinition *ItemDefinition `gorm:"foreignKey:MatchedItemDefinitionID;constraint:OnDelete:SET NULL"`
+}

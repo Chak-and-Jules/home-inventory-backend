@@ -34,6 +34,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	shoppingListHandler := &handlers.ShoppingListHandler{DB: db}
 	productHandler := &handlers.ProductHandler{DB: db}
 	maintenanceHandler := &handlers.MaintenanceTaskHandler{DB: db}
+	receiptHandler := &handlers.ReceiptHandler{DB: db}
 
 	// API v1 group
 	v1 := r.Group("/api/v1")
@@ -138,6 +139,14 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			maintenance.PUT("/:id", maintenanceHandler.UpdateMaintenanceTask)
 			maintenance.DELETE("/:id", maintenanceHandler.DeleteMaintenanceTask)
 			maintenance.POST("/:id/complete", maintenanceHandler.CompleteMaintenanceTask)
+		}
+
+		// Receipt Scanning
+		receipts := v1.Group("/receipts")
+		{
+			receipts.POST("/scan", receiptHandler.ScanReceipt)
+			receipts.GET("/jobs/:id", receiptHandler.GetReceiptJob)
+			receipts.POST("/jobs/:id/confirm", receiptHandler.ConfirmReceiptJob)
 		}
 	}
 
