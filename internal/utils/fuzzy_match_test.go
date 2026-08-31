@@ -12,6 +12,7 @@ import (
 
 func TestLevenshteinDistance(t *testing.T) {
 	assert.Equal(t, 0, utils.LevenshteinDistance("Milk", "milk"))
+	assert.Equal(t, 0, utils.LevenshteinDistance("Süt", "sut"))
 	assert.Equal(t, 1, utils.LevenshteinDistance("Milk", "Mlk"))
 	assert.Equal(t, 3, utils.LevenshteinDistance("Kitten", "Sitting"))
 	assert.Equal(t, 4, utils.LevenshteinDistance("", "test"))
@@ -21,6 +22,8 @@ func TestStringSimilarity(t *testing.T) {
 	assert.Equal(t, 1.0, utils.StringSimilarity("Organic Milk", "organic milk"))
 	assert.Equal(t, 0.0, utils.StringSimilarity("", "test"))
 	assert.True(t, utils.StringSimilarity("Milk", "Whole Milk") > 0.8)
+	assert.True(t, utils.StringSimilarity("Organic Milk", "Milk Organic") >= 0.9)
+	assert.True(t, utils.StringSimilarity("Tam Yağlı Süt", "Tam Yagli Sut") >= 0.9)
 	assert.True(t, utils.StringSimilarity("Apple Juice", "Orange Juice") > 0.4)
 }
 
@@ -48,14 +51,16 @@ func TestStandardReceiptOCRParser(t *testing.T) {
 	receiptText := `
 GROCERY STORE #123
 123 MAIN STREET
+TEL: 555-0199
 ------------------
 2x Organic Milk $4.99
 Fresh Sliced Bread $2.49
-2x Apple Juice $1.99
+3 x 12,50 Tam Sut 37.50 TL
 SUBTOTAL $11.46
-TAX $0.92
+KDV TOPLAM 3.00 TL
 TOTAL $12.38
 THANK YOU!
+TESEKUKR EDERIZ
 `
 
 	items, err := parser.ParseReceipt(strings.NewReader(receiptText))
@@ -70,7 +75,7 @@ THANK YOU!
 	assert.Equal(t, 1.0, items[1].Quantity)
 	assert.Equal(t, 2.49, items[1].Price)
 
-	assert.Equal(t, "Apple Juice", items[2].RawName)
-	assert.Equal(t, 2.0, items[2].Quantity)
-	assert.Equal(t, 1.99, items[2].Price)
+	assert.Equal(t, "Tam Sut", items[2].RawName)
+	assert.Equal(t, 3.0, items[2].Quantity)
+	assert.Equal(t, 37.50, items[2].Price)
 }
