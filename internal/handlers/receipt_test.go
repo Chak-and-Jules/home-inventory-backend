@@ -314,6 +314,85 @@ func TestGetReceiptJob_SuccessAndMatchedDefinition(t *testing.T) {
 	assert.NotNil(t, resp.Items[0].MatchedItemDefinition)
 }
 
+func TestScanReceipt_RawBinaryUploads(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("raw binary file upload success", func(t *testing.T) {
+		gormDB, mock := setupReceiptTest(t)
+		handler := &ReceiptHandler{
+			DB: gormDB,
+			OCRParser: &mockOCRParser{
+				items: []utils.ExtractedReceiptItem{
+					{RawName: "Organic Milk", Quantity: 1, Price: 4.99},
+				},
+			},
+		}
+
+		homeID := uuid.New()
+		userID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "receipt_jobs"`)).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+		mock.ExpectCommit()
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE home_id = $1`)).
+			WithArgs(homeID).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}))
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "receipt_job_items"`)).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
+		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "receipt_jobs"`)).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		rawBytes := []byte("Organic Milk 4.99\n")
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, _ := http.NewRequest(http.MethodPost, "/api/v1/receipts/scan", bytes.NewReader(rawBytes))
+		req.Header.Set("Content-Type", "image/jpeg")
+		req.Header.Set("X-Home-Id", homeID.String())
+		c.Request = req
+		c.Set("userID", userID)
+
+		handler.ScanReceipt(c)
+		assert.Equal(t, http.StatusAccepted, w.Code)
+
+		time.Sleep(50 * time.Millisecond)
+	})
+
+	t.Run("raw binary unsupported json content type", func(t *testing.T) {
+		gormDB, mock := setupReceiptTest(t)
+		handler := &ReceiptHandler{DB: gormDB}
+
+		homeID := uuid.New()
+		userID := uuid.New()
+		i18n.InvalidateUserLanguageCache(userID)
+
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "user_homes" WHERE user_id = $1 AND home_id = $2 ORDER BY "user_homes"."user_id" LIMIT $3`)).
+			WithArgs(userID, homeID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
+
+		rawBytes := []byte("{\"key\": \"value\"}")
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, _ := http.NewRequest(http.MethodPost, "/api/v1/receipts/scan", bytes.NewReader(rawBytes))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Home-Id", homeID.String())
+		c.Request = req
+		c.Set("userID", userID)
+
+		handler.ScanReceipt(c)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+}
+
 func TestGetReceiptJob_Errors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	gormDB, mock := setupReceiptTest(t)

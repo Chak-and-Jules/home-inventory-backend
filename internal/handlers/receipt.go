@@ -83,32 +83,44 @@ func (h *ReceiptHandler) ScanReceipt(c *gin.Context) {
 		return
 	}
 
+	var fileBytes []byte
 	file, header, err := c.Request.FormFile("file")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Receipt image or document is required")})
-		return
-	}
-	defer file.Close()
+	if err == nil {
+		defer file.Close()
+		// Validate file type from multipart header
+		filename := strings.ToLower(header.Filename)
+		contentType := strings.ToLower(header.Header.Get("Content-Type"))
+		if !strings.HasSuffix(filename, ".jpg") && !strings.HasSuffix(filename, ".jpeg") &&
+			!strings.HasSuffix(filename, ".png") && !strings.HasSuffix(filename, ".pdf") &&
+			!strings.Contains(contentType, "image/jpeg") && !strings.Contains(contentType, "image/png") &&
+			!strings.Contains(contentType, "application/pdf") && !strings.Contains(contentType, "text/plain") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Unsupported file format. Please upload JPEG, PNG, or PDF")})
+			return
+		}
 
-	// Validate file type
-	filename := strings.ToLower(header.Filename)
-	contentType := header.Header.Get("Content-Type")
-	if !strings.HasSuffix(filename, ".jpg") && !strings.HasSuffix(filename, ".jpeg") &&
-		!strings.HasSuffix(filename, ".png") && !strings.HasSuffix(filename, ".pdf") &&
-		!strings.Contains(contentType, "image/jpeg") && !strings.Contains(contentType, "image/png") &&
-		!strings.Contains(contentType, "application/pdf") && !strings.Contains(contentType, "text/plain") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Unsupported file format. Please upload JPEG, PNG, or PDF")})
-		return
-	}
-
-	// Read content buffer
-	fileBytes, err := io.ReadAll(file)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to read receipt file")})
-		return
+		fileBytes, err = io.ReadAll(file)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to read receipt file")})
+			return
+		}
+	} else {
+		// Fallback to reading raw binary request body
+		if c.Request.Body != nil {
+			fileBytes, _ = io.ReadAll(c.Request.Body)
+		}
+		if len(fileBytes) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Receipt image or document is required")})
+			return
+		}
+		contentType := strings.ToLower(c.Request.Header.Get("Content-Type"))
+		if strings.Contains(contentType, "application/json") || strings.Contains(contentType, "application/x-www-form-urlencoded") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Unsupported file format. Please upload JPEG, PNG, or PDF")})
+			return
+		}
 	}
 
 	job := models.ReceiptJob{
+		ID:        uuid.New(),
 		HomeID:    homeID,
 		UserID:    userID,
 		Status:    "processing",
@@ -157,6 +169,7 @@ func (h *ReceiptHandler) processReceiptAsync(jobID, homeID uuid.UUID, fileBytes 
 		}
 
 		jobItems = append(jobItems, models.ReceiptJobItem{
+			ID:                      uuid.New(),
 			ReceiptJobID:            jobID,
 			RawName:                 extItem.RawName,
 			Quantity:                extItem.Quantity,
@@ -276,6 +289,7 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 			} else {
 				// Create new item definition if required or no definition ID supplied
 				newDef := models.ItemDefinition{
+					ID:         uuid.New(),
 					HomeID:     job.HomeID,
 					Name:       confirmItem.RawName,
 					CategoryID: confirmItem.CategoryID,
@@ -289,6 +303,7 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 
 			// Create InventoryItem
 			invItem := models.InventoryItem{
+				ID:               uuid.New(),
 				HomeID:           job.HomeID,
 				ItemDefinitionID: targetDefID,
 				Quantity:         confirmItem.Quantity,
@@ -300,6 +315,7 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 
 			// Create InventoryTransaction
 			txLog := models.InventoryTransaction{
+				ID:               uuid.New(),
 				HomeID:           job.HomeID,
 				ItemDefinitionID: targetDefID,
 				InventoryItemID:  invItem.ID,
