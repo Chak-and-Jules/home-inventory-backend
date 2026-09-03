@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
@@ -65,6 +66,9 @@ func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
 	expiringBefore := c.Query("expiring_before")
 	if expiringBefore != "" {
 		t, err := time.Parse(time.RFC3339, expiringBefore)
+		if err != nil && strings.Contains(expiringBefore, " ") {
+			t, err = time.Parse(time.RFC3339, strings.Replace(expiringBefore, " ", "+", 1))
+		}
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid date format for expiring_before. Use RFC3339 (e.g. 2023-01-02T15:04:05Z)")})
 			return
