@@ -37,3 +37,11 @@
 ## 2026-07-12 - [N+1 Query Elimination in RefreshAllShoppingLists]
 **Learning:** Found an N+1 query problem in `RefreshAllShoppingLists` where it was doing multiple DB queries inside a loop over expiring inventory items (one to fetch the item's definition for each expiring item). This would have degraded performance significantly for a scheduled batch job running across many items.
 **Action:** Used `Preload("ItemDefinition")` to pre-fetch the item definition data in the initial database call, thereby avoiding database calls within the loop entirely. Always check for database queries happening inside a loop when iterating over large datasets.
+
+## 2026-07-26 - Replace O(n²) Bubble Sort with Built-in sort.Slice
+**Learning:** Found a custom, nested-loop bubble sort implementation (O(n²)) in `inventory_item.go` used for sorting projected depletion occurrences by date. In an array that could grow to a decent size over 90 days with many daily/frequent tasks, this scales poorly.
+**Action:** Replace custom sorting loops with Go's `sort.Slice` (O(n log n)) to improve performance and code readability, especially when sorting slices of structs.
+
+## 2026-08-09 - [In-memory stitching for self-referencing Preloads]
+**Learning:** When fetching all records of a hierarchical model (like Categories in a Home) where children reference parents within the same table, using GORM's `Preload("Parent")` executes a redundant secondary query. Since all records (including parents) are already fetched in the primary query, the secondary database roundtrip is wasteful.
+**Action:** Remove `Preload("Parent")` and stitch the relationships together in Go memory using a map in O(N) time.

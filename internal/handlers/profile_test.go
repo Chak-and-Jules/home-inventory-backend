@@ -60,7 +60,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -92,7 +92,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -152,7 +152,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -176,7 +176,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -206,7 +206,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnError(errors.New("insert error"))
 		mock.ExpectRollback()
 
@@ -214,6 +214,132 @@ func TestSyncProfile(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestDeleteAccount(t *testing.T) {
+	logger.InitLogger()
+	gin.SetMode(gin.TestMode)
+
+	userID := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
+	email := "user@example.com"
+
+	setupTest := func(t *testing.T) (*ProfileHandler, sqlmock.Sqlmock, func()) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+
+		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
+		require.NoError(t, err)
+
+		return &ProfileHandler{DB: gormDB}, mock, func() {
+			db.Close()
+		}
+	}
+
+	setupContext := func(t *testing.T, body string) (*httptest.ResponseRecorder, *gin.Context) {
+		req, err := http.NewRequest(http.MethodPost, "/profiles/delete-account", strings.NewReader(body))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		c.Set("userID", userID)
+		c.Set("email", email)
+
+		return w, c
+	}
+
+	t.Run("success", func(t *testing.T) {
+		handler, mock, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"user_id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}`
+		w, c := setupContext(t, body)
+
+		mock.ExpectQuery(`SELECT \* FROM "profiles" WHERE id = \$1 AND email = \$2 ORDER BY "profiles"\."id" LIMIT \$3`).
+			WithArgs(userID, email, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "email"}).AddRow(userID, email))
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND role = \$2`).
+			WithArgs(userID, models.RoleOwner).
+			WillReturnRows(sqlmock.NewRows([]string{"home_id", "user_id", "role"}).AddRow(uuid.New(), userID, models.RoleOwner))
+
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE home_id = \$1 AND role = \$2 AND user_id != \$3`).
+			WithArgs(sqlmock.AnyArg(), models.RoleOwner, userID).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+		mock.ExpectExec(`DELETE FROM "homes" WHERE id IN \(\$1\)`).
+			WithArgs(sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		mock.ExpectExec(`DELETE FROM "user_homes" WHERE user_id = \$1`).
+			WithArgs(userID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		mock.ExpectExec(`DELETE FROM "profiles" WHERE id = \$1`).
+			WithArgs(userID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		handler.DeleteAccount(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "Account deleted successfully")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("unauthorized user", func(t *testing.T) {
+		handler, _, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"user_id":"223e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}`
+		w, c := setupContext(t, body)
+
+		handler.DeleteAccount(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Contains(t, w.Body.String(), "Unauthorized account deletion")
+	})
+
+	t.Run("unauthorized email", func(t *testing.T) {
+		handler, _, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"user_id":"123e4567-e89b-12d3-a456-426614174000","email":"hacker@example.com"}`
+		w, c := setupContext(t, body)
+
+		handler.DeleteAccount(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Contains(t, w.Body.String(), "Unauthorized account deletion")
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		handler, _, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"user_id": 123}` // Malformed
+		w, c := setupContext(t, body)
+
+		handler.DeleteAccount(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid request payload")
+	})
+
+	t.Run("invalid user ID format", func(t *testing.T) {
+		handler, _, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"user_id":"invalid-uuid","email":"user@example.com"}`
+		w, c := setupContext(t, body)
+
+		handler.DeleteAccount(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid user ID format")
 	})
 }
 
@@ -255,11 +381,12 @@ func TestGetProfile(t *testing.T) {
 
 		theme := "dark"
 		langID := uuid.New()
+		window := 10
 
-		rows := sqlmock.NewRows([]string{"web_theme", "mobile_theme", "language_id"}).
-			AddRow(&theme, nil, &langID)
+		rows := sqlmock.NewRows([]string{"web_theme", "mobile_theme", "language_id", "restock_window"}).
+			AddRow(&theme, nil, &langID, &window)
 
-		mock.ExpectQuery("^SELECT \"web_theme\",\"mobile_theme\",\"language_id\" FROM \"profiles\" WHERE id = \\$1 ORDER BY \"profiles\".\"id\" LIMIT \\$2$").
+		mock.ExpectQuery("^SELECT \"web_theme\",\"mobile_theme\",\"language_id\",\"restock_window\" FROM \"profiles\" WHERE id = \\$1 ORDER BY \"profiles\".\"id\" LIMIT \\$2$").
 			WithArgs(userID, 1).
 			WillReturnRows(rows)
 
@@ -268,6 +395,7 @@ func TestGetProfile(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Body.String(), "dark")
 		assert.Contains(t, w.Body.String(), langID.String())
+		assert.Contains(t, w.Body.String(), `"restock_window":10`)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 
@@ -277,7 +405,7 @@ func TestGetProfile(t *testing.T) {
 
 		w, c := setupContext(t)
 
-		mock.ExpectQuery("^SELECT \"web_theme\",\"mobile_theme\",\"language_id\" FROM \"profiles\" WHERE id = \\$1 ORDER BY \"profiles\".\"id\" LIMIT \\$2$").
+		mock.ExpectQuery("^SELECT \"web_theme\",\"mobile_theme\",\"language_id\",\"restock_window\" FROM \"profiles\" WHERE id = \\$1 ORDER BY \"profiles\".\"id\" LIMIT \\$2$").
 			WithArgs(userID, 1).
 			WillReturnError(gorm.ErrRecordNotFound)
 
@@ -294,7 +422,7 @@ func TestGetProfile(t *testing.T) {
 
 		w, c := setupContext(t)
 
-		mock.ExpectQuery("^SELECT \"web_theme\",\"mobile_theme\",\"language_id\" FROM \"profiles\" WHERE id = \\$1 ORDER BY \"profiles\".\"id\" LIMIT \\$2$").
+		mock.ExpectQuery("^SELECT \"web_theme\",\"mobile_theme\",\"language_id\",\"restock_window\" FROM \"profiles\" WHERE id = \\$1 ORDER BY \"profiles\".\"id\" LIMIT \\$2$").
 			WithArgs(userID, 1).
 			WillReturnError(errors.New("db error"))
 
@@ -354,6 +482,43 @@ func TestUpdateProfile(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Body.String(), "Profile updated successfully")
 		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("success update restock_window preference", func(t *testing.T) {
+		handler, mock, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"restock_window":14}`
+		w, c := setupContext(t, body)
+
+		mock.ExpectBegin()
+		mock.ExpectExec("^UPDATE \"profiles\" SET \"restock_window\"=\\$1,\"updated_at\"=\\$2 WHERE id = \\$3$").
+			WithArgs(14, sqlmock.AnyArg(), userID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		handler.UpdateProfile(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "Profile updated successfully")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("invalid restock_window value", func(t *testing.T) {
+		handler, mock, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"restock_window":-5}`
+		w, c := setupContext(t, body)
+
+		mock.ExpectQuery(`SELECT "id","language_id" FROM "profiles" WHERE id = \$1`).
+			WithArgs(userID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "language_id"}).AddRow(userID, nil))
+
+		handler.UpdateProfile(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Restock window must be a non-negative integer")
 	})
 
 	t.Run("success update multiple fields", func(t *testing.T) {

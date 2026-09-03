@@ -17,3 +17,11 @@
 **Vulnerability:** Missing standard HTTP security headers (HSTS, clickjacking protection, MIME-sniffing protection).
 **Learning:** Gin doesn't add security headers by default; they must be explicitly added via middleware to ensure defense-in-depth on all routes.
 **Prevention:** Always implement a dedicated security headers middleware early in the global router chain (e.g., using `r.Use`) for any new Gin web application.
+## 2026-07-22 - [Fix SSRF via unsanitized barcode in product lookup]
+ **Vulnerability:** Unsanitized path parameter injection in HTTP requests causing Server-Side Request Forgery (SSRF) and Path Traversal.
+ **Learning:** When taking user input to form an outgoing HTTP request URL path segment, failing to URL-encode the input allows attackers to break out of the intended path segment (e.g., using `../`) to access unintended resources.
+ **Prevention:** Always use `net/url.PathEscape` (or equivalent URL encoding functions depending on the URL component) to sanitize user-provided variables before inserting them into a URL.
+## 2024-07-24 - [CRITICAL] Fixed IDOR in account deletion endpoint
+**Vulnerability:** The `/account/delete-request` endpoint was unauthenticated and lacked authorization checks, allowing any user to delete any other user account and their associated homes by simply providing a target `user_id` and `email` in the payload.
+**Learning:** Endpoints performing sensitive operations like account deletion must always be placed within authenticated router groups.
+**Prevention:** Ensure all non-public endpoints are correctly grouped under the `v1` router with `middleware.SupabaseAuthMiddleware()` applied. Always retrieve the authenticated user identity directly from the `gin.Context` (e.g., `c.MustGet("userID")`) and validate it against any user IDs provided in the request payload to prevent IDOR.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -63,14 +64,20 @@ func (h *ProductHandler) GetProductLookup(c *gin.Context) {
 	if baseURL == "" {
 		baseURL = "https://world.openfoodfacts.org"
 	}
-	url := fmt.Sprintf("%s/api/v2/product/%s.json", baseURL, barcode)
+
+	encodedBarcode := url.PathEscape(barcode)
+	if barcode != encodedBarcode {
+		logger.Log.Warn("Potentially malicious barcode input detected and sanitized", zap.String("original", barcode), zap.String("sanitized", encodedBarcode))
+	}
+
+	reqURL := fmt.Sprintf("%s/api/v2/product/%s.json", baseURL, encodedBarcode)
 
 	// ⚡ Sentinel: Use custom http.Client with timeout to prevent goroutine exhaustion
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
-	resp, err := client.Get(url)
+	resp, err := client.Get(reqURL)
 	if err != nil {
 		logger.Log.Error("Failed to fetch product from Open Food Facts", zap.String("barcode", barcode), zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch product info")})

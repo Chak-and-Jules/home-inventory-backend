@@ -42,6 +42,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	shoppingListHandler := &handlers.ShoppingListHandler{DB: db}
 	productHandler := &handlers.ProductHandler{DB: db}
 	maintenanceHandler := &handlers.MaintenanceTaskHandler{DB: db}
+	receiptHandler := &handlers.ReceiptHandler{DB: db}
 	done()
 
 	done = bootStep("public route registration")
@@ -63,6 +64,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			profiles.GET("", profileHandler.GetProfile)
 			profiles.PUT("", profileHandler.UpdateProfile)
 			profiles.POST("/sync", profileHandler.SyncProfile)
+			profiles.POST("/delete-account", profileHandler.DeleteAccount)
 		}
 
 		// Homes
@@ -120,6 +122,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			inventory.GET("", inventoryItemHandler.GetInventoryItems)
 			inventory.GET("/almost-finished", inventoryItemHandler.GetAlmostFinishedItems)
 			inventory.GET("/expiring", inventoryItemHandler.GetExpiringItems)
+			inventory.GET("/insights/restock", inventoryItemHandler.GetPredictiveRestockInsights)
 			inventory.POST("", inventoryItemHandler.CreateInventoryItem)
 			inventory.PUT("/:id", inventoryItemHandler.UpdateInventoryItem)
 			inventory.PATCH("/:id/quantity", inventoryItemHandler.UpdateInventoryItemQuantity)
@@ -141,6 +144,8 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			shoppingList.PUT("/:id", shoppingListHandler.UpdateShoppingListItem)
 			shoppingList.PATCH("/:id/toggle-bought", shoppingListHandler.ToggleShoppingListItemBought)
 			shoppingList.DELETE("/:id", shoppingListHandler.DeleteShoppingListItem)
+			shoppingList.POST("/:id/accept", shoppingListHandler.AcceptShoppingListSuggestion)
+			shoppingList.POST("/:id/dismiss", shoppingListHandler.DismissShoppingListSuggestion)
 		}
 
 		// Maintenance Tasks
@@ -152,6 +157,14 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			maintenance.PUT("/:id", maintenanceHandler.UpdateMaintenanceTask)
 			maintenance.DELETE("/:id", maintenanceHandler.DeleteMaintenanceTask)
 			maintenance.POST("/:id/complete", maintenanceHandler.CompleteMaintenanceTask)
+		}
+
+		// Receipt Scanning
+		receipts := v1.Group("/receipts")
+		{
+			receipts.POST("/scan", receiptHandler.ScanReceipt)
+			receipts.GET("/jobs/:id", receiptHandler.GetReceiptJob)
+			receipts.POST("/jobs/:id/confirm", receiptHandler.ConfirmReceiptJob)
 		}
 	}
 	done()

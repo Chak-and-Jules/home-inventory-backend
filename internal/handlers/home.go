@@ -65,7 +65,13 @@ func (h *HomeHandler) UpdateHomeUserRole(c *gin.Context) {
 	}
 
 	// RBAC: Only owners and editors can update roles
-	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor) {
+	hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	if !hasAccess {
+		return
+	}
+
+	if requesterHome.Role == models.RoleEditor && req.Role == models.RoleOwner {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot grant owner role")})
 		return
 	}
 
@@ -77,6 +83,11 @@ func (h *HomeHandler) UpdateHomeUserRole(c *gin.Context) {
 			logger.Log.Error("Failed to find user in home", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user in home")})
 		}
+		return
+	}
+
+	if requesterHome.Role == models.RoleEditor && userHome.Role == models.RoleOwner {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot modify owner roles")})
 		return
 	}
 
@@ -101,7 +112,8 @@ func (h *HomeHandler) RemoveHomeUser(c *gin.Context) {
 	}
 
 	// RBAC: Only owners and editors can remove users
-	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor) {
+	hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	if !hasAccess {
 		return
 	}
 
@@ -113,6 +125,11 @@ func (h *HomeHandler) RemoveHomeUser(c *gin.Context) {
 			logger.Log.Error("Failed to find user in home", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to find user in home")})
 		}
+		return
+	}
+
+	if requesterHome.Role == models.RoleEditor && userHome.Role == models.RoleOwner {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot remove owners")})
 		return
 	}
 
@@ -139,7 +156,13 @@ func (h *HomeHandler) AddHomeUser(c *gin.Context) {
 	}
 
 	// RBAC: Only owners and editors can add users
-	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor) {
+	hasAccess, requesterHome := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	if !hasAccess {
+		return
+	}
+
+	if requesterHome.Role == models.RoleEditor && req.Role == models.RoleOwner {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Editors cannot add owners")})
 		return
 	}
 
@@ -182,21 +205,21 @@ func (h *HomeHandler) AddHomeUser(c *gin.Context) {
 
 // requireHomeRole retrieves the user's home access record and checks if they have one of the allowed roles.
 // It handles sending the appropriate 404 or 403 error response.
-func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, allowedRoles ...string) bool {
+func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, allowedRoles ...string) (bool, *models.UserHome) {
 	var userHome models.UserHome
 	if err := h.DB.Where("user_id = ? AND home_id = ?", userID, homeID).First(&userHome).Error; err != nil {
 		logger.Log.Warn("Home not found or access denied", zap.Error(err))
 		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Home not found or access denied")})
-		return false
+		return false, nil
 	}
 
 	if len(allowedRoles) == 0 {
-		return true
+		return true, &userHome
 	}
 
 	for _, role := range allowedRoles {
 		if userHome.Role == role {
-			return true
+			return true, &userHome
 		}
 	}
 
@@ -206,7 +229,7 @@ func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, 
 	} else {
 		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient permissions to update home")})
 	}
-	return false
+	return false, nil
 }
 
 func (h *HomeHandler) CreateHome(c *gin.Context) {
@@ -258,7 +281,8 @@ func (h *HomeHandler) UpdateHome(c *gin.Context) {
 		return
 	}
 
-	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor) {
+	hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner, models.RoleEditor)
+	if !hasAccess {
 		return
 	}
 
@@ -279,7 +303,8 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 	}
 
 	// RBAC: Only owners can delete homes
-	if !h.requireHomeRole(c, userID, homeID, models.RoleOwner) {
+	hasAccess, _ := h.requireHomeRole(c, userID, homeID, models.RoleOwner)
+	if !hasAccess {
 		return
 	}
 
@@ -343,7 +368,8 @@ func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
 	}
 
 	// Verify user has access to this home
-	if !h.requireHomeRole(c, userID, homeID) {
+	hasAccess, _ := h.requireHomeRole(c, userID, homeID)
+	if !hasAccess {
 		return
 	}
 
@@ -377,7 +403,8 @@ func (h *HomeHandler) GetHomeUsers(c *gin.Context) {
 	}
 
 	// RBAC: Verify user has access to this home
-	if !h.requireHomeRole(c, userID, homeID) {
+	hasAccess, _ := h.requireHomeRole(c, userID, homeID)
+	if !hasAccess {
 		return
 	}
 

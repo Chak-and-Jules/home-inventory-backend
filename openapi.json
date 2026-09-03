@@ -345,6 +345,10 @@
           "web_theme": {
             "nullable": true,
             "type": "string"
+          },
+          "restock_window": {
+            "type": "integer",
+            "nullable": true
           }
         },
         "type": "object"
@@ -363,6 +367,9 @@
           "web_theme": {
             "nullable": true,
             "type": "string"
+          },
+          "restock_window": {
+            "type": "integer"
           }
         },
         "type": "object"
@@ -580,6 +587,12 @@
           "IsBought": {
             "type": "boolean"
           },
+          "is_predictive": {
+            "type": "boolean"
+          },
+          "is_dismissed": {
+            "type": "boolean"
+          },
           "ItemDefinition": {
             "$ref": "#/components/schemas/ItemDefinition"
           },
@@ -657,7 +670,19 @@
             "type": "string"
           },
           "Frequency": {
+            "description": "Repeat frequency: Once, Daily, Weekly, Monthly, Every 3 Months, Every 6 Months, Yearly, Custom",
             "type": "string"
+          },
+          "custom_frequency": {
+            "description": "Custom repeat frequency numeric value",
+            "type": "number",
+            "nullable": true
+          },
+          "custom_frequency_metric": {
+            "description": "Custom repeat frequency metric (day, week, month, year)",
+            "type": "string",
+            "enum": ["day", "week", "month", "year"],
+            "nullable": true
           },
           "HomeID": {
             "format": "uuid",
@@ -701,7 +726,19 @@
             "type": "string"
           },
           "frequency": {
+            "description": "Repeat frequency: Once, Daily, Weekly, Monthly, Every 3 Months, Every 6 Months, Yearly, Custom",
             "type": "string"
+          },
+          "custom_frequency": {
+            "description": "Custom repeat frequency numeric value",
+            "type": "number",
+            "nullable": true
+          },
+          "custom_frequency_metric": {
+            "description": "Custom repeat frequency metric (day, week, month, year)",
+            "type": "string",
+            "enum": ["day", "week", "month", "year"],
+            "nullable": true
           },
           "inventory_item_id": {
             "format": "uuid",
@@ -777,6 +814,155 @@
           }
         },
         "type": "object"
+      },
+      "RestockInsightResponse": {
+        "properties": {
+          "item_definition": {
+            "$ref": "#/components/schemas/ItemDefinition"
+          },
+          "current_stock": {
+            "type": "number"
+          },
+          "average_daily_consumption": {
+            "type": "number"
+          },
+          "predicted_depletion_date": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "days_left": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReceiptJobItemResponse": {
+        "properties": {
+          "confidence": {
+            "type": "number"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "matched_item_definition": {
+            "$ref": "#/components/schemas/ItemDefinition"
+          },
+          "matched_item_definition_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "raw_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReceiptJobResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "home_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReceiptJobItemResponse"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ConfirmReceiptItem": {
+        "properties": {
+          "category_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "create_item_definition": {
+            "type": "boolean"
+          },
+          "expiry_date": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "item_definition_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "raw_name": {
+            "type": "string"
+          },
+          "size_unit_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "raw_name",
+          "quantity"
+        ],
+        "type": "object"
+      },
+      "ConfirmReceiptJobRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConfirmReceiptItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -795,6 +981,134 @@
   },
   "openapi": "3.0.3",
   "paths": {
+    "/receipts/scan": {
+      "post": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "job_id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Receipt uploaded successfully and is being processed"
+          }
+        },
+        "summary": "Upload receipt image or document for OCR processing",
+        "tags": [
+          "Receipts"
+        ]
+      }
+    },
+    "/receipts/jobs/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptJobResponse"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Get status and extracted items of a receipt processing job",
+        "tags": [
+          "Receipts"
+        ]
+      }
+    },
+    "/receipts/jobs/{id}/confirm": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmReceiptJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Receipt items confirmed and added to inventory"
+          }
+        },
+        "summary": "Confirm receipt line items and bulk add to inventory",
+        "tags": [
+          "Receipts"
+        ]
+      }
+    },
     "/account/delete-request": {
       "post": {
         "requestBody": {
@@ -832,6 +1146,96 @@
         "summary": "Request account deletion",
         "tags": [
           "Account"
+        ]
+      }
+    },
+    "/shopping-list/{id}/accept": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Accept a predictive suggestion and convert it to a regular shopping list item",
+        "tags": [
+          "Shopping List"
+        ]
+      }
+    },
+    "/shopping-list/{id}/dismiss": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Dismiss a predictive suggestion from being shown on the shopping list",
+        "tags": [
+          "Shopping List"
+        ]
+      }
+    },
+    "/inventory/insights/restock": {
+      "get": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RestockInsightResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          }
+        },
+        "summary": "Get predictive restock insights for items predicted to deplete within 14 days",
+        "tags": [
+          "Inventory Items"
         ]
       }
     },
