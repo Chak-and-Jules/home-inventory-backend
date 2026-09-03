@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/handlers"
@@ -12,7 +14,11 @@ import (
 )
 
 func SetupRouter(db *gorm.DB) *gin.Engine {
+	done := bootStep("gin engine creation")
 	r := gin.New()
+	done()
+
+	done = bootStep("router middleware registration")
 	r.Use(ginzap.Ginzap(logger.Log, time.RFC3339, true))
 	r.Use(ginzap.RecoveryWithZap(logger.Log, true))
 
@@ -22,8 +28,10 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 
 	// Add Security headers middleware
 	r.Use(middleware.SecurityHeadersMiddleware())
+	done()
 
 	// Initialize handlers
+	done = bootStep("handler initialization")
 	homeHandler := &handlers.HomeHandler{DB: db}
 	profileHandler := &handlers.ProfileHandler{DB: db}
 	categoryHandler := &handlers.CategoryHandler{DB: db}
@@ -35,8 +43,18 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	productHandler := &handlers.ProductHandler{DB: db}
 	maintenanceHandler := &handlers.MaintenanceTaskHandler{DB: db}
 	receiptHandler := &handlers.ReceiptHandler{DB: db}
+	done()
+
+	done = bootStep("public route registration")
+	// Public endpoints (no authentication required)
+	public := r.Group("/api/v1")
+	{
+		public.POST("/account/delete-request", profileHandler.DeleteAccount)
+	}
+	done()
 
 	// API v1 group
+	done = bootStep("authenticated route registration")
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.SupabaseAuthMiddleware())
 	{
@@ -149,6 +167,19 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			receipts.POST("/jobs/:id/confirm", receiptHandler.ConfirmReceiptJob)
 		}
 	}
+	done()
 
 	return r
+}
+
+func bootLog(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stdout, "boot: %s %s\n", time.Now().Format(time.RFC3339Nano), fmt.Sprintf(format, args...))
+}
+
+func bootStep(name string) func() {
+	start := time.Now()
+	bootLog("%s starting", name)
+	return func() {
+		bootLog("%s completed duration=%s", name, time.Since(start))
+	}
 }
