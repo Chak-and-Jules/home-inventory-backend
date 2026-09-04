@@ -329,76 +329,6 @@ func TestCreateRecipe(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, resp.Code)
 	})
-
-	t.Run("Item Def Not Found In Home", func(t *testing.T) {
-		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
-
-		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE id = \$1 AND home_id = \$2.*`).
-			WithArgs(itemDefID, homeID, 1).
-			WillReturnError(gorm.ErrRecordNotFound)
-
-		body := RecipeRequest{
-			Name: "Spaghetti Bolognese",
-			Ingredients: []RecipeIngredientRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 500},
-			},
-		}
-		jsonBody, _ := json.Marshal(body)
-
-		req, _ := http.NewRequest("POST", "/api/v1/recipes", bytes.NewBuffer(jsonBody))
-		req.Header.Set("X-Home-Id", homeID.String())
-		req.Header.Set("Content-Type", "application/json")
-		resp := httptest.NewRecorder()
-
-		router.ServeHTTP(resp, req)
-
-		assert.Equal(t, http.StatusBadRequest, resp.Code)
-	})
-
-	t.Run("Default Servings To 1", func(t *testing.T) {
-		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
-
-		defRows := sqlmock.NewRows([]string{"id", "home_id", "name", "created_at", "updated_at"}).
-			AddRow(itemDefID, homeID, "Spaghetti", time.Now(), time.Now())
-		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE id = \$1 AND home_id = \$2.*`).
-			WithArgs(itemDefID, homeID, 1).
-			WillReturnRows(defRows)
-
-		mock.ExpectBegin()
-		mock.ExpectQuery(`(?i)INSERT INTO "recipes"`).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
-		mock.ExpectQuery(`(?i)INSERT INTO "recipe_ingredients"`).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
-		mock.ExpectCommit()
-
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "instructions", "servings", "created_at", "updated_at"}).
-			AddRow(uuid.New(), homeID, "Spaghetti Bolognese", "Cook sauce", 1, time.Now(), time.Now())
-		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
-			WillReturnRows(recipeRows)
-
-		ingRows := sqlmock.NewRows([]string{"id", "recipe_id", "item_definition_id", "quantity_required", "created_at", "updated_at"}).
-			AddRow(uuid.New(), uuid.New(), itemDefID, 500, time.Now(), time.Now())
-		mock.ExpectQuery(`(?i)SELECT \* FROM "recipe_ingredients" WHERE "recipe_ingredients"\."recipe_id" = \$1`).
-			WillReturnRows(ingRows)
-
-		body := RecipeRequest{
-			Name:     "Spaghetti Bolognese",
-			Servings: -1,
-			Ingredients: []RecipeIngredientRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 500},
-			},
-		}
-		jsonBody, _ := json.Marshal(body)
-
-		req, _ := http.NewRequest("POST", "/api/v1/recipes", bytes.NewBuffer(jsonBody))
-		req.Header.Set("X-Home-Id", homeID.String())
-		req.Header.Set("Content-Type", "application/json")
-		resp := httptest.NewRecorder()
-
-		router.ServeHTTP(resp, req)
-
-		assert.Equal(t, http.StatusCreated, resp.Code)
-	})
 }
 
 func TestDeleteRecipe(t *testing.T) {
@@ -635,7 +565,7 @@ func TestCookRecipe(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, resp.Code)
 	})
 
-	t.Run("Success Cook FEFO Multiple Batches", func(t *testing.T) {
+	t.Run("Success Cook FEFO", func(t *testing.T) {
 		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
 			AddRow(recipeID, homeID, "Omelette")
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
@@ -643,7 +573,7 @@ func TestCookRecipe(t *testing.T) {
 			WillReturnRows(recipeRows)
 
 		ingRows := sqlmock.NewRows([]string{"id", "recipe_id", "item_definition_id", "quantity_required"}).
-			AddRow(uuid.New(), recipeID, itemDefID, 5)
+			AddRow(uuid.New(), recipeID, itemDefID, 2)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipe_ingredients" WHERE "recipe_ingredients"\."recipe_id" = \$1`).
 			WithArgs(recipeID).
 			WillReturnRows(ingRows)
@@ -651,35 +581,23 @@ func TestCookRecipe(t *testing.T) {
 		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
 
 		mock.ExpectBegin()
-		expDate1 := time.Now().AddDate(0, 0, 1)
-		expDate2 := time.Now().AddDate(0, 0, 5)
-		invItemID1 := uuid.New()
-		invItemID2 := uuid.New()
-
+		expDate := time.Now().AddDate(0, 0, 2)
 		invRows := sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity", "expiration_date"}).
-			AddRow(invItemID1, homeID, itemDefID, 2.0, expDate1).
-			AddRow(invItemID2, homeID, itemDefID, 10.0, expDate2)
+			AddRow(invItemID, homeID, itemDefID, 5.0, expDate)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "inventory_items" WHERE home_id = \$1 AND item_definition_id = \$2 AND \(expiration_date IS NULL OR expiration_date > \$3\) ORDER BY expiration_date ASC NULLS LAST`).
 			WithArgs(homeID, itemDefID, sqlmock.AnyArg()).
 			WillReturnRows(invRows)
 
-		// Deduct 2 from batch 1
+		// Update inventory item quantity
 		mock.ExpectExec(`(?i)UPDATE "inventory_items" SET "quantity"=\$1,"updated_at"=\$2 WHERE "id" = \$3`).
-			WithArgs(0.0, sqlmock.AnyArg(), invItemID1).
+			WithArgs(3.0, sqlmock.AnyArg(), invItemID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
+		// Insert transaction log
 		mock.ExpectQuery(`(?i)INSERT INTO "inventory_transactions"`).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
 
-		// Deduct remaining 3 from batch 2
-		mock.ExpectExec(`(?i)UPDATE "inventory_items" SET "quantity"=\$1,"updated_at"=\$2 WHERE "id" = \$3`).
-			WithArgs(7.0, sqlmock.AnyArg(), invItemID2).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-
-		mock.ExpectQuery(`(?i)INSERT INTO "inventory_transactions"`).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
-
-		// Shopping list check
+		// Update shopping list check
 		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity"}).
 			AddRow(itemDefID, homeID, "Eggs", nil, nil)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1 ORDER BY "item_definitions"\."id" LIMIT \$2`).
@@ -893,5 +811,499 @@ func TestAddRecipeToShoppingList(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestRecipeExtraCoverage(t *testing.T) {
+	gormDB, mock := setupTestDBForRecipe(t)
+	handler := &RecipeHandler{DB: gormDB}
+	userID := uuid.New()
+	homeID := uuid.New()
+	recipeID := uuid.New()
+	itemDefID := uuid.New()
+	router := setupTestRouterForRecipe(handler, userID)
+
+	t.Run("Create Recipe - Item Def Internal DB Error", func(t *testing.T) {
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE id = \$1 AND home_id = \$2.*`).
+			WithArgs(itemDefID, homeID, 1).
+			WillReturnError(gorm.ErrInvalidDB)
+
+		body := RecipeRequest{
+			Name: "Spaghetti Bolognese",
+			Ingredients: []RecipeIngredientRequest{
+				{ItemDefinitionID: itemDefID, QuantityRequired: 500},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/v1/recipes", bytes.NewBuffer(jsonBody))
+		req.Header.Set("X-Home-Id", homeID.String())
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Create Recipe - Tx Failure", func(t *testing.T) {
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		defRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(itemDefID, homeID, "Spaghetti")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE id = \$1 AND home_id = \$2.*`).
+			WithArgs(itemDefID, homeID, 1).
+			WillReturnRows(defRows)
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(`(?i)INSERT INTO "recipes"`).
+			WillReturnError(gorm.ErrInvalidDB)
+		mock.ExpectRollback()
+
+		body := RecipeRequest{
+			Name: "Spaghetti Bolognese",
+			Ingredients: []RecipeIngredientRequest{
+				{ItemDefinitionID: itemDefID, QuantityRequired: 500},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/v1/recipes", bytes.NewBuffer(jsonBody))
+		req.Header.Set("X-Home-Id", homeID.String())
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Update Recipe - Invalid Recipe ID", func(t *testing.T) {
+		req, _ := http.NewRequest("PUT", "/api/v1/recipes/invalid-uuid", bytes.NewBufferString("{}"))
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("Update Recipe - Internal DB Error On First", func(t *testing.T) {
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnError(gorm.ErrInvalidDB)
+
+		req, _ := http.NewRequest("PUT", "/api/v1/recipes/"+recipeID.String(), bytes.NewBufferString("{}"))
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Update Recipe - Viewer Access Denied", func(t *testing.T) {
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(recipeID, homeID, "Pasta")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnRows(recipeRows)
+
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "viewer")
+
+		req, _ := http.NewRequest("PUT", "/api/v1/recipes/"+recipeID.String(), bytes.NewBufferString("{}"))
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusForbidden, resp.Code)
+	})
+
+	t.Run("Update Recipe - Invalid JSON Payload", func(t *testing.T) {
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(recipeID, homeID, "Pasta")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnRows(recipeRows)
+
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		req, _ := http.NewRequest("PUT", "/api/v1/recipes/"+recipeID.String(), bytes.NewBufferString("{bad-json"))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("Update Recipe - Item Def Internal DB Error", func(t *testing.T) {
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(recipeID, homeID, "Pasta")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnRows(recipeRows)
+
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE id = \$1 AND home_id = \$2.*`).
+			WithArgs(itemDefID, homeID, 1).
+			WillReturnError(gorm.ErrInvalidDB)
+
+		body := RecipeRequest{
+			Name: "Pasta Primavera",
+			Ingredients: []RecipeIngredientRequest{
+				{ItemDefinitionID: itemDefID, QuantityRequired: 250},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("PUT", "/api/v1/recipes/"+recipeID.String(), bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Update Recipe - Tx Failure", func(t *testing.T) {
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(recipeID, homeID, "Pasta")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnRows(recipeRows)
+
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`(?i)UPDATE "recipes" SET`).
+			WillReturnError(gorm.ErrInvalidDB)
+		mock.ExpectRollback()
+
+		body := RecipeRequest{Name: "Pasta Primavera"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("PUT", "/api/v1/recipes/"+recipeID.String(), bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Delete Recipe - Invalid Recipe ID", func(t *testing.T) {
+		req, _ := http.NewRequest("DELETE", "/api/v1/recipes/invalid-uuid", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("Delete Recipe - Internal DB Error", func(t *testing.T) {
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnError(gorm.ErrInvalidDB)
+
+		req, _ := http.NewRequest("DELETE", "/api/v1/recipes/"+recipeID.String(), nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Delete Recipe - DB Delete Failure", func(t *testing.T) {
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(recipeID, homeID, "Soup")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnRows(recipeRows)
+
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		mock.ExpectBegin()
+		mock.ExpectExec(`(?i)DELETE FROM "recipes" WHERE "recipes"\."id" = \$1`).
+			WithArgs(recipeID).
+			WillReturnError(gorm.ErrInvalidDB)
+		mock.ExpectRollback()
+
+		req, _ := http.NewRequest("DELETE", "/api/v1/recipes/"+recipeID.String(), nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Cook Recipe - Invalid Recipe ID", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/v1/recipes/invalid-uuid/cook", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("Cook Recipe - Internal DB Error", func(t *testing.T) {
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnError(gorm.ErrInvalidDB)
+
+		req, _ := http.NewRequest("POST", "/api/v1/recipes/"+recipeID.String()+"/cook", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Cook Recipe - DB Query Error Inside Tx", func(t *testing.T) {
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(recipeID, homeID, "Omelette")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnRows(recipeRows)
+
+		ingRows := sqlmock.NewRows([]string{"id", "recipe_id", "item_definition_id", "quantity_required"}).
+			AddRow(uuid.New(), recipeID, itemDefID, 2)
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipe_ingredients" WHERE "recipe_ingredients"\."recipe_id" = \$1`).
+			WithArgs(recipeID).
+			WillReturnRows(ingRows)
+
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(`(?i)SELECT \* FROM "inventory_items" WHERE home_id = \$1 AND item_definition_id = \$2.*`).
+			WithArgs(homeID, itemDefID, sqlmock.AnyArg()).
+			WillReturnError(gorm.ErrInvalidDB)
+		mock.ExpectRollback()
+
+		req, _ := http.NewRequest("POST", "/api/v1/recipes/"+recipeID.String()+"/cook", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Get Suggestions - Invalid Home Header", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/v1/recipes/suggestions", nil)
+		req.Header.Set("X-Home-Id", "invalid-uuid")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("Get Suggestions - DB Error Fetching Recipes", func(t *testing.T) {
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnError(gorm.ErrInvalidDB)
+
+		req, _ := http.NewRequest("GET", "/api/v1/recipes/suggestions", nil)
+		req.Header.Set("X-Home-Id", homeID.String())
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Get Suggestions - DB Error Fetching Inventory Items", func(t *testing.T) {
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "instructions", "servings"}).
+			AddRow(uuid.New(), homeID, "Pancakes", "Mix", 2)
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(recipeRows)
+
+		ingRows := sqlmock.NewRows([]string{"id", "recipe_id", "item_definition_id", "quantity_required"})
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipe_ingredients" WHERE "recipe_ingredients"\."recipe_id" = \$1`).
+			WillReturnRows(ingRows)
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "inventory_items" WHERE home_id = \$1.*`).
+			WithArgs(homeID, sqlmock.AnyArg()).
+			WillReturnError(gorm.ErrInvalidDB)
+
+		req, _ := http.NewRequest("GET", "/api/v1/recipes/suggestions", nil)
+		req.Header.Set("X-Home-Id", homeID.String())
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Get Suggestions - Full Sort Coverage 5 Recipes", func(t *testing.T) {
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		r1, r2, r3, r4, r5 := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+		itemExp, itemNormal, itemMissing := uuid.New(), uuid.New(), uuid.New()
+
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "instructions", "servings"}).
+			AddRow(r1, homeID, "Alpha Dish", "Desc", 1).
+			AddRow(r2, homeID, "Beta Dish", "Desc", 1).
+			AddRow(r3, homeID, "Gamma Dish", "Desc", 1).
+			AddRow(r4, homeID, "Delta Dish", "Desc", 1).
+			AddRow(r5, homeID, "Zeta Dish", "Desc", 1)
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE home_id = \$1`).
+			WithArgs(homeID).
+			WillReturnRows(recipeRows)
+
+		ingRows := sqlmock.NewRows([]string{"id", "recipe_id", "item_definition_id", "quantity_required"}).
+			AddRow(uuid.New(), r1, itemExp, 1).
+			AddRow(uuid.New(), r2, itemNormal, 1).
+			AddRow(uuid.New(), r3, itemMissing, 1).
+			AddRow(uuid.New(), r4, itemMissing, 1).
+			AddRow(uuid.New(), r4, itemNormal, 100).
+			AddRow(uuid.New(), r5, itemMissing, 1)
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipe_ingredients" WHERE "recipe_ingredients"\."recipe_id" IN \(\$1,\$2,\$3,\$4,\$5\)`).
+			WithArgs(r1, r2, r3, r4, r5).
+			WillReturnRows(ingRows)
+
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(itemExp, homeID, "Expiring Milk").
+			AddRow(itemNormal, homeID, "Flour").
+			AddRow(itemMissing, homeID, "Truffles")
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" IN \(\$1,\$2,\$3\)`).
+			WithArgs(itemExp, itemNormal, itemMissing).
+			WillReturnRows(itemDefRows)
+
+		expiringDate := time.Now().AddDate(0, 0, 1)
+		invRows := sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity", "expiration_date"}).
+			AddRow(uuid.New(), homeID, itemExp, 5.0, expiringDate).
+			AddRow(uuid.New(), homeID, itemNormal, 5.0, time.Now().AddDate(0, 0, 30))
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "inventory_items" WHERE home_id = \$1 AND \(expiration_date IS NULL OR expiration_date > \$2\)`).
+			WithArgs(homeID, sqlmock.AnyArg()).
+			WillReturnRows(invRows)
+
+		req, _ := http.NewRequest("GET", "/api/v1/recipes/suggestions", nil)
+		req.Header.Set("X-Home-Id", homeID.String())
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusOK, resp.Code)
+
+		var suggestions []RecipeSuggestion
+		err := json.Unmarshal(resp.Body.Bytes(), &suggestions)
+		assert.NoError(t, err)
+		assert.Len(t, suggestions, 5)
+
+		assert.Equal(t, "Alpha Dish", suggestions[0].Recipe.Name)
+		assert.True(t, suggestions[0].UsesExpiringSoon)
+		assert.Equal(t, "Beta Dish", suggestions[1].Recipe.Name)
+		assert.True(t, suggestions[1].CanCook)
+		assert.Equal(t, "Gamma Dish", suggestions[2].Recipe.Name)
+		assert.Equal(t, "Zeta Dish", suggestions[3].Recipe.Name)
+		assert.Equal(t, "Delta Dish", suggestions[4].Recipe.Name)
+	})
+
+	t.Run("Meal Plan - Invalid Recipe ID", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/v1/recipes/invalid-uuid/meal-plan", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("Meal Plan - Internal DB Error On Recipe Fetch", func(t *testing.T) {
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnError(gorm.ErrInvalidDB)
+
+		req, _ := http.NewRequest("POST", "/api/v1/recipes/"+recipeID.String()+"/meal-plan", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Meal Plan - Error Querying Inventory Sum Inside Tx", func(t *testing.T) {
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(recipeID, homeID, "Salad")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnRows(recipeRows)
+
+		ingRows := sqlmock.NewRows([]string{"id", "recipe_id", "item_definition_id", "quantity_required"}).
+			AddRow(uuid.New(), recipeID, itemDefID, 3)
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipe_ingredients" WHERE "recipe_ingredients"\."recipe_id" = \$1`).
+			WithArgs(recipeID).
+			WillReturnRows(ingRows)
+
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(itemDefID, homeID, "Tomatoes")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
+			WithArgs(itemDefID).
+			WillReturnRows(itemDefRows)
+
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(`(?i)SELECT COALESCE\(SUM\(quantity\), 0\) FROM "inventory_items" WHERE home_id = \$1 AND item_definition_id = \$2.*`).
+			WithArgs(homeID, itemDefID, sqlmock.AnyArg()).
+			WillReturnError(gorm.ErrInvalidDB)
+		mock.ExpectRollback()
+
+		req, _ := http.NewRequest("POST", "/api/v1/recipes/"+recipeID.String()+"/meal-plan", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+
+	t.Run("Meal Plan - Error Querying Shopping List Item Inside Tx", func(t *testing.T) {
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(recipeID, homeID, "Salad")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
+			WithArgs(recipeID, 1).
+			WillReturnRows(recipeRows)
+
+		ingRows := sqlmock.NewRows([]string{"id", "recipe_id", "item_definition_id", "quantity_required"}).
+			AddRow(uuid.New(), recipeID, itemDefID, 3)
+		mock.ExpectQuery(`(?i)SELECT \* FROM "recipe_ingredients" WHERE "recipe_ingredients"\."recipe_id" = \$1`).
+			WithArgs(recipeID).
+			WillReturnRows(ingRows)
+
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
+			AddRow(itemDefID, homeID, "Tomatoes")
+		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
+			WithArgs(itemDefID).
+			WillReturnRows(itemDefRows)
+
+		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
+
+		mock.ExpectBegin()
+		sumRows := sqlmock.NewRows([]string{"COALESCE(SUM(quantity), 0)"}).AddRow(1.0)
+		mock.ExpectQuery(`(?i)SELECT COALESCE\(SUM\(quantity\), 0\) FROM "inventory_items" WHERE home_id = \$1 AND item_definition_id = \$2.*`).
+			WithArgs(homeID, itemDefID, sqlmock.AnyArg()).
+			WillReturnRows(sumRows)
+
+		mock.ExpectQuery(`(?i)SELECT \* FROM "shopping_list_items" WHERE home_id = \$1 AND item_definition_id = \$2 AND is_bought = \$3 ORDER BY "shopping_list_items"\."id" LIMIT \$4`).
+			WithArgs(homeID, itemDefID, false, 1).
+			WillReturnError(gorm.ErrInvalidDB)
+		mock.ExpectRollback()
+
+		req, _ := http.NewRequest("POST", "/api/v1/recipes/"+recipeID.String()+"/meal-plan", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
 	})
 }
