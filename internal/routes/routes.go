@@ -43,6 +43,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	productHandler := &handlers.ProductHandler{DB: db}
 	maintenanceHandler := &handlers.MaintenanceTaskHandler{DB: db}
 	receiptHandler := &handlers.ReceiptHandler{DB: db}
+	recipeHandler := &handlers.RecipeHandler{DB: db}
 	done()
 
 	done = bootStep("public route registration")
@@ -165,6 +166,19 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			receipts.POST("/scan", receiptHandler.ScanReceipt)
 			receipts.GET("/jobs/:id", receiptHandler.GetReceiptJob)
 			receipts.POST("/jobs/:id/confirm", receiptHandler.ConfirmReceiptJob)
+		}
+
+		// Recipes
+		recipes := v1.Group("/recipes")
+		{
+			recipes.GET("", recipeHandler.GetRecipes)
+			recipes.GET("/suggestions", recipeHandler.GetRecipeSuggestions)
+			recipes.POST("", recipeHandler.CreateRecipe)
+			recipes.GET("/:id", recipeHandler.GetRecipe)
+			recipes.PUT("/:id", recipeHandler.UpdateRecipe)
+			recipes.DELETE("/:id", recipeHandler.DeleteRecipe)
+			recipes.POST("/:id/cook", recipeHandler.CookRecipe)
+			recipes.POST("/:id/meal-plan", recipeHandler.AddRecipeToShoppingList)
 		}
 	}
 	done()

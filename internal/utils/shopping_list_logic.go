@@ -31,6 +31,9 @@ func updateShoppingListWithDef(tx *gorm.DB, homeID uuid.UUID, itemDef *models.It
 		if err == nil {
 			return tx.Delete(&existingItem).Error
 		}
+		if err == gorm.ErrRecordNotFound {
+			return nil
+		}
 		logger.Log.Error("Failed to fetch existing shopping list item", zap.Error(err))
 		return nil
 	}
