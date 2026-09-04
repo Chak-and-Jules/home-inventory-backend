@@ -681,7 +681,12 @@
           "custom_frequency_metric": {
             "description": "Custom repeat frequency metric (day, week, month, year)",
             "type": "string",
-            "enum": ["day", "week", "month", "year"],
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
             "nullable": true
           },
           "HomeID": {
@@ -737,7 +742,12 @@
           "custom_frequency_metric": {
             "description": "Custom repeat frequency metric (day, week, month, year)",
             "type": "string",
-            "enum": ["day", "week", "month", "year"],
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
             "nullable": true
           },
           "inventory_item_id": {
@@ -963,6 +973,143 @@
           "items"
         ],
         "type": "object"
+      },
+      "RecipeIngredientRequest": {
+        "type": "object",
+        "required": [
+          "item_definition_id",
+          "quantity_required"
+        ],
+        "properties": {
+          "item_definition_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantity_required": {
+            "type": "number"
+          }
+        }
+      },
+      "RecipeRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "servings": {
+            "type": "integer"
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "": "#/components/schemas/RecipeIngredientRequest"
+            }
+          }
+        }
+      },
+      "RecipeIngredient": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "recipe_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "item_definition_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantity_required": {
+            "type": "number"
+          },
+          "item_definition": {
+            "": "#/components/schemas/ItemDefinition"
+          }
+        }
+      },
+      "Recipe": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "home_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "servings": {
+            "type": "integer"
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "": "#/components/schemas/RecipeIngredient"
+            }
+          }
+        }
+      },
+      "RecipeIngredientDetail": {
+        "type": "object",
+        "properties": {
+          "item_definition_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "item_definition_name": {
+            "type": "string"
+          },
+          "quantity_required": {
+            "type": "number"
+          },
+          "quantity_available": {
+            "type": "number"
+          },
+          "quantity_missing": {
+            "type": "number"
+          },
+          "uses_expiring_soon": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RecipeSuggestion": {
+        "type": "object",
+        "properties": {
+          "recipe": {
+            "": "#/components/schemas/Recipe"
+          },
+          "can_cook": {
+            "type": "boolean"
+          },
+          "uses_expiring_soon": {
+            "type": "boolean"
+          },
+          "missing_count": {
+            "type": "integer"
+          },
+          "ingredient_details": {
+            "type": "array",
+            "items": {
+              "": "#/components/schemas/RecipeIngredientDetail"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2001,6 +2148,15 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "description": "Filter by barcode",
+            "in": "query",
+            "name": "barcode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2018,20 +2174,6 @@
             "description": "Success"
           }
         },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/HomeIdHeader"
-          },
-          {
-            "description": "Filter by barcode",
-            "in": "query",
-            "name": "barcode",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
         "summary": "Get item definitions for home",
         "tags": [
           "Item Definitions"
@@ -2688,6 +2830,274 @@
         "tags": [
           "Maintenance Tasks"
         ]
+      }
+    },
+    "/recipes": {
+      "get": {
+        "summary": "Get recipes",
+        "tags": [
+          "Recipes"
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Home-Id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "": "#/components/schemas/Recipe"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create recipe",
+        "tags": [
+          "Recipes"
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Home-Id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "": "#/components/schemas/RecipeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/suggestions": {
+      "get": {
+        "summary": "Get recipe smart suggestions",
+        "tags": [
+          "Recipes"
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Home-Id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "": "#/components/schemas/RecipeSuggestion"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{id}": {
+      "get": {
+        "summary": "Get recipe by ID",
+        "tags": [
+          "Recipes"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update recipe",
+        "tags": [
+          "Recipes"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "": "#/components/schemas/RecipeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete recipe",
+        "tags": [
+          "Recipes"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{id}/cook": {
+      "post": {
+        "summary": "Cook recipe and deduct ingredients from inventory (FEFO)",
+        "tags": [
+          "Recipes"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recipes/{id}/meal-plan": {
+      "post": {
+        "summary": "Add recipe ingredients to shopping list (Meal Plan)",
+        "tags": [
+          "Recipes"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

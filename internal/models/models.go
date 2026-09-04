@@ -226,3 +226,32 @@ type ReceiptJobItem struct {
 	ReceiptJob            *ReceiptJob     `gorm:"foreignKey:ReceiptJobID;constraint:OnDelete:CASCADE"`
 	MatchedItemDefinition *ItemDefinition `gorm:"foreignKey:MatchedItemDefinitionID;constraint:OnDelete:SET NULL"`
 }
+
+// Recipe represents a culinary recipe linked to a home
+type Recipe struct {
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	HomeID       uuid.UUID `gorm:"type:uuid;not null;index"`
+	Name         string    `gorm:"type:varchar(255);not null"`
+	Instructions string    `gorm:"type:text"`
+	Servings     int       `gorm:"type:integer;default:1"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+
+	// Relations
+	Home        Home               `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
+	Ingredients []RecipeIngredient `gorm:"foreignKey:RecipeID;constraint:OnDelete:CASCADE"`
+}
+
+// RecipeIngredient links a recipe to required item definitions with quantity
+type RecipeIngredient struct {
+	ID               uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	RecipeID         uuid.UUID `gorm:"type:uuid;not null;index"`
+	ItemDefinitionID uuid.UUID `gorm:"type:uuid;not null;index"`
+	QuantityRequired float64   `gorm:"type:numeric;not null;default:1"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+
+	// Relations
+	Recipe         *Recipe        `gorm:"foreignKey:RecipeID;constraint:OnDelete:CASCADE"`
+	ItemDefinition ItemDefinition `gorm:"foreignKey:ItemDefinitionID;constraint:OnDelete:RESTRICT"`
+}
