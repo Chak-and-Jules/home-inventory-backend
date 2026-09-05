@@ -681,7 +681,12 @@
           "custom_frequency_metric": {
             "description": "Custom repeat frequency metric (day, week, month, year)",
             "type": "string",
-            "enum": ["day", "week", "month", "year"],
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
             "nullable": true
           },
           "HomeID": {
@@ -737,7 +742,12 @@
           "custom_frequency_metric": {
             "description": "Custom repeat frequency metric (day, week, month, year)",
             "type": "string",
-            "enum": ["day", "week", "month", "year"],
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
             "nullable": true
           },
           "inventory_item_id": {
@@ -963,6 +973,65 @@
           "items"
         ],
         "type": "object"
+      },
+      "PredictionResponse": {
+        "type": "object",
+        "properties": {
+          "prediction_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "item_definition_details": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "picture_url": {
+                "type": "string"
+              }
+            }
+          },
+          "predicted_amount": {
+            "type": "number"
+          },
+          "prediction_date": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "IgnorePredictionRequest": {
+        "type": "object",
+        "required": [
+          "prediction_id"
+        ],
+        "properties": {
+          "prediction_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ApplyPredictionRequest": {
+        "type": "object",
+        "required": [
+          "prediction_id",
+          "applied_amount"
+        ],
+        "properties": {
+          "prediction_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "applied_amount": {
+            "type": "number"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2001,6 +2070,15 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "description": "Filter by barcode",
+            "in": "query",
+            "name": "barcode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2018,20 +2096,6 @@
             "description": "Success"
           }
         },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/HomeIdHeader"
-          },
-          {
-            "description": "Filter by barcode",
-            "in": "query",
-            "name": "barcode",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
         "summary": "Get item definitions for home",
         "tags": [
           "Item Definitions"
@@ -2688,6 +2752,104 @@
         "tags": [
           "Maintenance Tasks"
         ]
+      }
+    },
+    "/homes/predictions": {
+      "get": {
+        "summary": "Get inventory predictions for home",
+        "tags": [
+          "Inventory Predictions"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PredictionResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/homes/predictions/ignore": {
+      "put": {
+        "summary": "Ignore an inventory prediction",
+        "tags": [
+          "Inventory Predictions"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IgnorePredictionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/homes/predictions/apply": {
+      "put": {
+        "summary": "Apply an inventory prediction to stock",
+        "tags": [
+          "Inventory Predictions"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyPredictionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
