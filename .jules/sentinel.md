@@ -25,3 +25,7 @@
 **Vulnerability:** The `/account/delete-request` endpoint was unauthenticated and lacked authorization checks, allowing any user to delete any other user account and their associated homes by simply providing a target `user_id` and `email` in the payload.
 **Learning:** Endpoints performing sensitive operations like account deletion must always be placed within authenticated router groups.
 **Prevention:** Ensure all non-public endpoints are correctly grouped under the `v1` router with `middleware.SupabaseAuthMiddleware()` applied. Always retrieve the authenticated user identity directly from the `gin.Context` (e.g., `c.MustGet("userID")`) and validate it against any user IDs provided in the request payload to prevent IDOR.
+## 2026-09-05 - [Prevent Panics on Unauthenticated Access]
+**Vulnerability:** The `DeleteAccount` handler in `internal/handlers/profile.go` used `c.MustGet("userID")` which caused a panic when accessed via the unauthenticated public route `/api/v1/account/delete-request`.
+**Learning:** `c.MustGet` should never be used to retrieve authentication context variables, because it strictly panics if the key is missing, leading to potential Denial of Service (DoS) and information leakage if a route is misconfigured.
+**Prevention:** Always use `c.Get("key")` and check the boolean `exists` return value to safely handle missing context variables and fail securely (e.g., returning 401 Unauthorized).

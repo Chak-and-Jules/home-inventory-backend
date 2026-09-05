@@ -196,8 +196,19 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 }
 
 func (h *ProfileHandler) DeleteAccount(c *gin.Context) {
-	authUserID := c.MustGet("userID").(uuid.UUID)
-	authEmail := c.MustGet("email").(string)
+	userIDVal, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	authUserID := userIDVal.(uuid.UUID)
+
+	emailVal, exists := c.Get("email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	authEmail := emailVal.(string)
 
 	var req DeleteAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

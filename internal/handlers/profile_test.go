@@ -303,6 +303,27 @@ func TestDeleteAccount(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "Unauthorized account deletion")
 	})
 
+	t.Run("unauthenticated missing context", func(t *testing.T) {
+		handler, _, closeDB := setupTest(t)
+		defer closeDB()
+
+		body := `{"user_id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}`
+
+		req, err := http.NewRequest(http.MethodPost, "/profiles/delete-account", strings.NewReader(body))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+		// Do not set userID and email in context to simulate public unauthenticated endpoint
+
+		handler.DeleteAccount(c)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Contains(t, w.Body.String(), "Unauthorized")
+	})
+
 	t.Run("unauthorized email", func(t *testing.T) {
 		handler, _, closeDB := setupTest(t)
 		defer closeDB()
