@@ -7,15 +7,17 @@ import (
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 )
 
+// ⚡ Bolt: Cache strings.NewReplacer as a package-level global to avoid memory allocation and trie building on every call
+var normalizeReplacer = strings.NewReplacer(
+	"ş", "s", "ı", "i", "ğ", "g", "ü", "u", "ö", "o", "ç", "c",
+	"İ", "i", "I", "i", "Ş", "s", "Ğ", "g", "Ü", "u", "Ö", "o", "Ç", "c",
+	"-", " ", "_", " ", "/", " ", ".", "", ",", "",
+)
+
 // normalizeString replaces Turkish/accented characters with standard ASCII equivalents and removes punctuation
 func normalizeString(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
-	replacer := strings.NewReplacer(
-		"ş", "s", "ı", "i", "ğ", "g", "ü", "u", "ö", "o", "ç", "c",
-		"İ", "i", "I", "i", "Ş", "s", "Ğ", "g", "Ü", "u", "Ö", "o", "Ç", "c",
-		"-", " ", "_", " ", "/", " ", ".", "", ",", "",
-	)
-	return replacer.Replace(s)
+	return normalizeReplacer.Replace(s)
 }
 
 // LevenshteinDistance calculates the edit distance between two strings
