@@ -76,6 +76,14 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			homes.DELETE("/:id", homeHandler.DeleteHome)
 			homes.POST("/:id/default", homeHandler.SetDefaultHome)
 
+			// Home Predictions
+			predictions := homes.Group("/predictions")
+			{
+				predictions.GET("", inventoryItemHandler.GetHomePredictions)
+				predictions.PUT("/ignore", inventoryItemHandler.IgnorePrediction)
+				predictions.PUT("/apply", inventoryItemHandler.ApplyPrediction)
+			}
+
 			// Home Users
 			users := homes.Group("/:id/users")
 			{
