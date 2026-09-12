@@ -35,7 +35,10 @@ type UpdateHomeUserRoleRequest struct {
 }
 
 func (h *HomeHandler) GetHomes(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 
 	var userHomes []models.UserHome
 	if err := h.DB.Preload("Home").Where("user_id = ?", userID).Find(&userHomes).Error; err != nil {
@@ -48,7 +51,10 @@ func (h *HomeHandler) GetHomes(c *gin.Context) {
 }
 
 func (h *HomeHandler) UpdateHomeUserRole(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
@@ -101,7 +107,10 @@ func (h *HomeHandler) UpdateHomeUserRole(c *gin.Context) {
 }
 
 func (h *HomeHandler) RemoveHomeUser(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
@@ -143,7 +152,10 @@ func (h *HomeHandler) RemoveHomeUser(c *gin.Context) {
 }
 
 func (h *HomeHandler) AddHomeUser(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
@@ -233,7 +245,10 @@ func (h *HomeHandler) requireHomeRole(c *gin.Context, userID, homeID uuid.UUID, 
 }
 
 func (h *HomeHandler) CreateHome(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 	var req CreateHomeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
@@ -269,7 +284,10 @@ func (h *HomeHandler) CreateHome(c *gin.Context) {
 }
 
 func (h *HomeHandler) UpdateHome(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
@@ -296,7 +314,10 @@ func (h *HomeHandler) UpdateHome(c *gin.Context) {
 }
 
 func (h *HomeHandler) DeleteHome(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
@@ -361,7 +382,10 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 }
 
 func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
@@ -396,7 +420,10 @@ func (h *HomeHandler) SetDefaultHome(c *gin.Context) {
 }
 
 func (h *HomeHandler) GetHomeUsers(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 	homeID, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid home ID")
 	if !ok {
 		return
