@@ -192,3 +192,131 @@ func TestParseUUIDHeader(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAuthUserID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name         string
+		setupContext func(c *gin.Context)
+		expectedID   uuid.UUID
+		expectedBool bool
+		expectedCode int
+		expectedErr  string
+	}{
+		{
+			name: "Valid User ID",
+			setupContext: func(c *gin.Context) {
+				c.Set("userID", uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"))
+			},
+			expectedID:   uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
+			expectedBool: true,
+			expectedCode: http.StatusOK,
+		},
+		{
+			name: "Missing User ID",
+			setupContext: func(c *gin.Context) {
+				// Do not set userID
+			},
+			expectedID:   uuid.Nil,
+			expectedBool: false,
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "Unauthorized access",
+		},
+		{
+			name: "Invalid User ID Type",
+			setupContext: func(c *gin.Context) {
+				c.Set("userID", "not-a-uuid-type")
+			},
+			expectedID:   uuid.Nil,
+			expectedBool: false,
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "Invalid user ID format in context",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			tt.setupContext(c)
+
+			id, ok := GetAuthUserID(c, nil)
+
+			assert.Equal(t, tt.expectedID, id)
+			assert.Equal(t, tt.expectedBool, ok)
+
+			if !ok {
+				assert.Equal(t, tt.expectedCode, w.Code)
+				var response map[string]string
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedErr, response["error"])
+			}
+		})
+	}
+}
+
+func TestGetAuthEmail(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name         string
+		setupContext func(c *gin.Context)
+		expectedStr  string
+		expectedBool bool
+		expectedCode int
+		expectedErr  string
+	}{
+		{
+			name: "Valid Email",
+			setupContext: func(c *gin.Context) {
+				c.Set("email", "test@example.com")
+			},
+			expectedStr:  "test@example.com",
+			expectedBool: true,
+			expectedCode: http.StatusOK,
+		},
+		{
+			name: "Missing Email",
+			setupContext: func(c *gin.Context) {
+				// Do not set email
+			},
+			expectedStr:  "",
+			expectedBool: false,
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "Unauthorized access",
+		},
+		{
+			name: "Invalid Email Type",
+			setupContext: func(c *gin.Context) {
+				c.Set("email", 123)
+			},
+			expectedStr:  "",
+			expectedBool: false,
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "Invalid email format in context",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			tt.setupContext(c)
+
+			str, ok := GetAuthEmail(c, nil)
+
+			assert.Equal(t, tt.expectedStr, str)
+			assert.Equal(t, tt.expectedBool, ok)
+
+			if !ok {
+				assert.Equal(t, tt.expectedCode, w.Code)
+				var response map[string]string
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedErr, response["error"])
+			}
+		})
+	}
+}
