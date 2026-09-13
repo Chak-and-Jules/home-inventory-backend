@@ -45,3 +45,6 @@
 ## 2026-08-09 - [In-memory stitching for self-referencing Preloads]
 **Learning:** When fetching all records of a hierarchical model (like Categories in a Home) where children reference parents within the same table, using GORM's `Preload("Parent")` executes a redundant secondary query. Since all records (including parents) are already fetched in the primary query, the secondary database roundtrip is wasteful.
 **Action:** Remove `Preload("Parent")` and stitch the relationships together in Go memory using a map in O(N) time.
+## $(date +%Y-%m-%d) - Cache strings.NewReplacer
+**Learning:** In Go, `strings.NewReplacer` allocates memory and builds an internal search structure. It should be cached as a package-level global variable when replacement pairs are static, especially for hot paths like string normalization and fuzzy matching, to significantly reduce CPU overhead and garbage collection pressure.
+**Action:** Always check if `strings.NewReplacer` is being instantiated inside a loop or frequently called function, and extract it to a global variable.
