@@ -7,15 +7,19 @@ import (
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 )
 
+// normalizeReplacer is cached as a package-level global variable
+// to avoid recreating the strings.Replacer search structure on every call
+// since this is a hot path for string normalization and fuzzy matching.
+var normalizeReplacer = strings.NewReplacer(
+	"ş", "s", "ı", "i", "ğ", "g", "ü", "u", "ö", "o", "ç", "c",
+	"İ", "i", "I", "i", "Ş", "s", "Ğ", "g", "Ü", "u", "Ö", "o", "Ç", "c",
+	"-", " ", "_", " ", "/", " ", ".", "", ",", "",
+)
+
 // normalizeString replaces Turkish/accented characters with standard ASCII equivalents and removes punctuation
 func normalizeString(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
-	replacer := strings.NewReplacer(
-		"ş", "s", "ı", "i", "ğ", "g", "ü", "u", "ö", "o", "ç", "c",
-		"İ", "i", "I", "i", "Ş", "s", "Ğ", "g", "Ü", "u", "Ö", "o", "Ç", "c",
-		"-", " ", "_", " ", "/", " ", ".", "", ",", "",
-	)
-	return replacer.Replace(s)
+	return normalizeReplacer.Replace(s)
 }
 
 // LevenshteinDistance calculates the edit distance between two strings
