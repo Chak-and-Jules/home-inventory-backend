@@ -10,6 +10,7 @@ import (
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -36,8 +37,14 @@ type DeleteAccountRequest struct {
 }
 
 func (h *ProfileHandler) SyncProfile(c *gin.Context) {
-	authUserID := c.MustGet("userID").(uuid.UUID)
-	authEmail := c.MustGet("email").(string)
+	authUserID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
+	authEmail, ok := utils.GetAuthEmail(c, h.DB)
+	if !ok {
+		return
+	}
 
 	var req ProfileSyncRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -104,7 +111,10 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 }
 
 func (h *ProfileHandler) GetProfile(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 
 	var profile models.Profile
 	if err := h.DB.Select("web_theme", "mobile_theme", "language_id", "restock_window").Where("id = ?", userID).First(&profile).Error; err != nil {
@@ -134,7 +144,10 @@ func (h *ProfileHandler) GetProfile(c *gin.Context) {
 }
 
 func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
-	userID := c.MustGet("userID").(uuid.UUID)
+	userID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
 
 	var payload map[string]interface{}
 	if err := c.ShouldBindJSON(&payload); err != nil {
@@ -196,8 +209,14 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 }
 
 func (h *ProfileHandler) DeleteAccount(c *gin.Context) {
-	authUserID := c.MustGet("userID").(uuid.UUID)
-	authEmail := c.MustGet("email").(string)
+	authUserID, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
+	authEmail, ok := utils.GetAuthEmail(c, h.DB)
+	if !ok {
+		return
+	}
 
 	var req DeleteAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

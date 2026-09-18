@@ -52,3 +52,35 @@ func ParseUUIDHeader(c *gin.Context, db *gorm.DB, name string, errorMessage stri
 	}
 	return id, true
 }
+
+// GetAuthUserID safely retrieves the authenticated user ID from the Gin context.
+// If the user ID is missing or invalid, it sends a 401 Unauthorized response and returns (uuid.Nil, false).
+func GetAuthUserID(c *gin.Context, db *gorm.DB) (uuid.UUID, bool) {
+	val, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(db, c, "Unauthorized access")})
+		return uuid.Nil, false
+	}
+	userID, ok := val.(uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(db, c, "Invalid user ID format in context")})
+		return uuid.Nil, false
+	}
+	return userID, true
+}
+
+// GetAuthEmail safely retrieves the authenticated email from the Gin context.
+// If the email is missing or invalid, it sends a 401 Unauthorized response and returns ("", false).
+func GetAuthEmail(c *gin.Context, db *gorm.DB) (string, bool) {
+	val, exists := c.Get("email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(db, c, "Unauthorized access")})
+		return "", false
+	}
+	email, ok := val.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(db, c, "Invalid email format in context")})
+		return "", false
+	}
+	return email, true
+}
