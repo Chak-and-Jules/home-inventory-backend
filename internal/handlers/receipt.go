@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -336,7 +338,8 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to confirm receipt items: "+err.Error())})
+		logger.Log.Error("Failed to confirm receipt items", zap.Error(err), zap.String("job_id", jobID.String()))
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to confirm receipt items")})
 		return
 	}
 
