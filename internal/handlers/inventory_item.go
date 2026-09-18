@@ -823,3 +823,173 @@ func (h *InventoryItemHandler) GetPredictiveRestockInsights(c *gin.Context) {
 
 	c.JSON(http.StatusOK, results)
 }
+
+type PredictionItemDetails struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	PictureURL string    `json:"picture_url"`
+}
+
+type PredictionResponse struct {
+	PredictionID          uuid.UUID             `json:"prediction_id"`
+	ItemDefinitionDetails PredictionItemDetails `json:"item_definition_details"`
+	PredictedAmount       float64               `json:"predicted_amount"`
+	PredictionDate        time.Time             `json:"prediction_date"`
+}
+
+type IgnorePredictionRequest struct {
+	PredictionID uuid.UUID `json:"prediction_id" binding:"required"`
+}
+
+type ApplyPredictionRequest struct {
+	PredictionID  uuid.UUID `json:"prediction_id" binding:"required"`
+	AppliedAmount float64   `json:"applied_amount" binding:"required"`
+}
+
+func (h *InventoryItemHandler) GetHomePredictions(c *gin.Context) {
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+	if !ok {
+		return
+	}
+
+	if !utils.VerifyHomeAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Access denied to this home")})
+		return
+	}
+
+	var predictions []models.InventoryPrediction
+	if err := h.DB.Joins("InventoryItem").
+		Preload("InventoryItem.ItemDefinition").
+		Where(`"InventoryItem".home_id = ? AND "inventory_predictions".status = ?`, homeID, models.PredictionStatusPredicted).
+		Order(`"inventory_predictions".created_at DESC`).
+		Find(&predictions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch predictions")})
+		return
+	}
+
+	var response []PredictionResponse
+	for _, p := range predictions {
+		response = append(response, PredictionResponse{
+			PredictionID: p.ID,
+			ItemDefinitionDetails: PredictionItemDetails{
+				ID:         p.InventoryItem.ItemDefinition.ID,
+				Name:       p.InventoryItem.ItemDefinition.Name,
+				PictureURL: p.InventoryItem.ItemDefinition.ImageURL,
+			},
+			PredictedAmount: p.PredictedConsumedAmount,
+			PredictionDate:  p.CreatedAt,
+		})
+	}
+
+	if response == nil {
+		response = []PredictionResponse{}
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *InventoryItemHandler) IgnorePrediction(c *gin.Context) {
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+	if !ok {
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+		return
+	}
+
+	var req IgnorePredictionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+
+	var prediction models.InventoryPrediction
+	if err := h.DB.Joins("InventoryItem").
+		Where(`"inventory_predictions".id = ? AND "InventoryItem".home_id = ?`, req.PredictionID, homeID).
+		First(&prediction).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Prediction not found")})
+		return
+	}
+
+	if err := h.DB.Model(&prediction).Update("status", models.PredictionStatusIgnored).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to ignore prediction")})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Prediction ignored successfully")})
+}
+
+func (h *InventoryItemHandler) ApplyPrediction(c *gin.Context) {
+	homeID, ok := utils.ParseUUIDHeader(c, h.DB, "X-Home-Id", "Invalid home_id")
+	if !ok {
+		return
+	}
+
+	if !utils.VerifyHomeWriteAccess(c, h.DB, homeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+		return
+	}
+
+	var req ApplyPredictionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+
+	if req.AppliedAmount <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Applied amount must be greater than zero")})
+		return
+	}
+
+	var prediction models.InventoryPrediction
+	if err := h.DB.Joins("InventoryItem").
+		Where(`"inventory_predictions".id = ? AND "InventoryItem".home_id = ?`, req.PredictionID, homeID).
+		First(&prediction).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Prediction not found")})
+		return
+	}
+
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		// Update status to Applied
+		if err := tx.Model(&prediction).Update("status", models.PredictionStatusApplied).Error; err != nil {
+			return err
+		}
+
+		// Subtract applied_amount from InventoryItem quantity
+		var item models.InventoryItem
+		if err := tx.First(&item, prediction.InventoryItemID).Error; err != nil {
+			return err
+		}
+
+		newQuantity := item.Quantity - req.AppliedAmount
+		if newQuantity < 0 {
+			newQuantity = 0
+		}
+
+		if err := tx.Model(&item).Update("quantity", newQuantity).Error; err != nil {
+			return err
+		}
+
+		// Create InventoryTransaction for this update
+		txLog := models.InventoryTransaction{
+			HomeID:           homeID,
+			ItemDefinitionID: item.ItemDefinitionID,
+			InventoryItemID:  item.ID,
+			QuantityChange:   -req.AppliedAmount,
+		}
+		if err := tx.Create(&txLog).Error; err != nil {
+			return err
+		}
+
+		return utils.UpdateShoppingListForDefinition(tx, homeID, item.ItemDefinitionID)
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to apply prediction")})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Prediction applied successfully")})
+}

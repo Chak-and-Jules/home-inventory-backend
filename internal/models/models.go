@@ -227,6 +227,25 @@ type ReceiptJobItem struct {
 	MatchedItemDefinition *ItemDefinition `gorm:"foreignKey:MatchedItemDefinitionID;constraint:OnDelete:SET NULL"`
 }
 
+const (
+	PredictionStatusPredicted = "Predicted"
+	PredictionStatusApplied   = "Applied"
+	PredictionStatusIgnored   = "Ignored"
+)
+
+// InventoryPrediction stores calculated consumption predictions for inventory items
+type InventoryPrediction struct {
+	ID                      uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	InventoryItemID         uuid.UUID `gorm:"type:uuid;not null;index" json:"inventory_item_id"`
+	PredictedConsumedAmount float64   `gorm:"type:numeric;not null" json:"predicted_consumed_amount"`
+	Status                  string    `gorm:"type:varchar(50);not null;default:'Predicted';index" json:"status"`
+	CreatedAt               time.Time `json:"created_at"`
+	UpdatedAt               time.Time `json:"updated_at"`
+
+	// Relations
+	InventoryItem InventoryItem `gorm:"foreignKey:InventoryItemID;constraint:OnDelete:CASCADE" json:"inventory_item,omitempty"`
+}
+
 // Recipe represents a culinary recipe linked to a home
 type Recipe struct {
 	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
