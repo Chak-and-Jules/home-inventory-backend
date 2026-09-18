@@ -17,15 +17,18 @@
 **Vulnerability:** Missing standard HTTP security headers (HSTS, clickjacking protection, MIME-sniffing protection).
 **Learning:** Gin doesn't add security headers by default; they must be explicitly added via middleware to ensure defense-in-depth on all routes.
 **Prevention:** Always implement a dedicated security headers middleware early in the global router chain (e.g., using `r.Use`) for any new Gin web application.
+
 ## 2026-07-22 - [Fix SSRF via unsanitized barcode in product lookup]
  **Vulnerability:** Unsanitized path parameter injection in HTTP requests causing Server-Side Request Forgery (SSRF) and Path Traversal.
  **Learning:** When taking user input to form an outgoing HTTP request URL path segment, failing to URL-encode the input allows attackers to break out of the intended path segment (e.g., using `../`) to access unintended resources.
  **Prevention:** Always use `net/url.PathEscape` (or equivalent URL encoding functions depending on the URL component) to sanitize user-provided variables before inserting them into a URL.
+
 ## 2024-07-24 - [CRITICAL] Fixed IDOR in account deletion endpoint
 **Vulnerability:** The `/account/delete-request` endpoint was unauthenticated and lacked authorization checks, allowing any user to delete any other user account and their associated homes by simply providing a target `user_id` and `email` in the payload.
 **Learning:** Endpoints performing sensitive operations like account deletion must always be placed within authenticated router groups.
 **Prevention:** Ensure all non-public endpoints are correctly grouped under the `v1` router with `middleware.SupabaseAuthMiddleware()` applied. Always retrieve the authenticated user identity directly from the `gin.Context` (e.g., `c.MustGet("userID")`) and validate it against any user IDs provided in the request payload to prevent IDOR.
-## 2026-09-11 - [CRITICAL] Replaced gin.Context MustGet with Safe Type Assertions
+
+## 2026-09-12 - [CRITICAL] Replaced gin.Context MustGet with Safe Type Assertions
 **Vulnerability:** A Denial of Service (DoS) vulnerability via application panic. `c.MustGet("userID")` was being used in endpoints like `DeleteAccount` which were exposed publicly without the authentication middleware. If an unauthenticated request hit these endpoints, `c.MustGet` would panic and crash the server because the key was not set by the middleware.
 **Learning:** The assumption that `userID` and `email` will always exist in the `gin.Context` is unsafe, especially if route definitions change or endpoints are accidentally exposed without middleware.
 **Prevention:** Always use `c.Get(key)` with a safe type assertion `val, ok := val.(uuid.UUID)`, returning a 401 Unauthorized response if the key doesn't exist or has an unexpected type. Extracted this pattern into `GetAuthUserID` and `GetAuthEmail` helpers in `gin_utils.go`.
