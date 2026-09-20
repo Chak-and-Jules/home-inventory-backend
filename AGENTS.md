@@ -21,7 +21,8 @@ Ensure that any changes you make do not break existing tests and that you write 
 ## API Endpoint Checks
 
 - Whenever there is any change in the codebase that changes the api contract, the `openapi.json` file should also be updated and included in the commit.
-- When the `openapi.json` file is updated, create an issue in the repository `https://github.com/Chak-and-Jules/home-inventory-web/issues` describing the change; and add `jules` label to it.
+- When the `openapi.json` file is updated, create an issue in the repository `https://github.com/Chak-and-Jules/home-inventory-web/issues` describing the change; and add `codex` label to it.
+- When the `openapi.json` file is updated, create an issue in the repository `https://github.com/Chak-and-Jules/home-inventory-mobile/issues` describing the change; and add `codex` label to it.
 
 ## Git Workflow
 
