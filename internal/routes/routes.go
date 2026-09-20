@@ -16,6 +16,7 @@ import (
 func SetupRouter(db *gorm.DB) *gin.Engine {
 	done := bootStep("gin engine creation")
 	r := gin.New()
+	r.SetTrustedProxies(nil)
 	done()
 
 	done = bootStep("router middleware registration")
