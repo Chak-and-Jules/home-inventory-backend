@@ -22,12 +22,9 @@ func normalizeString(s string) string {
 	return normalizeReplacer.Replace(s)
 }
 
-// LevenshteinDistance calculates the edit distance between two strings
-func LevenshteinDistance(s1, s2 string) int {
-	s1 = normalizeString(s1)
-	s2 = normalizeString(s2)
-
-	r1, r2 := []rune(s1), []rune(s2)
+// levenshteinDistanceRunes calculates the edit distance between two rune slices
+// without any normalization overhead.
+func levenshteinDistanceRunes(r1, r2 []rune) int {
 	len1, len2 := len(r1), len(r2)
 
 	if len1 == 0 {
@@ -59,6 +56,13 @@ func LevenshteinDistance(s1, s2 string) int {
 	return column[len1]
 }
 
+// LevenshteinDistance calculates the edit distance between two strings
+func LevenshteinDistance(s1, s2 string) int {
+	s1 = normalizeString(s1)
+	s2 = normalizeString(s2)
+	return levenshteinDistanceRunes([]rune(s1), []rune(s2))
+}
+
 func min(a, b, c int) int {
 	if a < b {
 		if a < c {
@@ -72,11 +76,8 @@ func min(a, b, c int) int {
 	return c
 }
 
-// StringSimilarity returns a confidence score between 0.0 and 1.0 based on Levenshtein distance, character normalization, and token-set matching
-func StringSimilarity(s1, s2 string) float64 {
-	str1 := normalizeString(s1)
-	str2 := normalizeString(s2)
-
+// calculateStringSimilarity calculates similarity using pre-normalized strings and avoids re-normalizing.
+func calculateStringSimilarity(str1, str2 string) float64 {
 	if str1 == "" || str2 == "" {
 		return 0.0
 	}
@@ -140,10 +141,12 @@ func StringSimilarity(s1, s2 string) float64 {
 		return 0.8 + 0.2*(minLen/maxLen)
 	}
 
-	dist := LevenshteinDistance(str1, str2)
-	maxLen := float64(len([]rune(str1)))
-	if float64(len([]rune(str2))) > maxLen {
-		maxLen = float64(len([]rune(str2)))
+	r1 := []rune(str1)
+	r2 := []rune(str2)
+	dist := levenshteinDistanceRunes(r1, r2)
+	maxLen := float64(len(r1))
+	if float64(len(r2)) > maxLen {
+		maxLen = float64(len(r2))
 	}
 
 	score := 1.0 - (float64(dist) / maxLen)
@@ -151,6 +154,13 @@ func StringSimilarity(s1, s2 string) float64 {
 		return 0
 	}
 	return score
+}
+
+// StringSimilarity returns a confidence score between 0.0 and 1.0 based on Levenshtein distance, character normalization, and token-set matching
+func StringSimilarity(s1, s2 string) float64 {
+	str1 := normalizeString(s1)
+	str2 := normalizeString(s2)
+	return calculateStringSimilarity(str1, str2)
 }
 
 type MatchResult struct {
@@ -163,8 +173,12 @@ func FindBestMatch(rawName string, itemDefs []models.ItemDefinition) MatchResult
 	var bestMatch *models.ItemDefinition
 	bestScore := 0.0
 
+	// Normalize the target name once to avoid O(N) redundant normalizations inside the loop
+	normalizedRaw := normalizeString(rawName)
+
 	for i := range itemDefs {
-		score := StringSimilarity(rawName, itemDefs[i].Name)
+		normalizedDef := normalizeString(itemDefs[i].Name)
+		score := calculateStringSimilarity(normalizedRaw, normalizedDef)
 		if score > bestScore {
 			bestScore = score
 			bestMatch = &itemDefs[i]
