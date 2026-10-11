@@ -49,3 +49,7 @@
 ## 2026-09-14 - Cache strings.NewReplacer
 **Learning:** In Go, `strings.NewReplacer` allocates memory and builds an internal search structure. It should be cached as a package-level global variable when replacement pairs are static, especially for hot paths like string normalization and fuzzy matching, to significantly reduce CPU overhead and garbage collection pressure.
 **Action:** Always check if `strings.NewReplacer` is being instantiated inside a loop or frequently called function, and extract it to a global variable.
+
+## $(date +%Y-%m-%d) - Optimize Fuzzy Match String Normalization Loop
+**Learning:** In hot path functions like `FindBestMatch`, calling helpers like `StringSimilarity` inside an O(N) loop caused O(N) redundant string normalizations and allocations for the static input string (`rawName`). Also, `LevenshteinDistance` internally re-normalized strings that were already normalized. Go's string manipulation and allocations in loops quickly create significant overhead.
+**Action:** Extract core logic that expects pre-normalized inputs (`calculateStringSimilarity`, `levenshteinDistanceRunes`) and lift static/repeated transformations (like `normalizeString(rawName)`) out of the O(N) loop to drastically reduce runtime and memory allocations.
