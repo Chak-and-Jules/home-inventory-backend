@@ -35,7 +35,7 @@ func setupReceiptTest(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 	logger.InitLogger()
 	gormDB, mock, err := setupTestDB()
 	assert.NoError(t, err)
-	return gormDB, mock
+	return withMockUnits(gormDB), mock
 }
 
 func TestScanReceipt_Success(t *testing.T) {
@@ -530,7 +530,7 @@ func TestConfirmReceiptJob_ErrorsAndTransactionFailure(t *testing.T) {
 		mock.ExpectRollback()
 
 		reqPayload := ConfirmReceiptJobRequest{
-			Items: []ConfirmReceiptItem{{RawName: "Milk", Quantity: 0}},
+			Items: []ConfirmReceiptItem{{QuantityUnitID: &mockCountUnitID, RawName: "Milk", Quantity: 0}},
 		}
 		jsonBytes, _ := json.Marshal(reqPayload)
 
@@ -559,7 +559,7 @@ func TestConfirmReceiptJob_ErrorsAndTransactionFailure(t *testing.T) {
 		mock.ExpectRollback()
 
 		reqPayload := ConfirmReceiptJobRequest{
-			Items: []ConfirmReceiptItem{{RawName: "Milk", Quantity: 1, ItemDefinitionID: &defID}},
+			Items: []ConfirmReceiptItem{{QuantityUnitID: &mockCountUnitID, RawName: "Milk", Quantity: 1, ItemDefinitionID: &defID}},
 		}
 		jsonBytes, _ := json.Marshal(reqPayload)
 
@@ -585,14 +585,14 @@ func TestConfirmReceiptJob_ErrorsAndTransactionFailure(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions"`)).
 			WithArgs(defID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(defID, homeID, "Milk"))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).AddRow(defID, homeID, "Milk", mockCountUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "inventory_items"`)).
 			WillReturnError(errors.New("db insert inv item error"))
 		mock.ExpectRollback()
 
 		reqPayload := ConfirmReceiptJobRequest{
-			Items: []ConfirmReceiptItem{{RawName: "Milk", Quantity: 1, ItemDefinitionID: &defID}},
+			Items: []ConfirmReceiptItem{{QuantityUnitID: &mockCountUnitID, RawName: "Milk", Quantity: 1, ItemDefinitionID: &defID}},
 		}
 		jsonBytes, _ := json.Marshal(reqPayload)
 
@@ -621,7 +621,7 @@ func TestConfirmReceiptJob_ErrorsAndTransactionFailure(t *testing.T) {
 		mock.ExpectRollback()
 
 		reqPayload := ConfirmReceiptJobRequest{
-			Items: []ConfirmReceiptItem{{RawName: "Butter", Quantity: 1, CreateItemDefinition: true}},
+			Items: []ConfirmReceiptItem{{QuantityUnitID: &mockCountUnitID, RawName: "Butter", Quantity: 1, SizeUnitID: &mockCountUnitID, CreateItemDefinition: true}},
 		}
 		jsonBytes, _ := json.Marshal(reqPayload)
 
@@ -647,7 +647,7 @@ func TestConfirmReceiptJob_ErrorsAndTransactionFailure(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions"`)).
 			WithArgs(defID, homeID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name"}).AddRow(defID, homeID, "Milk"))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).AddRow(defID, homeID, "Milk", mockCountUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "inventory_items"`)).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
@@ -657,7 +657,7 @@ func TestConfirmReceiptJob_ErrorsAndTransactionFailure(t *testing.T) {
 		mock.ExpectRollback()
 
 		reqPayload := ConfirmReceiptJobRequest{
-			Items: []ConfirmReceiptItem{{RawName: "Milk", Quantity: 1, ItemDefinitionID: &defID}},
+			Items: []ConfirmReceiptItem{{QuantityUnitID: &mockCountUnitID, RawName: "Milk", Quantity: 1, ItemDefinitionID: &defID}},
 		}
 		jsonBytes, _ := json.Marshal(reqPayload)
 

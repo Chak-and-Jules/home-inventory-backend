@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/quantity"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type MaintenanceTaskHandler struct {
@@ -19,8 +21,10 @@ type MaintenanceTaskHandler struct {
 }
 
 type TaskItemDependencyRequest struct {
-	ItemDefinitionID uuid.UUID `json:"item_definition_id" binding:"required"`
-	QuantityRequired float64   `json:"quantity_required" binding:"required"`
+	quantityInputs
+	QuantityUnitID   *uuid.UUID `json:"quantity_unit_id"`
+	ItemDefinitionID uuid.UUID  `json:"item_definition_id" binding:"required"`
+	QuantityRequired float64    `json:"quantity_required" binding:"required"`
 }
 
 type MaintenanceTaskRequest struct {
@@ -145,6 +149,14 @@ func (h *MaintenanceTaskHandler) CreateMaintenanceTask(c *gin.Context) {
 		}
 	}
 
+	for index, dep := range req.Dependencies {
+		value, err := quantityForDefinition(h.DB, dep.ItemDefinitionID, homeID, dep.QuantityRequired, dep.QuantityUnitID, false, dep.raw("quantity_required"))
+		if err != nil {
+			quantityError(c, h.DB, err)
+			return
+		}
+		req.Dependencies[index].QuantityRequired = value
+	}
 	task := models.MaintenanceTask{
 		HomeID:                homeID,
 		InventoryItemID:       req.InventoryItemID,
@@ -240,6 +252,14 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 		}
 	}
 
+	for index, dep := range req.Dependencies {
+		value, err := quantityForDefinition(h.DB, dep.ItemDefinitionID, task.HomeID, dep.QuantityRequired, dep.QuantityUnitID, false, dep.raw("quantity_required"))
+		if err != nil {
+			quantityError(c, h.DB, err)
+			return
+		}
+		req.Dependencies[index].QuantityRequired = value
+	}
 	updates := map[string]interface{}{
 		"inventory_item_id":       req.InventoryItemID,
 		"description":             req.Description,
@@ -354,7 +374,7 @@ func (h *MaintenanceTaskHandler) CompleteMaintenanceTask(c *gin.Context) {
 			remainingToDeduct := dep.QuantityRequired
 
 			var items []models.InventoryItem
-			if err := tx.Where("home_id = ? AND item_definition_id = ?", task.HomeID, dep.ItemDefinitionID).
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("home_id = ? AND item_definition_id = ?", task.HomeID, dep.ItemDefinitionID).
 				Order("expiration_date ASC NULLS LAST").
 				Find(&items).Error; err != nil {
 				return err
@@ -362,7 +382,7 @@ func (h *MaintenanceTaskHandler) CompleteMaintenanceTask(c *gin.Context) {
 
 			var totalAvailable float64
 			for _, item := range items {
-				totalAvailable += item.Quantity
+				totalAvailable = quantity.Add(totalAvailable, item.Quantity)
 			}
 
 			if totalAvailable < dep.QuantityRequired {
@@ -379,7 +399,7 @@ func (h *MaintenanceTaskHandler) CompleteMaintenanceTask(c *gin.Context) {
 					deduction = remainingToDeduct
 				}
 
-				if err := tx.Model(&item).Update("quantity", item.Quantity-deduction).Error; err != nil {
+				if err := tx.Model(&item).Update("quantity", quantity.Sub(item.Quantity, deduction)).Error; err != nil {
 					return err
 				}
 
@@ -394,7 +414,7 @@ func (h *MaintenanceTaskHandler) CompleteMaintenanceTask(c *gin.Context) {
 					return err
 				}
 
-				remainingToDeduct -= deduction
+				remainingToDeduct = quantity.Sub(remainingToDeduct, deduction)
 			}
 
 			if err := utils.UpdateShoppingListForDefinition(tx, task.HomeID, dep.ItemDefinitionID); err != nil {
@@ -503,4 +523,9 @@ func parseFrequencyAndAdvance(current time.Time, task models.MaintenanceTask) (t
 
 	// Unrecognized/Invalid treats as "once" and does not repeat
 	return current, false
+}
+
+func (r *TaskItemDependencyRequest) UnmarshalJSON(b []byte) error {
+	type plain TaskItemDependencyRequest
+	return decodeQuantityRequest(b, (*plain)(r), &r.quantityInputs)
 }

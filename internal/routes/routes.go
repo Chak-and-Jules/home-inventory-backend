@@ -134,6 +134,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 			inventory.GET("/insights/restock", inventoryItemHandler.GetPredictiveRestockInsights)
 			inventory.POST("", inventoryItemHandler.CreateInventoryItem)
 			inventory.PUT("/:id", inventoryItemHandler.UpdateInventoryItem)
+			inventory.PATCH("/:id", inventoryItemHandler.PatchInventoryItem)
 			inventory.PATCH("/:id/quantity", inventoryItemHandler.UpdateInventoryItemQuantity)
 			inventory.DELETE("/:id", inventoryItemHandler.DeleteInventoryItem)
 			inventory.POST("/scan", inventoryItemHandler.ScanInventoryItem)

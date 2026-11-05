@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/quantity"
 	"io"
 	"net/http"
 	"strings"
@@ -22,14 +24,17 @@ type ReceiptHandler struct {
 }
 
 type ConfirmReceiptItem struct {
-	RawName              string     `json:"raw_name" binding:"required"`
-	Quantity             float64    `json:"quantity" binding:"required"`
-	Price                float64    `json:"price"`
-	ExpirationDate       *time.Time `json:"expiry_date"`
-	ItemDefinitionID     *uuid.UUID `json:"item_definition_id"`
-	CreateItemDefinition bool       `json:"create_item_definition"`
-	CategoryID           *uuid.UUID `json:"category_id"`
-	SizeUnitID           *uuid.UUID `json:"size_unit_id"`
+	quantityInputs
+	QuantityUnitID       *uuid.UUID   `json:"quantity_unit_id"`
+	DisplaySizeUnitID    OptionalUnit `json:"display_size_unit_id"`
+	RawName              string       `json:"raw_name" binding:"required"`
+	Quantity             float64      `json:"quantity" binding:"required"`
+	Price                float64      `json:"price"`
+	ExpirationDate       *time.Time   `json:"expiry_date"`
+	ItemDefinitionID     *uuid.UUID   `json:"item_definition_id"`
+	CreateItemDefinition bool         `json:"create_item_definition"`
+	CategoryID           *uuid.UUID   `json:"category_id"`
+	SizeUnitID           *uuid.UUID   `json:"size_unit_id"`
 }
 
 type ConfirmReceiptJobRequest struct {
@@ -278,6 +283,7 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 			}
 
 			var targetDefID uuid.UUID
+			var targetDef models.ItemDefinition
 
 			if confirmItem.ItemDefinitionID != nil && *confirmItem.ItemDefinitionID != uuid.Nil {
 				// Verify definition exists in home
@@ -286,6 +292,7 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 					return fmt.Errorf("item definition not found or does not belong to home")
 				}
 				targetDefID = def.ID
+				targetDef = def
 			} else {
 				// Create new item definition if required or no definition ID supplied
 				newDef := models.ItemDefinition{
@@ -295,19 +302,37 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 					CategoryID: confirmItem.CategoryID,
 					SizeUnitID: confirmItem.SizeUnitID,
 				}
+				catalog, err := models.Catalog(tx)
+				if err != nil {
+					return err
+				}
+				if !catalog.Compatible(newDef.SizeUnitID, newDef.SizeUnitID) {
+					return models.ErrUnit
+				}
 				if err := tx.Create(&newDef).Error; err != nil {
 					return fmt.Errorf("failed to create item definition: %w", err)
 				}
 				targetDefID = newDef.ID
+				targetDef = newDef
 			}
 
+			normalized, err := normalizeForUnit(tx, confirmItem.Quantity, confirmItem.QuantityUnitID, targetDef.SizeUnitID, false, confirmItem.raw("quantity"))
+			if err != nil {
+				return err
+			}
+			if err := validateDisplay(tx, confirmItem.DisplaySizeUnitID.ID, targetDef.SizeUnitID); err != nil {
+				return err
+			}
+			confirmItem.Quantity = normalized
 			// Create InventoryItem
 			invItem := models.InventoryItem{
-				ID:               uuid.New(),
-				HomeID:           job.HomeID,
-				ItemDefinitionID: targetDefID,
-				Quantity:         confirmItem.Quantity,
-				ExpirationDate:   confirmItem.ExpirationDate,
+				ID:                uuid.New(),
+				HomeID:            job.HomeID,
+				ItemDefinitionID:  targetDefID,
+				Quantity:          confirmItem.Quantity,
+				DisplaySizeUnitID: confirmItem.DisplaySizeUnitID.ID,
+				BaseSizeUnitID:    targetDef.BaseSizeUnitID,
+				ExpirationDate:    confirmItem.ExpirationDate,
 			}
 			if err := tx.Create(&invItem).Error; err != nil {
 				return fmt.Errorf("failed to create inventory item: %w", err)
@@ -329,6 +354,14 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 				return err
 			}
 
+			invItem.ItemDefinition = targetDef
+			if catalog, err := models.Catalog(tx); err == nil {
+				invItem.BaseSizeUnitID = catalog.BaseID(targetDef.SizeUnitID)
+			}
+			invItem.EffectiveDisplaySizeUnitID = invItem.DisplaySizeUnitID
+			if invItem.EffectiveDisplaySizeUnitID == nil {
+				invItem.EffectiveDisplaySizeUnitID = targetDef.SizeUnitID
+			}
 			createdInventoryItems = append(createdInventoryItems, invItem)
 		}
 
@@ -336,7 +369,11 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to confirm receipt items: "+err.Error())})
+		if errors.Is(err, models.ErrUnit) || errors.Is(err, quantity.ErrInvalid) {
+			quantityError(c, h.DB, err)
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to confirm receipt items")})
 		return
 	}
 
@@ -344,4 +381,9 @@ func (h *ReceiptHandler) ConfirmReceiptJob(c *gin.Context) {
 		"message": i18n.TranslateDB(h.DB, c, "Receipt items confirmed and added to inventory successfully"),
 		"count":   len(createdInventoryItems),
 	})
+}
+
+func (r *ConfirmReceiptItem) UnmarshalJSON(b []byte) error {
+	type plain ConfirmReceiptItem
+	return decodeQuantityRequest(b, (*plain)(r), &r.quantityInputs)
 }

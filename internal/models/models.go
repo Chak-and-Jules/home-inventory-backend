@@ -24,7 +24,7 @@ type Profile struct {
 
 // Language represents a language preference
 type Language struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	Name      string    `gorm:"type:varchar(255);unique;not null"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -32,7 +32,7 @@ type Language struct {
 
 // Home represents a physical location where items are stored
 type Home struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	Name      string    `gorm:"type:varchar(255);not null"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -60,15 +60,19 @@ type UserHome struct {
 
 // SizeUnit represents standard units like kg, g, lt, etc.
 type SizeUnit struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	Name      string    `gorm:"type:varchar(50);unique;not null"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID             uuid.UUID  `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
+	Name           string     `gorm:"type:varchar(50);unique;not null"`
+	Family         string     `gorm:"type:varchar(50);not null;check:unit_family_nonempty,trim(family) <> '';uniqueIndex:one_base_per_family,where:is_base = true"`
+	IsBase         bool       `gorm:"not null;default:false;check:base_factor_one,not is_base or factor_to_base = 1"`
+	FactorToBase   float64    `gorm:"type:numeric(22,6);not null;check:positive_unit_factor,factor_to_base > 0"`
+	BaseSizeUnitID *uuid.UUID `gorm:"-" json:"base_size_unit_id"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // Category represents an optional 2-level category hierarchy
 type Category struct {
-	ID uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	// Standard unique index for when parent_id IS NOT NULL.
 	// PostgreSQL treats NULL as distinct, so we need a separate partial index for the NULL case.
 	HomeID   uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_category_home_name_parent;uniqueIndex:idx_category_home_name_null_parent,where:parent_id IS NULL"`
@@ -89,15 +93,16 @@ type Category struct {
 
 // ItemDefinition represents the blueprint of an item
 type ItemDefinition struct {
-	ID                uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID                uuid.UUID  `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	HomeID            uuid.UUID  `gorm:"type:uuid;not null;index;uniqueIndex:idx_item_def_home_barcode"`
 	Name              string     `gorm:"type:varchar(255);not null"`
 	Description       string     `gorm:"type:text"`
 	CategoryID        *uuid.UUID `gorm:"type:uuid;index"`
-	SizeUnitID        *uuid.UUID `gorm:"type:uuid;index"`
+	SizeUnitID        *uuid.UUID `gorm:"type:uuid;not null;index"`
+	BaseSizeUnitID    *uuid.UUID `gorm:"-" json:"base_size_unit_id"`
 	IsExpirable       bool       `gorm:"default:false"`
-	LowStockThreshold *float64   `gorm:"type:numeric"`
-	TargetQuantity    *float64   `gorm:"type:numeric"`
+	LowStockThreshold *float64   `gorm:"type:numeric(22,6);check:low_stock_quantity_range,low_stock_threshold >= 0 and low_stock_threshold <= 1000000000"`
+	TargetQuantity    *float64   `gorm:"type:numeric(22,6);check:target_quantity_range,target_quantity >= 0 and target_quantity <= 1000000000"`
 	Priority          string     `gorm:"type:varchar(50);default:'medium'"`
 	ImageURL          string     `gorm:"type:text"`
 	Barcode           *string    `gorm:"type:varchar(255);index;uniqueIndex:idx_item_def_home_barcode"`
@@ -112,13 +117,17 @@ type ItemDefinition struct {
 
 // InventoryItem represents a concrete instance of an item in a specific home
 type InventoryItem struct {
-	ID               uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	HomeID           uuid.UUID  `gorm:"type:uuid;not null;index"`
-	ItemDefinitionID uuid.UUID  `gorm:"type:uuid;not null;index"`
-	Quantity         float64    `gorm:"type:numeric;not null;default:0"`
-	ExpirationDate   *time.Time `gorm:"type:timestamp with time zone;column:expiration_date;index" json:"expiry_date"` // ⚡ Bolt: Added index for frequent expiration filtering and table-wide daily background scans
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                         uuid.UUID  `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
+	HomeID                     uuid.UUID  `gorm:"type:uuid;not null;index"`
+	ItemDefinitionID           uuid.UUID  `gorm:"type:uuid;not null;index"`
+	Quantity                   float64    `gorm:"type:numeric(22,6);not null;default:0;check:inventory_quantity_range,quantity >= 0 and quantity <= 1000000000"`
+	DisplaySizeUnitID          *uuid.UUID `gorm:"type:uuid;index"`
+	DisplaySizeUnit            *SizeUnit  `gorm:"foreignKey:DisplaySizeUnitID;constraint:OnDelete:RESTRICT" json:"-"`
+	BaseSizeUnitID             *uuid.UUID `gorm:"-" json:"base_size_unit_id"`
+	EffectiveDisplaySizeUnitID *uuid.UUID `gorm:"-" json:"effective_display_size_unit_id"`
+	ExpirationDate             *time.Time `gorm:"type:timestamp with time zone;column:expiration_date;index" json:"expiry_date"` // ⚡ Bolt: Added index for frequent expiration filtering and table-wide daily background scans
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
 
 	// Relations
 	Home           Home           `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
@@ -127,11 +136,12 @@ type InventoryItem struct {
 
 // ShoppingListItem represents an item in the shopping list
 type ShoppingListItem struct {
-	ID               uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	BaseSizeUnitID   *uuid.UUID `gorm:"-" json:"base_size_unit_id"`
+	ID               uuid.UUID  `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	HomeID           uuid.UUID  `gorm:"type:uuid;not null;index"`
 	ItemDefinitionID *uuid.UUID `gorm:"type:uuid;index"`
 	Name             string     `gorm:"type:varchar(255);not null"`
-	Quantity         float64    `gorm:"type:numeric;not null;default:1"`
+	Quantity         float64    `gorm:"type:numeric(22,6);not null;check:shopping_quantity_range,quantity >= 0 and quantity <= 1000000000"`
 	IsBought         bool       `gorm:"default:false"`
 	IsAutoGenerated  bool       `gorm:"default:false"`
 	IsPredictive     bool       `gorm:"default:false" json:"is_predictive"`
@@ -146,11 +156,11 @@ type ShoppingListItem struct {
 
 // InventoryTransaction logs changes in quantity for an inventory item
 type InventoryTransaction struct {
-	ID               uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID               uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	HomeID           uuid.UUID `gorm:"type:uuid;not null;index"`
 	ItemDefinitionID uuid.UUID `gorm:"type:uuid;not null;index"`
 	InventoryItemID  uuid.UUID `gorm:"type:uuid;not null;index"`
-	QuantityChange   float64   `gorm:"type:numeric;not null"`
+	QuantityChange   float64   `gorm:"type:numeric(22,6);not null;check:transaction_quantity_range,quantity_change >= -1000000000 and quantity_change <= 1000000000"`
 	CreatedAt        time.Time
 
 	// Relations
@@ -161,7 +171,7 @@ type InventoryTransaction struct {
 
 // MaintenanceTask represents a recurring or one-time maintenance task
 type MaintenanceTask struct {
-	ID                    uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID                    uuid.UUID  `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	HomeID                uuid.UUID  `gorm:"type:uuid;not null;index"`
 	InventoryItemID       *uuid.UUID `gorm:"type:uuid;index"`
 	Description           string     `gorm:"type:varchar(255);not null"`
@@ -182,10 +192,11 @@ type MaintenanceTask struct {
 
 // TaskItemDependency links a maintenance task to required inventory items
 type TaskItemDependency struct {
-	ID                uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	MaintenanceTaskID uuid.UUID `gorm:"type:uuid;not null;index"`
-	ItemDefinitionID  uuid.UUID `gorm:"type:uuid;not null;index"`
-	QuantityRequired  float64   `gorm:"type:numeric;not null;default:1"`
+	BaseSizeUnitID    *uuid.UUID `gorm:"-" json:"base_size_unit_id"`
+	ID                uuid.UUID  `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
+	MaintenanceTaskID uuid.UUID  `gorm:"type:uuid;not null;index"`
+	ItemDefinitionID  uuid.UUID  `gorm:"type:uuid;not null;index"`
+	QuantityRequired  float64    `gorm:"type:numeric(22,6);not null;check:task_quantity_range,quantity_required > 0 and quantity_required <= 1000000000"`
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 
@@ -196,7 +207,7 @@ type TaskItemDependency struct {
 
 // ReceiptJob represents an asynchronous OCR receipt scanning job
 type ReceiptJob struct {
-	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	HomeID       uuid.UUID `gorm:"type:uuid;not null;index"`
 	UserID       uuid.UUID `gorm:"type:uuid;not null;index"`
 	Status       string    `gorm:"type:varchar(50);not null;default:'pending'"` // 'pending', 'processing', 'completed', 'failed'
@@ -213,7 +224,7 @@ type ReceiptJob struct {
 
 // ReceiptJobItem represents a extracted line item from an OCR-scanned receipt
 type ReceiptJobItem struct {
-	ID                      uuid.UUID  `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID                      uuid.UUID  `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	ReceiptJobID            uuid.UUID  `gorm:"type:uuid;not null;index"`
 	RawName                 string     `gorm:"type:varchar(255);not null"`
 	Quantity                float64    `gorm:"type:numeric;not null;default:1"`
@@ -235,9 +246,9 @@ const (
 
 // InventoryPrediction stores calculated consumption predictions for inventory items
 type InventoryPrediction struct {
-	ID                      uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()" json:"id"`
+	ID                      uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())" json:"id"`
 	InventoryItemID         uuid.UUID `gorm:"type:uuid;not null;index" json:"inventory_item_id"`
-	PredictedConsumedAmount float64   `gorm:"type:numeric;not null" json:"predicted_consumed_amount"`
+	PredictedConsumedAmount float64   `gorm:"type:numeric(22,6);not null;check:prediction_quantity_range,predicted_consumed_amount >= 0 and predicted_consumed_amount <= 1000000000" json:"predicted_consumed_amount"`
 	Status                  string    `gorm:"type:varchar(50);not null;default:'Predicted';index" json:"status"`
 	CreatedAt               time.Time `json:"created_at"`
 	UpdatedAt               time.Time `json:"updated_at"`
@@ -248,7 +259,7 @@ type InventoryPrediction struct {
 
 // Recipe represents a culinary recipe linked to a home
 type Recipe struct {
-	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	HomeID       uuid.UUID `gorm:"type:uuid;not null;index"`
 	Name         string    `gorm:"type:varchar(255);not null"`
 	Instructions string    `gorm:"type:text"`
@@ -263,10 +274,11 @@ type Recipe struct {
 
 // RecipeIngredient links a recipe to required item definitions with quantity
 type RecipeIngredient struct {
-	ID               uuid.UUID `gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	RecipeID         uuid.UUID `gorm:"type:uuid;not null;index"`
-	ItemDefinitionID uuid.UUID `gorm:"type:uuid;not null;index"`
-	QuantityRequired float64   `gorm:"type:numeric;not null;default:1"`
+	BaseSizeUnitID   *uuid.UUID `gorm:"-" json:"base_size_unit_id"`
+	ID               uuid.UUID  `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
+	RecipeID         uuid.UUID  `gorm:"type:uuid;not null;index"`
+	ItemDefinitionID uuid.UUID  `gorm:"type:uuid;not null;index"`
+	QuantityRequired float64    `gorm:"type:numeric(22,6);not null;check:ingredient_quantity_range,quantity_required > 0 and quantity_required <= 1000000000"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 

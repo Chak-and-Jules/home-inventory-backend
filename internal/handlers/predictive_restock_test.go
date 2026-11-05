@@ -25,7 +25,7 @@ func setupPredictiveRestockTest(t *testing.T) (*InventoryItemHandler, sqlmock.Sq
 	require.NoError(t, err)
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 	require.NoError(t, err)
-	handler := &InventoryItemHandler{DB: gormDB}
+	handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 	return handler, mock
 }
 

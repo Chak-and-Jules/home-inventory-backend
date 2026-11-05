@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/quantity"
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
@@ -49,11 +50,15 @@ func updateShoppingListWithDef(tx *gorm.DB, homeID uuid.UUID, itemDef *models.It
 
 	if totalQuantity <= *itemDef.LowStockThreshold {
 		// Needs to be on the shopping list
-		neededQuantity := 1.0
+		fallback, unitErr := models.DefaultBaseAmount(tx, *itemDef)
+		if unitErr != nil {
+			return unitErr
+		}
+		neededQuantity := fallback
 		if itemDef.TargetQuantity != nil {
-			neededQuantity = *itemDef.TargetQuantity - totalQuantity
+			neededQuantity = quantity.Sub(*itemDef.TargetQuantity, totalQuantity)
 			if neededQuantity <= 0 {
-				neededQuantity = 1.0 // Fallback if target is somehow less than current but still below threshold
+				neededQuantity = fallback // Fallback if target is somehow less than current but still below threshold
 			}
 		}
 

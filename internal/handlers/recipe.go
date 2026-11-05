@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/quantity"
 	"math"
 	"net/http"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type RecipeHandler struct {
@@ -21,8 +23,10 @@ type RecipeHandler struct {
 }
 
 type RecipeIngredientRequest struct {
-	ItemDefinitionID uuid.UUID `json:"item_definition_id" binding:"required"`
-	QuantityRequired float64   `json:"quantity_required" binding:"required"`
+	quantityInputs
+	QuantityUnitID   *uuid.UUID `json:"quantity_unit_id"`
+	ItemDefinitionID uuid.UUID  `json:"item_definition_id" binding:"required"`
+	QuantityRequired float64    `json:"quantity_required" binding:"required"`
 }
 
 type RecipeRequest struct {
@@ -33,12 +37,13 @@ type RecipeRequest struct {
 }
 
 type RecipeIngredientDetail struct {
-	ItemDefinitionID   uuid.UUID `json:"item_definition_id"`
-	ItemDefinitionName string    `json:"item_definition_name"`
-	QuantityRequired   float64   `json:"quantity_required"`
-	QuantityAvailable  float64   `json:"quantity_available"`
-	QuantityMissing    float64   `json:"quantity_missing"`
-	UsesExpiringSoon   bool      `json:"uses_expiring_soon"`
+	BaseSizeUnitID     *uuid.UUID `json:"base_size_unit_id"`
+	ItemDefinitionID   uuid.UUID  `json:"item_definition_id"`
+	ItemDefinitionName string     `json:"item_definition_name"`
+	QuantityRequired   float64    `json:"quantity_required"`
+	QuantityAvailable  float64    `json:"quantity_available"`
+	QuantityMissing    float64    `json:"quantity_missing"`
+	UsesExpiringSoon   bool       `json:"uses_expiring_soon"`
 }
 
 type RecipeSuggestion struct {
@@ -115,7 +120,7 @@ func (h *RecipeHandler) CreateRecipe(c *gin.Context) {
 		return
 	}
 
-	for _, ing := range req.Ingredients {
+	for index, ing := range req.Ingredients {
 		if ing.QuantityRequired <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 			return
@@ -129,6 +134,12 @@ func (h *RecipeHandler) CreateRecipe(c *gin.Context) {
 			}
 			return
 		}
+		value, err := normalizeForUnit(h.DB, ing.QuantityRequired, ing.QuantityUnitID, itemDef.SizeUnitID, false, ing.raw("quantity_required"))
+		if err != nil {
+			quantityError(c, h.DB, err)
+			return
+		}
+		req.Ingredients[index].QuantityRequired = value
 	}
 
 	servings := req.Servings
@@ -207,7 +218,7 @@ func (h *RecipeHandler) UpdateRecipe(c *gin.Context) {
 		return
 	}
 
-	for _, ing := range req.Ingredients {
+	for index, ing := range req.Ingredients {
 		if ing.QuantityRequired <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 			return
@@ -221,6 +232,12 @@ func (h *RecipeHandler) UpdateRecipe(c *gin.Context) {
 			}
 			return
 		}
+		value, err := normalizeForUnit(h.DB, ing.QuantityRequired, ing.QuantityUnitID, itemDef.SizeUnitID, false, ing.raw("quantity_required"))
+		if err != nil {
+			quantityError(c, h.DB, err)
+			return
+		}
+		req.Ingredients[index].QuantityRequired = value
 	}
 
 	servings := req.Servings
@@ -327,7 +344,7 @@ func (h *RecipeHandler) GetRecipeSuggestions(c *gin.Context) {
 	expiringSoonDefs := make(map[uuid.UUID]bool)
 
 	for _, item := range invItems {
-		stockByDef[item.ItemDefinitionID] += item.Quantity
+		stockByDef[item.ItemDefinitionID] = quantity.Add(stockByDef[item.ItemDefinitionID], item.Quantity)
 		if item.ExpirationDate != nil && item.ExpirationDate.After(now) && !item.ExpirationDate.After(threeDaysFromNow) {
 			expiringSoonDefs[item.ItemDefinitionID] = true
 		}
@@ -343,7 +360,7 @@ func (h *RecipeHandler) GetRecipeSuggestions(c *gin.Context) {
 
 		for _, ing := range recipe.Ingredients {
 			avail := stockByDef[ing.ItemDefinitionID]
-			missing := math.Max(0, ing.QuantityRequired-avail)
+			missing := math.Max(0, quantity.Sub(ing.QuantityRequired, avail))
 			if missing > 0 {
 				canCook = false
 				missingCount++
@@ -358,6 +375,7 @@ func (h *RecipeHandler) GetRecipeSuggestions(c *gin.Context) {
 				ItemDefinitionID:   ing.ItemDefinitionID,
 				ItemDefinitionName: ing.ItemDefinition.Name,
 				QuantityRequired:   ing.QuantityRequired,
+				BaseSizeUnitID:     ing.ItemDefinition.BaseSizeUnitID,
 				QuantityAvailable:  avail,
 				QuantityMissing:    missing,
 				UsesExpiringSoon:   isExpiringSoon,
@@ -420,7 +438,7 @@ func (h *RecipeHandler) CookRecipe(c *gin.Context) {
 
 		for _, ing := range recipe.Ingredients {
 			var items []models.InventoryItem
-			if err := tx.Where("home_id = ? AND item_definition_id = ? AND (expiration_date IS NULL OR expiration_date > ?)", recipe.HomeID, ing.ItemDefinitionID, now).
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("home_id = ? AND item_definition_id = ? AND (expiration_date IS NULL OR expiration_date > ?)", recipe.HomeID, ing.ItemDefinitionID, now).
 				Order("expiration_date ASC NULLS LAST").
 				Find(&items).Error; err != nil {
 				return err
@@ -428,7 +446,7 @@ func (h *RecipeHandler) CookRecipe(c *gin.Context) {
 
 			var totalAvailable float64
 			for _, item := range items {
-				totalAvailable += item.Quantity
+				totalAvailable = quantity.Add(totalAvailable, item.Quantity)
 			}
 
 			if totalAvailable < ing.QuantityRequired {
@@ -446,7 +464,7 @@ func (h *RecipeHandler) CookRecipe(c *gin.Context) {
 					deduction = remainingToDeduct
 				}
 
-				if err := tx.Model(&item).Update("quantity", item.Quantity-deduction).Error; err != nil {
+				if err := tx.Model(&item).Update("quantity", quantity.Sub(item.Quantity, deduction)).Error; err != nil {
 					return err
 				}
 
@@ -460,7 +478,7 @@ func (h *RecipeHandler) CookRecipe(c *gin.Context) {
 					return err
 				}
 
-				remainingToDeduct -= deduction
+				remainingToDeduct = quantity.Sub(remainingToDeduct, deduction)
 			}
 
 			if err := utils.UpdateShoppingListForDefinition(tx, recipe.HomeID, ing.ItemDefinitionID); err != nil {
@@ -516,7 +534,7 @@ func (h *RecipeHandler) AddRecipeToShoppingList(c *gin.Context) {
 				return err
 			}
 
-			missing := ing.QuantityRequired - totalAvailable
+			missing := quantity.Sub(ing.QuantityRequired, totalAvailable)
 			if missing <= 0 {
 				continue
 			}
@@ -539,7 +557,7 @@ func (h *RecipeHandler) AddRecipeToShoppingList(c *gin.Context) {
 					return err
 				}
 			} else if err == nil {
-				if err := tx.Model(&existingItem).Update("quantity", existingItem.Quantity+missing).Error; err != nil {
+				if err := tx.Model(&existingItem).Update("quantity", quantity.Add(existingItem.Quantity, missing)).Error; err != nil {
 					return err
 				}
 			} else {
@@ -556,4 +574,9 @@ func (h *RecipeHandler) AddRecipeToShoppingList(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Recipe ingredients added to shopping list successfully")})
+}
+
+func (r *RecipeIngredientRequest) UnmarshalJSON(b []byte) error {
+	type plain RecipeIngredientRequest
+	return decodeQuantityRequest(b, (*plain)(r), &r.quantityInputs)
 }

@@ -27,7 +27,7 @@ func setupTestDBForRecipe(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 	}), &gorm.Config{})
 	assert.NoError(t, err)
 
-	return gormDB, mock
+	return withMockUnits(gormDB), mock
 }
 
 func setupTestRouterForRecipe(handler *RecipeHandler, userID uuid.UUID) *gin.Engine {
@@ -89,8 +89,8 @@ func TestGetRecipes(t *testing.T) {
 			WithArgs(recipeID).
 			WillReturnRows(ingRows)
 
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID, homeID, "Pasta")
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Pasta", mockCountUnitID)
 
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 			WithArgs(itemDefID).
@@ -171,8 +171,8 @@ func TestGetRecipe(t *testing.T) {
 			WithArgs(recipeID).
 			WillReturnRows(ingRows)
 
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID, homeID, "Pasta")
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Pasta", mockCountUnitID)
 
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 			WithArgs(itemDefID).
@@ -217,8 +217,8 @@ func TestGetRecipe(t *testing.T) {
 			WithArgs(recipeID).
 			WillReturnRows(ingRows)
 
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID, homeID, "Pasta")
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Pasta", mockCountUnitID)
 
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 			WithArgs(itemDefID).
@@ -249,8 +249,8 @@ func TestCreateRecipe(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
 
-		defRows := sqlmock.NewRows([]string{"id", "home_id", "name", "created_at", "updated_at"}).
-			AddRow(itemDefID, homeID, "Spaghetti", time.Now(), time.Now())
+		defRows := sqlmock.NewRows([]string{"id", "home_id", "name", "created_at", "updated_at", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Spaghetti", time.Now(), time.Now(), mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE id = \$1 AND home_id = \$2.*`).
 			WithArgs(itemDefID, homeID, 1).
 			WillReturnRows(defRows)
@@ -277,7 +277,7 @@ func TestCreateRecipe(t *testing.T) {
 			Instructions: "Cook sauce",
 			Servings:     4,
 			Ingredients: []RecipeIngredientRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 500},
+				{QuantityUnitID: &mockCountUnitID, ItemDefinitionID: itemDefID, QuantityRequired: 500},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -315,7 +315,7 @@ func TestCreateRecipe(t *testing.T) {
 		body := RecipeRequest{
 			Name: "Spaghetti",
 			Ingredients: []RecipeIngredientRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: -5},
+				{QuantityUnitID: &mockCountUnitID, ItemDefinitionID: itemDefID, QuantityRequired: -5},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -340,8 +340,8 @@ func TestDeleteRecipe(t *testing.T) {
 	router := setupTestRouterForRecipe(handler, userID)
 
 	t.Run("Success", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Soup")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Soup", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -377,8 +377,8 @@ func TestDeleteRecipe(t *testing.T) {
 	})
 
 	t.Run("Delete Recipe - Viewer Access Denied", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Soup")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Soup", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -412,8 +412,8 @@ func TestUpdateRecipe(t *testing.T) {
 
 		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
 
-		defRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID, homeID, "Noodles")
+		defRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Noodles", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE id = \$1 AND home_id = \$2.*`).
 			WithArgs(itemDefID, homeID, 1).
 			WillReturnRows(defRows)
@@ -435,7 +435,7 @@ func TestUpdateRecipe(t *testing.T) {
 			Instructions: "Boil and stir-fry",
 			Servings:     3,
 			Ingredients: []RecipeIngredientRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 250},
+				{QuantityUnitID: &mockCountUnitID, ItemDefinitionID: itemDefID, QuantityRequired: 250},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -468,8 +468,8 @@ func TestUpdateRecipe(t *testing.T) {
 	})
 
 	t.Run("Invalid Payload - Empty Name", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Pasta")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Pasta", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -489,8 +489,8 @@ func TestUpdateRecipe(t *testing.T) {
 	})
 
 	t.Run("Item Definition Not Belong to Home", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Pasta")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Pasta", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -504,7 +504,7 @@ func TestUpdateRecipe(t *testing.T) {
 		body := RecipeRequest{
 			Name: "Pasta Primavera",
 			Ingredients: []RecipeIngredientRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 250},
+				{QuantityUnitID: &mockCountUnitID, ItemDefinitionID: itemDefID, QuantityRequired: 250},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -543,8 +543,8 @@ func TestCookRecipe(t *testing.T) {
 	})
 
 	t.Run("Cook Recipe - Viewer Access Denied", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Omelette")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Omelette", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -566,8 +566,8 @@ func TestCookRecipe(t *testing.T) {
 	})
 
 	t.Run("Success Cook FEFO", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Omelette")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Omelette", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -598,8 +598,8 @@ func TestCookRecipe(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
 
 		// Update shopping list check
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity"}).
-			AddRow(itemDefID, homeID, "Eggs", nil, nil)
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Eggs", nil, nil, mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1 ORDER BY "item_definitions"\."id" LIMIT \$2`).
 			WithArgs(itemDefID, 1).
 			WillReturnRows(itemDefRows)
@@ -621,8 +621,8 @@ func TestCookRecipe(t *testing.T) {
 	})
 
 	t.Run("Insufficient Stock", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Omelette")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Omelette", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -682,9 +682,9 @@ func TestGetRecipeSuggestions(t *testing.T) {
 			WithArgs(recipeID1, recipeID2).
 			WillReturnRows(ingRows)
 
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID1, homeID, "Flour").
-			AddRow(itemDefID2, homeID, "Milk")
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID1, homeID, "Flour", mockCountUnitID).
+			AddRow(itemDefID2, homeID, "Milk", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" IN \(\$1,\$2\)`).
 			WithArgs(itemDefID1, itemDefID2).
 			WillReturnRows(itemDefRows)
@@ -737,8 +737,8 @@ func TestAddRecipeToShoppingList(t *testing.T) {
 	})
 
 	t.Run("Meal Plan - Viewer Access Denied", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Salad")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Salad", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -749,8 +749,8 @@ func TestAddRecipeToShoppingList(t *testing.T) {
 			WithArgs(recipeID).
 			WillReturnRows(ingRows)
 
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID, homeID, "Tomatoes")
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Tomatoes", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 			WithArgs(itemDefID).
 			WillReturnRows(itemDefRows)
@@ -766,8 +766,8 @@ func TestAddRecipeToShoppingList(t *testing.T) {
 	})
 
 	t.Run("Success Meal Plan Integration", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Salad")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Salad", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -778,8 +778,8 @@ func TestAddRecipeToShoppingList(t *testing.T) {
 			WithArgs(recipeID).
 			WillReturnRows(ingRows)
 
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID, homeID, "Tomatoes")
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Tomatoes", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 			WithArgs(itemDefID).
 			WillReturnRows(itemDefRows)
@@ -833,7 +833,7 @@ func TestRecipeExtraCoverage(t *testing.T) {
 		body := RecipeRequest{
 			Name: "Spaghetti Bolognese",
 			Ingredients: []RecipeIngredientRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 500},
+				{QuantityUnitID: &mockCountUnitID, ItemDefinitionID: itemDefID, QuantityRequired: 500},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -851,8 +851,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 	t.Run("Create Recipe - Tx Failure", func(t *testing.T) {
 		mockVerifyHomeAccessForRecipe(mock, homeID, userID, "owner")
 
-		defRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID, homeID, "Spaghetti")
+		defRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Spaghetti", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE id = \$1 AND home_id = \$2.*`).
 			WithArgs(itemDefID, homeID, 1).
 			WillReturnRows(defRows)
@@ -865,7 +865,7 @@ func TestRecipeExtraCoverage(t *testing.T) {
 		body := RecipeRequest{
 			Name: "Spaghetti Bolognese",
 			Ingredients: []RecipeIngredientRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 500},
+				{QuantityUnitID: &mockCountUnitID, ItemDefinitionID: itemDefID, QuantityRequired: 500},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -903,8 +903,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("Update Recipe - Viewer Access Denied", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Pasta")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Pasta", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -920,8 +920,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("Update Recipe - Invalid JSON Payload", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Pasta")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Pasta", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -938,8 +938,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("Update Recipe - Item Def Internal DB Error", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Pasta")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Pasta", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -953,7 +953,7 @@ func TestRecipeExtraCoverage(t *testing.T) {
 		body := RecipeRequest{
 			Name: "Pasta Primavera",
 			Ingredients: []RecipeIngredientRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 250},
+				{QuantityUnitID: &mockCountUnitID, ItemDefinitionID: itemDefID, QuantityRequired: 250},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -968,8 +968,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("Update Recipe - Tx Failure", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Pasta")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Pasta", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -1016,8 +1016,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("Delete Recipe - DB Delete Failure", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Soup")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Soup", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -1061,8 +1061,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("Cook Recipe - DB Query Error Inside Tx", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Omelette")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Omelette", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -1170,10 +1170,10 @@ func TestRecipeExtraCoverage(t *testing.T) {
 			WithArgs(r1, r2, r3, r4, r5).
 			WillReturnRows(ingRows)
 
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemExp, homeID, "Expiring Milk").
-			AddRow(itemNormal, homeID, "Flour").
-			AddRow(itemMissing, homeID, "Truffles")
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemExp, homeID, "Expiring Milk", mockCountUnitID).
+			AddRow(itemNormal, homeID, "Flour", mockCountUnitID).
+			AddRow(itemMissing, homeID, "Truffles", mockCountUnitID)
 
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" IN \(\$1,\$2,\$3\)`).
 			WithArgs(itemExp, itemNormal, itemMissing).
@@ -1233,8 +1233,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("Meal Plan - Error Querying Inventory Sum Inside Tx", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Salad")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Salad", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -1245,8 +1245,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 			WithArgs(recipeID).
 			WillReturnRows(ingRows)
 
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID, homeID, "Tomatoes")
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Tomatoes", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 			WithArgs(itemDefID).
 			WillReturnRows(itemDefRows)
@@ -1268,8 +1268,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("Meal Plan - Error Querying Shopping List Item Inside Tx", func(t *testing.T) {
-		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(recipeID, homeID, "Salad")
+		recipeRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(recipeID, homeID, "Salad", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "recipes" WHERE "recipes"\."id" = \$1 ORDER BY "recipes"\."id" LIMIT \$2`).
 			WithArgs(recipeID, 1).
 			WillReturnRows(recipeRows)
@@ -1280,8 +1280,8 @@ func TestRecipeExtraCoverage(t *testing.T) {
 			WithArgs(recipeID).
 			WillReturnRows(ingRows)
 
-		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name"}).
-			AddRow(itemDefID, homeID, "Tomatoes")
+		itemDefRows := sqlmock.NewRows([]string{"id", "home_id", "name", "size_unit_id"}).
+			AddRow(itemDefID, homeID, "Tomatoes", mockCountUnitID)
 		mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 			WithArgs(itemDefID).
 			WillReturnRows(itemDefRows)

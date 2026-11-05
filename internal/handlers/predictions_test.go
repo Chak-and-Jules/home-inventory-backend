@@ -28,7 +28,7 @@ func setupPredictionsTest(t *testing.T) (*InventoryItemHandler, sqlmock.Sqlmock)
 	}), &gorm.Config{})
 	assert.NoError(t, err)
 
-	handler := &InventoryItemHandler{DB: gormDB}
+	handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 	return handler, mock
 }
 
@@ -202,7 +202,7 @@ func TestApplyPrediction(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 
-		body := ApplyPredictionRequest{
+		body := ApplyPredictionRequest{QuantityUnitID: &mockCountUnitID,
 			PredictionID:  predID,
 			AppliedAmount: 3.0,
 		}
@@ -222,10 +222,14 @@ func TestApplyPrediction(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"id", "inventory_item_id", "status"}).
 				AddRow(predID, itemID, models.PredictionStatusPredicted))
 
+			// Validate and normalize the explicit input unit before mutation.
+		expectQuantityLock(mock, itemID, homeID, itemDefID, 10)
+		expectQuantityDefinition(mock, itemDefID, homeID)
+
 		// Transaction: Update prediction status
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "inventory_predictions"`).
-			WithArgs(models.PredictionStatusApplied, sqlmock.AnyArg(), predID).
+			WithArgs(models.PredictionStatusApplied, sqlmock.AnyArg(), models.PredictionStatusPredicted, predID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		// Fetch item
@@ -271,7 +275,7 @@ func TestApplyPrediction(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 
-		body := ApplyPredictionRequest{
+		body := ApplyPredictionRequest{QuantityUnitID: &mockCountUnitID,
 			PredictionID:  predID,
 			AppliedAmount: 0,
 		}

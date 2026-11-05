@@ -26,7 +26,7 @@ func setupInventoryTest(t *testing.T) (*InventoryItemHandler, sqlmock.Sqlmock) {
 	require.NoError(t, err)
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 	require.NoError(t, err)
-	handler := &InventoryItemHandler{DB: gormDB}
+	handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 	return handler, mock
 }
 
@@ -367,7 +367,7 @@ func TestCreateInventoryItem(t *testing.T) {
 		i18n.InvalidateUserLanguageCache(userID)
 
 		quantity := 5.0
-		body := CreateInventoryItemRequest{
+		body := CreateInventoryItemRequest{QuantityUnitID: &mockCountUnitID,
 			ItemDefinitionID: itemDefID,
 			Quantity:         &quantity,
 		}
@@ -384,6 +384,7 @@ func TestCreateInventoryItem(t *testing.T) {
 			WithArgs(userID, homeID, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
+		expectQuantityDefinition(mock, itemDefID, homeID)
 		mock.ExpectBegin()
 		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "inventory_items"`)).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
@@ -420,7 +421,7 @@ func TestUpdateInventoryItem(t *testing.T) {
 		i18n.InvalidateUserLanguageCache(userID)
 
 		quantity := 10.0
-		body := UpdateInventoryItemRequest{
+		body := UpdateInventoryItemRequest{QuantityUnitID: &mockCountUnitID,
 			Quantity: &quantity,
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -441,6 +442,8 @@ func TestUpdateInventoryItem(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
+		expectQuantityLock(mock, itemID, homeID, itemDefID, 5)
+		expectQuantityDefinition(mock, itemDefID, homeID)
 		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "inventory_items" SET "expiration_date"=$1,"quantity"=$2,"updated_at"=$3 WHERE "id" = $4`)).
 			WithArgs(sqlmock.AnyArg(), 10.0, sqlmock.AnyArg(), itemID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
@@ -468,7 +471,7 @@ func TestUpdateInventoryItem(t *testing.T) {
 		handler, mock := setupInventoryTest(t)
 		i18n.InvalidateUserLanguageCache(userID)
 
-		body := map[string]interface{}{"quantity": 0.0}
+		body := map[string]interface{}{"quantity": 0.0, "quantity_unit_id": mockCountUnitID}
 		jsonBody, _ := json.Marshal(body)
 		req, _ := http.NewRequest(http.MethodPut, "/inventory/"+itemID.String(), bytes.NewBuffer(jsonBody))
 
@@ -487,6 +490,8 @@ func TestUpdateInventoryItem(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
+		expectQuantityLock(mock, itemID, homeID, itemDefID, 5)
+		expectQuantityDefinition(mock, itemDefID, homeID)
 		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "inventory_items" SET "expiration_date"=$1,"quantity"=$2,"updated_at"=$3 WHERE "id" = $4`)).
 			WithArgs(sqlmock.AnyArg(), 0.0, sqlmock.AnyArg(), itemID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
@@ -523,7 +528,7 @@ func TestUpdateInventoryItemQuantity(t *testing.T) {
 		i18n.InvalidateUserLanguageCache(userID)
 
 		quantity := 10.0
-		body := UpdateQuantityRequest{
+		body := UpdateQuantityRequest{QuantityUnitID: &mockCountUnitID,
 			Quantity: &quantity,
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -544,6 +549,8 @@ func TestUpdateInventoryItemQuantity(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
+		expectQuantityLock(mock, itemID, homeID, itemDefID, 5)
+		expectQuantityDefinition(mock, itemDefID, homeID)
 		mock.ExpectExec(regexp.QuoteMeta(`UPDATE "inventory_items" SET "quantity"=$1,"updated_at"=$2 WHERE "id" = $3`)).
 			WithArgs(10.0, sqlmock.AnyArg(), itemID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
@@ -597,6 +604,7 @@ func TestDeleteInventoryItem(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
 		mock.ExpectBegin()
+		expectQuantityLock(mock, itemID, homeID, itemDefID, 5)
 		mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "inventory_transactions"`)).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
 

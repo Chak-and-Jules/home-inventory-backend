@@ -32,10 +32,10 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
-		handler := &InventoryItemHandler{DB: gormDB}
+		handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 
 		change := 1.0
-		reqBody := ScanInventoryRequest{
+		reqBody := ScanInventoryRequest{QuantityUnitID: &mockCountUnitID,
 			Barcode: barcode,
 			Change:  &change,
 		}
@@ -55,7 +55,7 @@ func TestScanInventoryItem(t *testing.T) {
 		itemDefID := uuid.New()
 		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1 AND barcode = \$2`).
 			WithArgs(homeID, barcode, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode"}).AddRow(itemDefID, homeID, barcode))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode", "size_unit_id"}).AddRow(itemDefID, homeID, barcode, mockCountUnitID))
 
 		mock.ExpectBegin()
 		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1 AND item_definition_id = \$2 ORDER BY expiration_date ASC NULLS LAST`).
@@ -63,7 +63,7 @@ func TestScanInventoryItem(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "item_definition_id", "quantity"})) // No rows found
 
 		mock.ExpectQuery(`INSERT INTO "inventory_items"`).
-			WithArgs(homeID, itemDefID, 1.0, nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(homeID, itemDefID, 1.0, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
 
 		mock.ExpectQuery(`INSERT INTO "inventory_transactions"`).
@@ -91,10 +91,10 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
-		handler := &InventoryItemHandler{DB: gormDB}
+		handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 
 		change := -10.0
-		reqBody := ScanInventoryRequest{
+		reqBody := ScanInventoryRequest{QuantityUnitID: &mockCountUnitID,
 			Barcode: barcode,
 			Change:  &change,
 		}
@@ -114,7 +114,7 @@ func TestScanInventoryItem(t *testing.T) {
 		itemDefID := uuid.New()
 		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1 AND barcode = \$2`).
 			WithArgs(homeID, barcode, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode"}).AddRow(itemDefID, homeID, barcode))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode", "size_unit_id"}).AddRow(itemDefID, homeID, barcode, mockCountUnitID))
 
 		itemID := uuid.New()
 		mock.ExpectBegin()
@@ -127,7 +127,7 @@ func TestScanInventoryItem(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		mock.ExpectQuery(`INSERT INTO "inventory_transactions"`).
-			WithArgs(homeID, itemDefID, itemID, -10.0, sqlmock.AnyArg()).
+			WithArgs(homeID, itemDefID, itemID, -5.0, sqlmock.AnyArg()).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
 
 		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
@@ -151,10 +151,10 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
-		handler := &InventoryItemHandler{DB: gormDB}
+		handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 
 		change := 60.0
-		reqBody := ScanInventoryRequest{
+		reqBody := ScanInventoryRequest{QuantityUnitID: &mockCountUnitID,
 			Barcode: barcode,
 			Change:  &change,
 		}
@@ -174,7 +174,7 @@ func TestScanInventoryItem(t *testing.T) {
 		itemDefID := uuid.New()
 		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1 AND barcode = \$2`).
 			WithArgs(homeID, barcode, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode"}).AddRow(itemDefID, homeID, barcode))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode", "size_unit_id"}).AddRow(itemDefID, homeID, barcode, mockCountUnitID))
 
 		itemID := uuid.New()
 		mock.ExpectBegin()
@@ -211,11 +211,11 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
-		handler := &InventoryItemHandler{DB: gormDB}
+		handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 		i18n.InvalidateUserLanguageCache(userID)
 
 		change := -1.0
-		reqBody := ScanInventoryRequest{
+		reqBody := ScanInventoryRequest{QuantityUnitID: &mockCountUnitID,
 			Barcode: barcode,
 			Change:  &change,
 		}
@@ -235,7 +235,7 @@ func TestScanInventoryItem(t *testing.T) {
 		itemDefID := uuid.New()
 		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1 AND barcode = \$2`).
 			WithArgs(homeID, barcode, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode"}).AddRow(itemDefID, homeID, barcode))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode", "size_unit_id"}).AddRow(itemDefID, homeID, barcode, mockCountUnitID))
 
 		mock.ExpectBegin()
 		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1 AND item_definition_id = \$2 ORDER BY expiration_date ASC NULLS LAST`).
@@ -260,12 +260,12 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
-		handler := &InventoryItemHandler{DB: gormDB}
+		handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 
 		i18n.InvalidateUserLanguageCache(userID)
 
 		change := 1.0
-		reqBody := ScanInventoryRequest{
+		reqBody := ScanInventoryRequest{QuantityUnitID: &mockCountUnitID,
 			Barcode: "unknown",
 			Change:  &change,
 		}
@@ -301,11 +301,11 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
-		handler := &InventoryItemHandler{DB: gormDB}
+		handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 		i18n.InvalidateUserLanguageCache(userID)
 
 		change := 1.0
-		reqBody := ScanInventoryRequest{
+		reqBody := ScanInventoryRequest{QuantityUnitID: &mockCountUnitID,
 			Barcode: barcode,
 			Change:  &change,
 		}
@@ -325,7 +325,7 @@ func TestScanInventoryItem(t *testing.T) {
 		itemDefID := uuid.New()
 		mock.ExpectQuery(`SELECT \* FROM "item_definitions" WHERE home_id = \$1 AND barcode = \$2`).
 			WithArgs(homeID, barcode, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode"}).AddRow(itemDefID, homeID, barcode))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "barcode", "size_unit_id"}).AddRow(itemDefID, homeID, barcode, mockCountUnitID))
 
 		mock.ExpectBegin()
 		mock.ExpectQuery(`SELECT \* FROM "inventory_items" WHERE home_id = \$1 AND item_definition_id = \$2 ORDER BY expiration_date ASC NULLS LAST`).
@@ -349,11 +349,11 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
-		handler := &InventoryItemHandler{DB: gormDB}
+		handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 		i18n.InvalidateUserLanguageCache(userID)
 
 		change := 1.0
-		reqBody := ScanInventoryRequest{
+		reqBody := ScanInventoryRequest{QuantityUnitID: &mockCountUnitID,
 			Barcode: barcode,
 			Change:  &change,
 		}
@@ -385,7 +385,7 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
-		handler := &InventoryItemHandler{DB: gormDB}
+		handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 		i18n.InvalidateUserLanguageCache(userID)
 
 		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", bytes.NewBuffer([]byte(`invalid-json`)))
@@ -415,7 +415,7 @@ func TestScanInventoryItem(t *testing.T) {
 		require.NoError(t, err)
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
-		handler := &InventoryItemHandler{DB: gormDB}
+		handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 		i18n.InvalidateUserLanguageCache(userID)
 
 		req, _ := http.NewRequest(http.MethodPost, "/inventory/scan", nil)

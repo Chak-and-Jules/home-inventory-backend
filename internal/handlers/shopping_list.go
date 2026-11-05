@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/quantity"
 	"net/http"
 	"time"
 
@@ -17,14 +19,47 @@ type ShoppingListHandler struct {
 }
 
 type ShoppingListItemRequest struct {
+	quantityInputs
+	QuantityUnitID   *uuid.UUID `json:"quantity_unit_id"`
+	quantityPresent  bool
 	ItemDefinitionID *uuid.UUID `json:"item_definition_id"`
 	Name             string     `json:"name"`
-	Quantity         float64    `json:"quantity" binding:"required,gte=0"`
+	Quantity         float64    `json:"quantity" binding:"gte=0"`
 }
 
 type UpdateShoppingListItemRequest struct {
-	Quantity float64 `json:"quantity" binding:"required,gte=0"`
-	IsBought bool    `json:"is_bought"`
+	quantityInputs
+	QuantityUnitID  *uuid.UUID `json:"quantity_unit_id"`
+	quantityPresent bool
+	Quantity        float64 `json:"quantity" binding:"gte=0"`
+	IsBought        bool    `json:"is_bought"`
+}
+
+func (r *ShoppingListItemRequest) UnmarshalJSON(b []byte) error {
+	type plain ShoppingListItemRequest
+	if err := json.Unmarshal(b, (*plain)(r)); err != nil {
+		return err
+	}
+	var f map[string]json.RawMessage
+	if err := json.Unmarshal(b, &f); err != nil {
+		return err
+	}
+	v, ok := f["quantity"]
+	r.quantityPresent = ok && string(v) != "null"
+	return r.quantityInputs.read(b)
+}
+func (r *UpdateShoppingListItemRequest) UnmarshalJSON(b []byte) error {
+	type plain UpdateShoppingListItemRequest
+	if err := json.Unmarshal(b, (*plain)(r)); err != nil {
+		return err
+	}
+	var f map[string]json.RawMessage
+	if err := json.Unmarshal(b, &f); err != nil {
+		return err
+	}
+	v, ok := f["quantity"]
+	r.quantityPresent = ok && string(v) != "null"
+	return r.quantityInputs.read(b)
 }
 
 func (h *ShoppingListHandler) generatePredictiveSuggestions(c *gin.Context, homeID uuid.UUID) {
@@ -122,7 +157,7 @@ func (h *ShoppingListHandler) generatePredictiveSuggestions(c *gin.Context, home
 		var currentStock float64
 		for _, item := range items {
 			if item.ExpirationDate == nil || item.ExpirationDate.After(now) {
-				currentStock += item.Quantity
+				currentStock = quantity.Add(currentStock, item.Quantity)
 			}
 		}
 
@@ -137,7 +172,7 @@ func (h *ShoppingListHandler) generatePredictiveSuggestions(c *gin.Context, home
 			continue
 		}
 
-		depDate, _ := invHandler.projectDepletion(c, now, currentStock, adc, tasks, def.ID, def.Name)
+		depDate, _ := invHandler.projectDepletion(c, now, currentStock, adc, tasks, def.ID, def.Name, models.DisplayUnits(h.DB, def)...)
 		if depDate != nil {
 			daysLeft := int(depDate.Sub(now).Hours() / 24)
 			if daysLeft < 0 {
@@ -158,13 +193,17 @@ func (h *ShoppingListHandler) generatePredictiveSuggestions(c *gin.Context, home
 
 				if !hasActiveItem && !hasDismissedSuggestion {
 					// Suggest add!
-					neededQuantity := 1.0
+					fallback, unitErr := models.DefaultBaseAmount(h.DB, def)
+					if unitErr != nil {
+						continue
+					}
+					neededQuantity := fallback
 					if def.TargetQuantity != nil && *def.TargetQuantity > currentStock {
-						neededQuantity = *def.TargetQuantity - currentStock
+						neededQuantity = quantity.Sub(*def.TargetQuantity, currentStock)
 					} else if def.LowStockThreshold != nil && *def.LowStockThreshold > currentStock {
-						neededQuantity = *def.LowStockThreshold - currentStock
+						neededQuantity = quantity.Sub(*def.LowStockThreshold, currentStock)
 						if neededQuantity <= 0 {
-							neededQuantity = 1.0
+							neededQuantity = fallback
 						}
 					}
 
@@ -234,7 +273,7 @@ func (h *ShoppingListHandler) CreateShoppingListItem(c *gin.Context) {
 	}
 
 	var req ShoppingListItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil || !req.quantityPresent {
 		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
@@ -244,6 +283,7 @@ func (h *ShoppingListHandler) CreateShoppingListItem(c *gin.Context) {
 		return
 	}
 
+	var baseID *uuid.UUID
 	name := req.Name
 	if req.ItemDefinitionID != nil {
 		var def models.ItemDefinition
@@ -255,12 +295,32 @@ func (h *ShoppingListHandler) CreateShoppingListItem(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Item definition does not belong to this home")})
 			return
 		}
+		value, err := normalizeForUnit(h.DB, req.Quantity, req.QuantityUnitID, def.SizeUnitID, false, req.raw("quantity"))
+		if err != nil {
+			quantityError(c, h.DB, err)
+			return
+		}
+		req.Quantity = value
+		baseID = def.BaseSizeUnitID
 		if name == "" {
 			name = def.Name
 		}
 	}
 
+	if req.ItemDefinitionID == nil && req.raw("quantity") != "" {
+		value, err := quantity.ToBaseText(req.raw("quantity"), 1)
+		if err != nil {
+			quantityError(c, h.DB, err)
+			return
+		}
+		req.Quantity = value
+	}
+	if err := quantity.Validate(req.Quantity); err != nil {
+		quantityError(c, h.DB, err)
+		return
+	}
 	item := models.ShoppingListItem{
+		BaseSizeUnitID:   baseID,
 		HomeID:           homeID,
 		ItemDefinitionID: req.ItemDefinitionID,
 		Name:             name,
@@ -295,11 +355,31 @@ func (h *ShoppingListHandler) UpdateShoppingListItem(c *gin.Context) {
 	}
 
 	var req UpdateShoppingListItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil || !req.quantityPresent {
 		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 
+	if item.ItemDefinitionID != nil {
+		value, err := quantityForDefinition(h.DB, *item.ItemDefinitionID, item.HomeID, req.Quantity, req.QuantityUnitID, false, req.raw("quantity"))
+		if err != nil {
+			quantityError(c, h.DB, err)
+			return
+		}
+		req.Quantity = value
+	}
+	if item.ItemDefinitionID == nil && req.raw("quantity") != "" {
+		value, err := quantity.ToBaseText(req.raw("quantity"), 1)
+		if err != nil {
+			quantityError(c, h.DB, err)
+			return
+		}
+		req.Quantity = value
+	}
+	if err := quantity.Validate(req.Quantity); err != nil {
+		quantityError(c, h.DB, err)
+		return
+	}
 	updates := map[string]interface{}{
 		"quantity":  req.Quantity,
 		"is_bought": req.IsBought,
