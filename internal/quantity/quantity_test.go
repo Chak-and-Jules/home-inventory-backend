@@ -41,3 +41,47 @@ func TestExactJSONDecimalPrecision(t *testing.T) {
 		t.Fatalf("small kg amount: %v %v", v, err)
 	}
 }
+
+func TestValidateQuantityBoundaries(t *testing.T) {
+	for _, value := range []float64{0, Max, -Max, 0.000001, -0.000001, 800.123456} {
+		if err := Validate(value); err != nil {
+			t.Errorf("valid amount %v rejected: %v", value, err)
+		}
+	}
+	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1), Max + 1, -Max - 1, 0.0000001, -0.0000001} {
+		if err := Validate(value); err != ErrInvalid {
+			t.Errorf("invalid amount %v: got %v", value, err)
+		}
+	}
+	for _, factor := range []float64{0, -1, math.NaN(), math.Inf(1)} {
+		if _, err := ToBase(1, factor); err != ErrInvalid {
+			t.Errorf("invalid factor %v: got %v", factor, err)
+		}
+		if _, err := ToBaseText("1", factor); err != ErrInvalid {
+			t.Errorf("invalid decimal factor %v: got %v", factor, err)
+		}
+	}
+	if _, err := ToBaseText("not-a-decimal", 1); err != ErrInvalid {
+		t.Fatalf("malformed decimal: %v", err)
+	}
+}
+
+func TestArithmeticRejectsNonfiniteOperands(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		operation func()
+	}{
+		{"sum", func() { Add(math.NaN(), 1) }},
+		{"difference", func() { Sub(1, math.Inf(1)) }},
+		{"display", func() { FromBase(math.Inf(-1), 1000) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if got := recover(); got != "non-finite quantity" {
+					t.Fatalf("expected non-finite quantity guard, got %v", got)
+				}
+			}()
+			tc.operation()
+		})
+	}
+}
