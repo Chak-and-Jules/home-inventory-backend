@@ -1,12 +1,13 @@
 package handlers
 
 import (
-	"fmt"
+	"context"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
+	"firebase.google.com/go/v4/auth"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/authentication"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
@@ -19,7 +20,8 @@ import (
 )
 
 type ProfileHandler struct {
-	DB *gorm.DB
+	DB   *gorm.DB
+	Auth authentication.Client
 }
 
 type ProfileSyncRequest struct {
@@ -27,8 +29,8 @@ type ProfileSyncRequest struct {
 }
 
 type ProfileSyncUser struct {
-	ID    uuid.UUID `json:"id" binding:"required"`
-	Email string    `json:"email" binding:"required,email"`
+	ID    string `json:"id" binding:"required"`
+	Email string `json:"email" binding:"required,email"`
 }
 
 type DeleteAccountRequest struct {
@@ -52,7 +54,8 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 		return
 	}
 
-	if req.User.ID != authUserID {
+	firebaseUID := c.GetString("firebaseUID")
+	if firebaseUID == "" || req.User.ID != firebaseUID {
 		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Profile user ID does not match authenticated user")})
 		return
 	}
@@ -63,8 +66,9 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 	}
 
 	profile := models.Profile{
-		ID:    req.User.ID,
-		Email: req.User.Email,
+		ID:          authUserID,
+		Email:       authEmail,
+		FirebaseUID: &firebaseUID,
 	}
 
 	if err := h.DB.Clauses(clause.OnConflict{
@@ -220,29 +224,39 @@ func (h *ProfileHandler) DeleteAccount(c *gin.Context) {
 
 	var req DeleteAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
 		return
 	}
 
 	userID, err := uuid.Parse(req.UserID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid user ID format")})
 		return
 	}
 
 	if userID != authUserID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized account deletion"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Unauthorized account deletion")})
 		return
 	}
 
 	if !strings.EqualFold(req.Email, authEmail) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized account deletion"})
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Unauthorized account deletion")})
 		return
 	}
 
 	var profile models.Profile
-	if err := h.DB.Where("id = ? AND email = ?", userID, req.Email).First(&profile).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Account not found"})
+	if err := h.DB.Where("id = ? AND email = ?", userID, authEmail).First(&profile).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Account not found")})
+		return
+	}
+
+	firebaseUID := c.GetString("firebaseUID")
+	if firebaseUID == "" || profile.FirebaseUID == nil || *profile.FirebaseUID != firebaseUID {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Unauthorized account deletion")})
+		return
+	}
+	if h.Auth == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Authentication is not configured")})
 		return
 	}
 
@@ -277,41 +291,23 @@ func (h *ProfileHandler) DeleteAccount(c *gin.Context) {
 			return err
 		}
 
-		return nil
+		// A failed Firebase request rolls back the SQL deletion for a later retry.
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		defer cancel()
+		err := h.Auth.DeleteUser(ctx, *profile.FirebaseUID)
+		if auth.IsUserNotFound(err) {
+			return nil
+		}
+		return err
 	})
 
 	if err != nil {
-		logger.Log.Error("Failed to delete account from database", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+		logger.Log.Error("Failed to delete account", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete account")})
 		return
-	}
-
-	supabaseURL := os.Getenv("SUPABASE_URL")
-	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-	if supabaseURL != "" && serviceKey != "" {
-		reqURL := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, userID.String())
-		httpReq, err := http.NewRequest(http.MethodDelete, reqURL, nil)
-		if err == nil {
-			httpReq.Header.Set("Authorization", "Bearer "+serviceKey)
-			httpReq.Header.Set("apikey", serviceKey)
-
-			client := &http.Client{Timeout: 10 * time.Second}
-			resp, err := client.Do(httpReq)
-			if err != nil {
-				logger.Log.Error("Failed to delete user from Supabase auth", zap.Error(err))
-			} else {
-				defer resp.Body.Close()
-				if resp.StatusCode >= 400 {
-					logger.Log.Error("Supabase auth deletion returned error status", zap.Int("status", resp.StatusCode))
-				}
-			}
-		} else {
-			logger.Log.Error("Failed to create request for Supabase auth deletion", zap.Error(err))
-		}
 	}
 
 	i18n.InvalidateUserLanguageCache(userID)
 
-	c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Account deleted successfully")})
 }

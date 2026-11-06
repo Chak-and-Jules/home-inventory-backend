@@ -71,6 +71,7 @@
             "type": "string"
           },
           "user_id": {
+            "description": "Internal profile UUID returned as ID by profile sync; separate from Firebase user.uid.",
             "format": "uuid",
             "type": "string"
           }
@@ -437,7 +438,9 @@
                 "type": "string"
               },
               "id": {
-                "format": "uuid",
+                "description": "Firebase user.uid; must match the verified ID token. The response ID is a separate internal UUID.",
+                "minLength": 1,
+                "maxLength": 128,
                 "type": "string"
               }
             },
@@ -1442,7 +1445,7 @@
     "securitySchemes": {
       "BearerAuth": {
         "bearerFormat": "JWT",
-        "description": "Supabase JWT Token",
+        "description": "Firebase ID token from the client SDK. Verified for this project, including revocation and disabled/deleted users.",
         "scheme": "bearer",
         "type": "http"
       }
@@ -1645,6 +1648,8 @@
           "400": {
             "description": "Invalid request payload"
           },
+          "401": {"description": "Missing or invalid Firebase ID token"},
+          "403": {"description": "Identity does not match the account"},
           "404": {
             "description": "Account not found"
           },
@@ -1652,7 +1657,9 @@
             "description": "Failed to delete account"
           }
         },
-        "security": [],
+        "security": [
+          {"BearerAuth": []}
+        ],
         "summary": "Request account deletion",
         "tags": [
           "Account"
@@ -2952,6 +2959,7 @@
             "description": "Success"
           }
         },
+        "description": "Send the verified Firebase UID and email. Returns the internal profile UUID as ID; use that UUID for database-facing user identifiers. Creates a default home if needed.",
         "summary": "Sync profile",
         "tags": [
           "Profiles"

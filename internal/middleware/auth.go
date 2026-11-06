@@ -1,204 +1,86 @@
 package middleware
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
-	"math/big"
+	"context"
+	"errors"
 	"net/http"
-	"os"
+	"net/mail"
 	"strings"
-	"sync"
 	"time"
+	"unicode/utf8"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/authentication"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-var supabaseUrl string
-var jwksURL string
-var jwtSecret string
-var jwtSecretBytes []byte // ⚡ Bolt: Cached byte slice to avoid per-request memory allocation during HMAC verification
-
-var (
-	jwksCache sync.Map // ⚡ Bolt: Replaced map+RWMutex with sync.Map for lock-free, concurrent reads of ECDSA public keys
-)
-
-func SupabaseAuthMiddleware() gin.HandlerFunc {
-	supabaseUrl = os.Getenv("SUPABASE_URL")
-	if supabaseUrl == "" {
-		// Don't panic in library code or tests; return a middleware that
-		// responds with 500 so callers (tests/servers) can handle it.
-		return func(c *gin.Context) {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(nil, c, "SUPABASE_URL is not configured")})
-		}
-	}
-
-	jwksURL = supabaseUrl + "/auth/v1/.well-known/jwks.json"
-	jwtSecret = os.Getenv("SUPABASE_JWT_SECRET")
-	jwtSecretBytes = []byte(jwtSecret) // Cache byte slice
-
+func FirebaseAuthMiddleware(db *gorm.DB, client authentication.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Authorization header is missing")})
-			return
-		}
-
-		if !strings.HasPrefix(authHeader, "Bearer ") {
+		fields := strings.Fields(c.GetHeader("Authorization"))
+		if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid authorization header format")})
 			return
 		}
-
-		tokenString := authHeader[7:]
-		// ⚡ Bolt: Use IndexByte instead of Contains string since we're just checking for a space character
-		if strings.IndexByte(tokenString, ' ') != -1 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid authorization header format")})
+		if client == nil || db == nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(nil, c, "Authentication is not configured")})
 			return
 		}
 
-		if jwtSecret == "" {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(nil, c, "JWT secret is not configured")})
-			return
-		}
-
-		claims, err := FetchAndVerifyToken(tokenString)
-
-		if err != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+		token, err := client.VerifyIDTokenAndCheckRevoked(ctx, fields[1])
+		cancel()
+		if err != nil || token == nil || token.UID == "" || utf8.RuneCountInString(token.UID) > 128 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid token")})
 			return
 		}
-
-		if claims == nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Failed to parse token claims")})
-			return
-		}
-
-		sub, ok := (*claims)["sub"].(string)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Subject missing from token claims")})
-			return
-		}
-
-		userID, err := uuid.Parse(sub)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Invalid user ID in token")})
-			return
-		}
-
-		email, ok := (*claims)["email"].(string)
-		if !ok {
+		email, _ := token.Claims["email"].(string)
+		address, err := mail.ParseAddress(email)
+		if err != nil || address.Address != email || len(email) > 254 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateDB(nil, c, "Email missing from token claims")})
 			return
 		}
 
-		// Set the user ID in the context so subsequent handlers can access it
-		c.Set("userID", userID)
+		profile, err := resolveFirebaseProfile(db.WithContext(c.Request.Context()), token.UID, email)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(nil, c, "Failed to sync profile")})
+			return
+		}
+		c.Set("userID", profile.ID)
+		c.Set("firebaseUID", token.UID)
 		c.Set("email", email)
 		c.Next()
 	}
 }
 
-// FetchAndVerifyToken validates a Supabase token using the ECDSA public key
-func FetchAndVerifyToken(tokenString string) (*jwt.MapClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-			if jwtSecret == "" {
-				return nil, fmt.Errorf("JWT secret is not configured")
-			}
-			return jwtSecretBytes, nil // ⚡ Bolt: Return cached bytes to avoid allocation
+func resolveFirebaseProfile(db *gorm.DB, uid, email string) (models.Profile, error) {
+	var profile models.Profile
+	err := db.Where("firebase_uid = ?", uid).First(&profile).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		profile = models.Profile{ID: uuid.New(), Email: email, FirebaseUID: &uid}
+		// Concurrent first requests must resolve to the same internal UUID.
+		// Email conflicts deliberately fail: email is never an account-linking key.
+		if err = db.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "firebase_uid"}}, DoNothing: true,
+		}).Create(&profile).Error; err != nil {
+			return models.Profile{}, err
 		}
-
-		kid, ok := token.Header["kid"].(string)
-		if !ok {
-			return nil, fmt.Errorf("kid not found in token header")
-		}
-
-		// Check cache first
-		if pubKeyInterface, exists := jwksCache.Load(kid); exists {
-			return pubKeyInterface.(*ecdsa.PublicKey), nil
-		}
-
-		// Fetch JWKS from Supabase for ECDSA verification
-		client := &http.Client{
-			Timeout: 10 * time.Second,
-		}
-		resp, err := client.Get(jwksURL)
-		if err != nil {
-			return nil, fmt.Errorf("could not fetch JWKS: %v", err)
-		}
-		defer resp.Body.Close()
-
-		var jwks map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
-			return nil, fmt.Errorf("could not parse JWKS: %v", err)
-		}
-
-		keys, ok := jwks["keys"].([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("invalid JWKS format")
-		}
-
-		for _, key := range keys {
-			keyMap := key.(map[string]interface{})
-			if keyMap["kid"] == kid {
-				pubKey, err := parseECDSAPublicKey(keyMap)
-				if err != nil {
-					return nil, err
-				}
-
-				// Update cache
-				jwksCache.Store(kid, pubKey)
-
-				return pubKey, nil
-			}
-		}
-
-		return nil, fmt.Errorf("key not found")
-	})
-
+		// Clear the candidate ID so GORM cannot add it as an implicit condition.
+		profile = models.Profile{}
+		err = db.Where("firebase_uid = ?", uid).First(&profile).Error
+	}
 	if err != nil {
-		return nil, err
+		return models.Profile{}, err
 	}
-
-	if claims, ok := token.Claims.(*jwt.MapClaims); ok && token.Valid {
-		return claims, nil
+	if profile.Email != email {
+		// The UID owns the profile, including after an email change in Firebase.
+		if err := db.Model(&profile).Update("email", email).Error; err != nil {
+			return models.Profile{}, err
+		}
+		profile.Email = email
 	}
-
-	return nil, fmt.Errorf("invalid token")
-}
-
-// parseECDSAPublicKey extracts ECDSA public key from JWKS key data
-func parseECDSAPublicKey(keyMap map[string]interface{}) (*ecdsa.PublicKey, error) {
-	x, ok := keyMap["x"].(string)
-	if !ok {
-		return nil, fmt.Errorf("x coordinate not found in JWKS key")
-	}
-
-	y, ok := keyMap["y"].(string)
-	if !ok {
-		return nil, fmt.Errorf("y coordinate not found in JWKS key")
-	}
-
-	xBytes, err := base64.RawURLEncoding.DecodeString(x)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode x: %v", err)
-	}
-
-	yBytes, err := base64.RawURLEncoding.DecodeString(y)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode y: %v", err)
-	}
-
-	pubKey := &ecdsa.PublicKey{
-		Curve: elliptic.P256(),
-		X:     new(big.Int).SetBytes(xBytes),
-		Y:     new(big.Int).SetBytes(yBytes),
-	}
-
-	return pubKey, nil
+	return profile, nil
 }

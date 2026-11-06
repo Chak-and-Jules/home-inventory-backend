@@ -4,7 +4,6 @@ import (
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -16,9 +15,6 @@ import (
 
 func TestSetupRouter(t *testing.T) {
 	logger.InitLogger()
-	// Set required environment variables for middleware
-	os.Setenv("SUPABASE_URL", "http://localhost")
-	defer os.Unsetenv("SUPABASE_URL")
 
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
@@ -27,7 +23,7 @@ func TestSetupRouter(t *testing.T) {
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 	require.NoError(t, err)
 
-	router := SetupRouter(gormDB)
+	router := SetupRouter(gormDB, nil)
 	assert.NotNil(t, router)
 
 	routes := router.Routes()
@@ -54,4 +50,16 @@ func TestSetupRouter(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	// Every route, including the deletion alias, must reject missing credentials.
+	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/homes"},
+		{http.MethodPost, "/api/v1/profiles/sync"},
+		{http.MethodPost, "/api/v1/profiles/delete-account"},
+		{http.MethodPost, "/api/v1/account/delete-request"},
+	} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(route.method, route.path, nil))
+		assert.Equal(t, http.StatusUnauthorized, w.Code, route.path)
+	}
 }
