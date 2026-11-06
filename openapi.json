@@ -106,13 +106,26 @@
           "quantity": {
             "minimum": 0,
             "type": "number"
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family."
+          },
+          "display_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Entry-only display override. Omitted on update preserves the override; null restores inheritance from ItemDefinition.SizeUnitID. An explicit value remains explicit even when equal to the default."
           }
         },
         "required": [
           "item_definition_id",
-          "quantity"
+          "quantity",
+          "quantity_unit_id"
         ],
-        "type": "object"
+        "type": "object",
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor."
       },
       "Home": {
         "properties": {
@@ -140,11 +153,6 @@
             "format": "date-time",
             "type": "string"
           },
-          "ExpirationDate": {
-            "format": "date-time",
-            "nullable": true,
-            "type": "string"
-          },
           "Home": {
             "$ref": "#/components/schemas/Home"
           },
@@ -164,11 +172,37 @@
             "type": "string"
           },
           "Quantity": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value."
           },
           "UpdatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Base unit identifying the units of stored/returned quantities. Null only for unlinked free-form shopping entries."
+          },
+          "DisplaySizeUnitID": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Persisted entry display override; null inherits the definition default."
+          },
+          "effective_display_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "description": "DisplaySizeUnitID when set; otherwise ItemDefinition.SizeUnitID. The display amount is calculated from Quantity and FactorToBase."
+          },
+          "expiry_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "type": "object"
@@ -203,10 +237,6 @@
           },
           "ImageURL": {
             "type": "string"
-          },
-          "barcode": {
-            "type": "string",
-            "nullable": true
           },
           "IsExpirable": {
             "type": "boolean"
@@ -246,17 +276,30 @@
             "format": "date-time",
             "type": "string"
           },
-          "low_stock_threshold": {
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Base unit identifying the units of stored/returned quantities. Null only for unlinked free-form shopping entries."
+          },
+          "LowStockThreshold": {
             "type": "number",
             "format": "double",
-            "nullable": true
+            "nullable": true,
+            "description": "Stored base-unit amount. The associated base_size_unit_id identifies its unit; display preferences do not change this value."
           },
-          "target_quantity": {
+          "TargetQuantity": {
             "type": "number",
             "format": "double",
+            "nullable": true,
+            "description": "Stored base-unit amount. The associated base_size_unit_id identifies its unit; display preferences do not change this value."
+          },
+          "Barcode": {
+            "type": "string",
             "nullable": true
           },
-          "priority": {
+          "Priority": {
             "type": "string"
           }
         },
@@ -287,25 +330,36 @@
           },
           "size_unit_id": {
             "format": "uuid",
-            "type": "string"
+            "type": "string",
+            "description": "Required default display unit. After creation, changes are allowed only within the same unit family."
           },
           "low_stock_threshold": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "nullable": true,
+            "description": "Omitted on update preserves the base amount; null clears it; a number requires quantity_unit_id."
           },
           "target_quantity": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "nullable": true,
+            "description": "Omitted on update preserves the base amount; null clears it; a number requires quantity_unit_id."
           },
           "priority": {
             "type": "string"
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unit shared by submitted low_stock_threshold and target_quantity amounts. Required when either is non-null; must match the definition family. Changing size_unit_id alone preserves stored quantities."
           }
         },
         "required": [
           "name",
           "size_unit_id"
         ],
-        "type": "object"
+        "type": "object",
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor."
       },
       "Profile": {
         "properties": {
@@ -435,9 +489,41 @@
           "UpdatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "Family": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Immutable conversion family. Mass and volume are separate; standalone/count units do not convert to mass or volume."
+          },
+          "IsBase": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "Exactly one unit per family is the base unit."
+          },
+          "FactorToBase": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "readOnly": true,
+            "description": "Multiplier from this unit to its family base unit. Base units use 1. Catalog metadata is immutable."
+          },
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Base unit identifying the units of stored/returned quantities. Null only for unlinked free-form shopping entries."
           }
         },
-        "type": "object"
+        "type": "object",
+        "required": [
+          "ID",
+          "Name",
+          "Family",
+          "IsBase",
+          "FactorToBase",
+          "base_size_unit_id"
+        ]
       },
       "UpdateHomeRequest": {
         "properties": {
@@ -455,29 +541,50 @@
           "expiry_date": {
             "format": "date-time",
             "nullable": true,
-            "type": "string"
+            "type": "string",
+            "description": "PUT keeps replacement behavior: omission or null clears expiry. Use PATCH for preservation of omitted fields."
           },
           "quantity": {
             "minimum": 0,
             "type": "number"
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family."
+          },
+          "display_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Entry-only display override. Omitted on update preserves the override; null restores inheritance from ItemDefinition.SizeUnitID. An explicit value remains explicit even when equal to the default."
           }
         },
         "required": [
-          "quantity"
+          "quantity",
+          "quantity_unit_id"
         ],
-        "type": "object"
+        "type": "object",
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor."
       },
       "UpdateQuantityRequest": {
         "properties": {
           "quantity": {
             "minimum": 0,
             "type": "number"
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family."
           }
         },
         "required": [
-          "quantity"
+          "quantity",
+          "quantity_unit_id"
         ],
-        "type": "object"
+        "type": "object",
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor."
       },
       "UserHome": {
         "properties": {
@@ -556,7 +663,8 @@
           },
           "total_quantity": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value."
           },
           "reason": {
             "type": "string"
@@ -605,11 +713,19 @@
             "type": "string"
           },
           "Quantity": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value. An unlinked free-form entry retains an independent count."
           },
           "UpdatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Base unit identifying the units of stored/returned quantities. Null only for unlinked free-form shopping entries."
           }
         },
         "type": "object"
@@ -627,12 +743,18 @@
           "quantity": {
             "minimum": 0,
             "type": "number"
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family. Required for definition-linked shopping entries; free-form entries keep independent counts."
           }
         },
         "required": [
           "quantity"
         ],
-        "type": "object"
+        "type": "object",
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor."
       },
       "UpdateShoppingListItemRequest": {
         "properties": {
@@ -642,12 +764,18 @@
           "quantity": {
             "minimum": 0,
             "type": "number"
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family. Required for definition-linked shopping entries; free-form entries keep independent counts."
           }
         },
         "required": [
           "quantity"
         ],
-        "type": "object"
+        "type": "object",
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor."
       },
       "MaintenanceTask": {
         "properties": {
@@ -791,11 +919,19 @@
             "type": "string"
           },
           "QuantityRequired": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value."
           },
           "UpdatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Base unit identifying the units of stored/returned quantities. Null only for unlinked free-form shopping entries."
           }
         },
         "type": "object"
@@ -809,13 +945,20 @@
           "quantity_required": {
             "minimum": 0,
             "type": "number"
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family."
           }
         },
         "required": [
           "item_definition_id",
-          "quantity_required"
+          "quantity_required",
+          "quantity_unit_id"
         ],
-        "type": "object"
+        "type": "object",
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor."
       },
       "MessageResponse": {
         "properties": {
@@ -831,10 +974,12 @@
             "$ref": "#/components/schemas/ItemDefinition"
           },
           "current_stock": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value."
           },
           "average_daily_consumption": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value."
           },
           "predicted_depletion_date": {
             "format": "date-time",
@@ -951,14 +1096,28 @@
           "size_unit_id": {
             "format": "uuid",
             "nullable": true,
-            "type": "string"
+            "type": "string",
+            "description": "Required default unit when creating a definition. This is distinct from quantity_unit_id, which identifies the confirmed amount."
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family."
+          },
+          "display_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Entry-only display override. Omitted on update preserves the override; null restores inheritance from ItemDefinition.SizeUnitID. An explicit value remains explicit even when equal to the default."
           }
         },
         "required": [
           "raw_name",
-          "quantity"
+          "quantity",
+          "quantity_unit_id"
         ],
-        "type": "object"
+        "type": "object",
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor. OCR quantities remain raw extraction values until confirmation supplies an explicit compatible quantity_unit_id. Receipt price is not a stock quantity."
       },
       "ConfirmReceiptJobRequest": {
         "properties": {
@@ -997,11 +1156,19 @@
             }
           },
           "predicted_amount": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value."
           },
           "prediction_date": {
             "type": "string",
             "format": "date-time"
+          },
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Base unit identifying the units of stored/returned quantities. Null only for unlinked free-form shopping entries."
           }
         }
       },
@@ -1021,7 +1188,8 @@
         "type": "object",
         "required": [
           "prediction_id",
-          "applied_amount"
+          "applied_amount",
+          "quantity_unit_id"
         ],
         "properties": {
           "prediction_id": {
@@ -1030,14 +1198,21 @@
           },
           "applied_amount": {
             "type": "number"
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family."
           }
-        }
+        },
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor."
       },
       "RecipeIngredientRequest": {
         "type": "object",
         "required": [
           "item_definition_id",
-          "quantity_required"
+          "quantity_required",
+          "quantity_unit_id"
         ],
         "properties": {
           "item_definition_id": {
@@ -1046,8 +1221,14 @@
           },
           "quantity_required": {
             "type": "number"
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family."
           }
-        }
+        },
+        "description": " Submitted quantities are normalized to base units. Normalized stored quantities must be finite, have at most six fractional base-unit digits, and have absolute value at most 1000000000. Input precision/range depends on the input conversion factor."
       },
       "RecipeRequest": {
         "type": "object",
@@ -1067,7 +1248,7 @@
           "ingredients": {
             "type": "array",
             "items": {
-              "": "#/components/schemas/RecipeIngredientRequest"
+              "$ref": "#/components/schemas/RecipeIngredientRequest"
             }
           }
         }
@@ -1075,50 +1256,58 @@
       "RecipeIngredient": {
         "type": "object",
         "properties": {
-          "id": {
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Base unit identifying the units of stored/returned quantities. Null only for unlinked free-form shopping entries."
+          },
+          "ID": {
             "type": "string",
             "format": "uuid"
           },
-          "recipe_id": {
+          "RecipeID": {
             "type": "string",
             "format": "uuid"
           },
-          "item_definition_id": {
+          "ItemDefinitionID": {
             "type": "string",
             "format": "uuid"
           },
-          "quantity_required": {
-            "type": "number"
+          "QuantityRequired": {
+            "type": "number",
+            "description": "Stored base-unit amount. The associated base_size_unit_id identifies its unit; display preferences do not change this value."
           },
-          "item_definition": {
-            "": "#/components/schemas/ItemDefinition"
+          "ItemDefinition": {
+            "$ref": "#/components/schemas/ItemDefinition"
           }
         }
       },
       "Recipe": {
         "type": "object",
         "properties": {
-          "id": {
+          "ID": {
             "type": "string",
             "format": "uuid"
           },
-          "home_id": {
+          "HomeID": {
             "type": "string",
             "format": "uuid"
           },
-          "name": {
+          "Name": {
             "type": "string"
           },
-          "instructions": {
+          "Instructions": {
             "type": "string"
           },
-          "servings": {
+          "Servings": {
             "type": "integer"
           },
-          "ingredients": {
+          "Ingredients": {
             "type": "array",
             "items": {
-              "": "#/components/schemas/RecipeIngredient"
+              "$ref": "#/components/schemas/RecipeIngredient"
             }
           }
         }
@@ -1134,16 +1323,26 @@
             "type": "string"
           },
           "quantity_required": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value."
           },
           "quantity_available": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value."
           },
           "quantity_missing": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity in the definition family base unit (g for mass, mL for volume). The associated base_size_unit_id is supplied directly or by item_definition/ItemDefinition. Display-only unit changes never rescale this value."
           },
           "uses_expiring_soon": {
             "type": "boolean"
+          },
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Base unit identifying the units of stored/returned quantities. Null only for unlinked free-form shopping entries."
           }
         }
       },
@@ -1151,7 +1350,7 @@
         "type": "object",
         "properties": {
           "recipe": {
-            "": "#/components/schemas/Recipe"
+            "$ref": "#/components/schemas/Recipe"
           },
           "can_cook": {
             "type": "boolean"
@@ -1165,10 +1364,79 @@
           "ingredient_details": {
             "type": "array",
             "items": {
-              "": "#/components/schemas/RecipeIngredientDetail"
+              "$ref": "#/components/schemas/RecipeIngredientDetail"
             }
           }
         }
+      },
+      "PatchInventoryItemRequest": {
+        "type": "object",
+        "properties": {
+          "quantity": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Absolute remaining stock in quantity_unit_id. Omission preserves stock; null is invalid."
+          },
+          "quantity_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family."
+          },
+          "display_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Entry-only display override. Omitted on update preserves the override; null restores inheritance from ItemDefinition.SizeUnitID. An explicit value remains explicit even when equal to the default."
+          },
+          "expiry_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Omission preserves expiry; null clears it."
+          }
+        },
+        "description": "Updates only submitted fields. Quantity and quantity_unit_id must appear together. Display-only edits preserve stock, expiry, transactions and predictions. At least one editable field must be supplied. Normalized amounts support six fractional base-unit digits, up to 1000000000 base units.",
+        "anyOf": [
+          {
+            "required": [
+              "quantity"
+            ]
+          },
+          {
+            "required": [
+              "display_size_unit_id"
+            ]
+          },
+          {
+            "required": [
+              "expiry_date"
+            ]
+          }
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "quantity",
+              "quantity_unit_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "quantity"
+                  ]
+                },
+                {
+                  "required": [
+                    "quantity_unit_id"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     "securitySchemes": {
@@ -1235,6 +1503,24 @@
               }
             },
             "description": "Receipt uploaded successfully and is being processed"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Upload receipt image or document for OCR processing",
@@ -1307,6 +1593,24 @@
               }
             },
             "description": "Receipt items confirmed and added to inventory"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Confirm receipt line items and bulk add to inventory",
@@ -1378,6 +1682,24 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Accept a predictive suggestion and convert it to a regular shopping list item",
@@ -1409,6 +1731,24 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Dismiss a predictive suggestion from being shown on the shopping list",
@@ -1509,12 +1849,19 @@
                     "type": "string"
                   },
                   "change": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "Signed stock adjustment in quantity_unit_id. Converted to base units before applying stock bounds; the transaction records the actual applied change."
+                  },
+                  "quantity_unit_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Explicit unit of the submitted amount, independent of the saved display preference. Must belong to the item definition unit family."
                   }
                 },
                 "required": [
                   "barcode",
-                  "change"
+                  "change",
+                  "quantity_unit_id"
                 ],
                 "type": "object"
               }
@@ -1535,6 +1882,24 @@
           },
           "404": {
             "description": "Item definition not found"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Update inventory quantity by barcode scan",
@@ -2068,6 +2433,12 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateInventoryItemRequest"
+              },
+              "example": {
+                "item_definition_id": "00000000-0000-4000-8000-000000000010",
+                "quantity": 3,
+                "quantity_unit_id": "00000000-0000-4000-8000-000000000002",
+                "display_size_unit_id": null
               }
             }
           },
@@ -2083,12 +2454,31 @@
               }
             },
             "description": "Created"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Create inventory item",
         "tags": [
           "Inventory Items"
-        ]
+        ],
+        "description": "The example quantity_unit_id represents kg obtained from GET /size-units; 3 kg is persisted as 3000 g. No display quantity is persisted."
       }
     },
     "/inventory/{id}": {
@@ -2153,12 +2543,106 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Update inventory item",
         "tags": [
           "Inventory Items"
         ]
+      },
+      "patch": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchInventoryItemRequest"
+              },
+              "examples": {
+                "displayOnly": {
+                  "value": {
+                    "display_size_unit_id": "00000000-0000-4000-8000-000000000001"
+                  }
+                },
+                "restoreInheritance": {
+                  "value": {
+                    "display_size_unit_id": null
+                  }
+                },
+                "remainingStock": {
+                  "value": {
+                    "quantity": 800,
+                    "quantity_unit_id": "00000000-0000-4000-8000-000000000001"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
+          }
+        },
+        "summary": "Partially update inventory stock, display override or expiry",
+        "tags": [
+          "Inventory Items"
+        ],
+        "description": "Display-only changes do not create inventory transactions or stock-driven effects. Omitted fields are preserved. Quantity updates are absolute and require an explicit input unit."
       }
     },
     "/inventory/{id}/quantity": {
@@ -2194,6 +2678,24 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Update inventory item quantity",
@@ -2264,6 +2766,24 @@
               }
             },
             "description": "Created"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Create item definition",
@@ -2334,6 +2854,24 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Update item definition",
@@ -2575,6 +3113,24 @@
               }
             },
             "description": "Created"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Create shopping list item",
@@ -2645,6 +3201,24 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Update shopping list item",
@@ -2676,6 +3250,24 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Toggle bought status of shopping list item",
@@ -2747,6 +3339,24 @@
               }
             },
             "description": "Created"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Create maintenance task",
@@ -2784,6 +3394,9 @@
           },
           "404": {
             "description": "Maintenance task not found"
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Mark a maintenance task as completed and deduct dependencies from inventory",
@@ -2883,6 +3496,24 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         },
         "summary": "Update maintenance task",
@@ -2950,6 +3581,24 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         }
       }
@@ -2985,6 +3634,24 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         }
       }
@@ -3014,7 +3681,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "": "#/components/schemas/Recipe"
+                    "$ref": "#/components/schemas/Recipe"
                   }
                 }
               }
@@ -3043,7 +3710,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "": "#/components/schemas/RecipeRequest"
+                "$ref": "#/components/schemas/RecipeRequest"
               }
             }
           }
@@ -3054,10 +3721,28 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "": "#/components/schemas/Recipe"
+                  "$ref": "#/components/schemas/Recipe"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         }
       }
@@ -3087,7 +3772,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "": "#/components/schemas/RecipeSuggestion"
+                    "$ref": "#/components/schemas/RecipeSuggestion"
                   }
                 }
               }
@@ -3119,7 +3804,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "": "#/components/schemas/Recipe"
+                  "$ref": "#/components/schemas/Recipe"
                 }
               }
             }
@@ -3147,7 +3832,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "": "#/components/schemas/RecipeRequest"
+                "$ref": "#/components/schemas/RecipeRequest"
               }
             }
           }
@@ -3158,10 +3843,28 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/MessageResponse"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         }
       },
@@ -3187,7 +3890,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/MessageResponse"
                 }
               }
             }
@@ -3218,10 +3921,28 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/MessageResponse"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         }
       }
@@ -3249,10 +3970,28 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/MessageResponse"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user lacks write access to this home."
           }
         }
       }

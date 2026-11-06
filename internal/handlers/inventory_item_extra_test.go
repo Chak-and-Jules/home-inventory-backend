@@ -36,7 +36,7 @@ func TestGetAlmostFinishedItems_Full(t *testing.T) {
 	}), &gorm.Config{})
 	assert.NoError(t, err)
 
-	handler := &InventoryItemHandler{DB: gormDB}
+	handler := &InventoryItemHandler{DB: withMockUnits(gormDB)}
 
 	// Test case: Invalid Home ID
 	w := httptest.NewRecorder()

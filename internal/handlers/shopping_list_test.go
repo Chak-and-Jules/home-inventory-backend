@@ -322,7 +322,7 @@ func TestCreateShoppingListItem(t *testing.T) {
 		itemDefID := uuid.New()
 		i18n.InvalidateUserLanguageCache(userID)
 
-		payload := ShoppingListItemRequest{
+		payload := ShoppingListItemRequest{QuantityUnitID: &mockCountUnitID,
 			ItemDefinitionID: &itemDefID,
 			Quantity:         1,
 		}
@@ -355,7 +355,7 @@ func TestCreateShoppingListItem(t *testing.T) {
 		homeID := uuid.New()
 		i18n.InvalidateUserLanguageCache(userID)
 
-		payload := ShoppingListItemRequest{
+		payload := ShoppingListItemRequest{QuantityUnitID: &mockCountUnitID,
 			Name:     "Eggs",
 			Quantity: 12,
 		}
@@ -407,7 +407,7 @@ func TestCreateShoppingListItem(t *testing.T) {
 		homeID := uuid.New()
 		i18n.InvalidateUserLanguageCache(userID)
 
-		payload := ShoppingListItemRequest{Name: "Milk", Quantity: 1}
+		payload := ShoppingListItemRequest{QuantityUnitID: &mockCountUnitID, Name: "Milk", Quantity: 1}
 		jsonPayload, _ := json.Marshal(payload)
 		req, _ := http.NewRequest(http.MethodPost, "/shopping-list", bytes.NewBuffer(jsonPayload))
 		req.Header.Set("X-Home-Id", homeID.String())
@@ -474,7 +474,7 @@ func TestCreateShoppingListItem(t *testing.T) {
 		itemDefID := uuid.New()
 		i18n.InvalidateUserLanguageCache(userID)
 
-		payload := ShoppingListItemRequest{
+		payload := ShoppingListItemRequest{QuantityUnitID: &mockCountUnitID,
 			ItemDefinitionID: &itemDefID,
 			Quantity:         1,
 		}
@@ -505,7 +505,7 @@ func TestCreateShoppingListItem(t *testing.T) {
 		homeID := uuid.New()
 		i18n.InvalidateUserLanguageCache(userID)
 
-		payload := ShoppingListItemRequest{Quantity: 1}
+		payload := ShoppingListItemRequest{QuantityUnitID: &mockCountUnitID, Quantity: 1}
 		jsonPayload, _ := json.Marshal(payload)
 		req, _ := http.NewRequest(http.MethodPost, "/shopping-list", bytes.NewBuffer(jsonPayload))
 		req.Header.Set("X-Home-Id", homeID.String())
@@ -534,7 +534,7 @@ func TestUpdateShoppingListItem(t *testing.T) {
 		itemID := uuid.New()
 		i18n.InvalidateUserLanguageCache(userID)
 
-		payload := UpdateShoppingListItemRequest{
+		payload := UpdateShoppingListItemRequest{QuantityUnitID: &mockCountUnitID,
 			Quantity: 5,
 			IsBought: true,
 		}
@@ -665,7 +665,7 @@ func TestUpdateShoppingListItem(t *testing.T) {
 		itemID := uuid.New()
 		i18n.InvalidateUserLanguageCache(userID)
 
-		payload := UpdateShoppingListItemRequest{Quantity: 5}
+		payload := UpdateShoppingListItemRequest{QuantityUnitID: &mockCountUnitID, Quantity: 5}
 		jsonPayload, _ := json.Marshal(payload)
 		req, _ := http.NewRequest(http.MethodPut, "/shopping-list/"+itemID.String(), bytes.NewBuffer(jsonPayload))
 		w := httptest.NewRecorder()

@@ -35,8 +35,10 @@ func TestSetupRouter(t *testing.T) {
 
 	// verify some known routes exist
 	paths := make(map[string]bool)
+	methods := make(map[string]bool)
 	for _, route := range routes {
 		paths[route.Path] = true
+		methods[route.Method+" "+route.Path] = true
 	}
 
 	assert.True(t, paths["/api/v1/homes"])
@@ -45,6 +47,7 @@ func TestSetupRouter(t *testing.T) {
 	assert.True(t, paths["/api/v1/item-definitions"])
 	assert.True(t, paths["/api/v1/size-units"])
 	assert.True(t, paths["/api/v1/inventory"])
+	assert.True(t, methods["PATCH /api/v1/inventory/:id"])
 
 	// Test a 404 response
 	req, _ := http.NewRequest(http.MethodGet, "/invalid-route", nil)

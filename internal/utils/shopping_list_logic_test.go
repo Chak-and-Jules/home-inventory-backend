@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"time"
 
 	"errors"
@@ -16,12 +17,15 @@ import (
 	"gorm.io/gorm"
 )
 
+var utilityUnitID = uuid.MustParse("00000000-0000-4000-8000-000000000001")
+
 func setupShoppingTestDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 	require.NoError(t, err)
-	return gormDB, mock
+	u := models.SizeUnit{ID: utilityUnitID, Name: "piece", Family: "count", IsBase: true, FactorToBase: 1}
+	return models.WithUnitCatalog(gormDB, &models.UnitCatalog{Units: map[uuid.UUID]models.SizeUnit{u.ID: u}, Bases: map[string]uuid.UUID{"count": u.ID}}), mock
 }
 
 func TestUpdateShoppingListForDefinition(t *testing.T) {
@@ -36,8 +40,8 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity", "priority"}).
-				AddRow(itemDefID, homeID, "Milk", &threshold, &target, "medium"))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity", "priority", "size_unit_id"}).
+				AddRow(itemDefID, homeID, "Milk", &threshold, &target, "medium", utilityUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
 			WithArgs(homeID, itemDefID, true, false, 1).
@@ -69,8 +73,8 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity", "priority"}).
-				AddRow(itemDefID, homeID, "Milk", &threshold, &target, "medium"))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "target_quantity", "priority", "size_unit_id"}).
+				AddRow(itemDefID, homeID, "Milk", &threshold, &target, "medium", utilityUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
 			WithArgs(homeID, itemDefID, true, false, 1).
@@ -98,8 +102,8 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "priority"}).
-				AddRow(itemDefID, homeID, "Milk", &threshold, "medium"))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "priority", "size_unit_id"}).
+				AddRow(itemDefID, homeID, "Milk", &threshold, "medium", utilityUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
 			WithArgs(homeID, itemDefID, true, false, 1).
@@ -126,8 +130,8 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
-				AddRow(itemDefID, homeID, "Milk", nil))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "size_unit_id"}).
+				AddRow(itemDefID, homeID, "Milk", nil, utilityUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
 			WithArgs(homeID, itemDefID, true, false, 1).
@@ -160,8 +164,8 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 		threshold := 5.0
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
-				AddRow(itemDefID, homeID, "Milk", &threshold))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "size_unit_id"}).
+				AddRow(itemDefID, homeID, "Milk", &threshold, utilityUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
 			WithArgs(homeID, itemDefID, true, false, 1).
@@ -177,8 +181,8 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 		threshold := 5.0
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
-				AddRow(itemDefID, homeID, "Milk", &threshold))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "size_unit_id"}).
+				AddRow(itemDefID, homeID, "Milk", &threshold, utilityUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
 			WithArgs(homeID, itemDefID, true, false, 1).
@@ -198,8 +202,8 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 		threshold := 5.0
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
-				AddRow(itemDefID, homeID, "Milk", &threshold))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "size_unit_id"}).
+				AddRow(itemDefID, homeID, "Milk", &threshold, utilityUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
 			WithArgs(homeID, itemDefID, true, false, 1).
@@ -224,8 +228,8 @@ func TestUpdateShoppingListForDefinition(t *testing.T) {
 		shoppingItemID := uuid.New()
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "item_definitions" WHERE "item_definitions"."id" = $1 ORDER BY "item_definitions"."id" LIMIT $2`)).
 			WithArgs(itemDefID, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).
-				AddRow(itemDefID, homeID, "Milk", nil))
+			WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "size_unit_id"}).
+				AddRow(itemDefID, homeID, "Milk", nil, utilityUnitID))
 
 		mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "shopping_list_items" WHERE home_id = $1 AND item_definition_id = $2 AND is_auto_generated = $3 AND is_bought = $4 ORDER BY "shopping_list_items"."id" LIMIT $5`)).
 			WithArgs(homeID, itemDefID, true, false, 1).
@@ -276,13 +280,13 @@ func TestRefreshAllShoppingLists(t *testing.T) {
 	// Preload item definitions
 	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions" WHERE "item_definitions"\."id" = \$1`).
 		WithArgs(sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "home_id"}).
-			AddRow(uuid.New(), "Milk", uuid.New()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "home_id", "size_unit_id"}).
+			AddRow(uuid.New(), "Milk", uuid.New(), utilityUnitID))
 
 	// 2. Mocking the FindInBatches query for ItemDefinitions
 	mock.ExpectQuery(`(?i)SELECT \* FROM "item_definitions".*LIMIT \$1`).
 		WithArgs(100).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold"}).AddRow(uuid.New(), uuid.New(), "Milk", nil))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "home_id", "name", "low_stock_threshold", "size_unit_id"}).AddRow(uuid.New(), uuid.New(), "Milk", nil, utilityUnitID))
 
 	// UpdateShoppingListForDefinition calls no longer fetch item definition
 

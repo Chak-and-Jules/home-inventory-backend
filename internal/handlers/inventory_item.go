@@ -1,9 +1,14 @@
 package handlers
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/quantity"
+	"gorm.io/gorm/clause"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,23 +25,130 @@ type InventoryItemHandler struct {
 }
 
 type CreateInventoryItemRequest struct {
-	ItemDefinitionID uuid.UUID  `json:"item_definition_id" binding:"required"`
-	Quantity         *float64   `json:"quantity" binding:"required"`
-	ExpirationDate   *time.Time `json:"expiry_date"`
+	quantityInputs
+	DisplaySizeUnitID OptionalUnit `json:"display_size_unit_id,omitzero"`
+	QuantityUnitID    *uuid.UUID   `json:"quantity_unit_id"`
+	ItemDefinitionID  uuid.UUID    `json:"item_definition_id" binding:"required"`
+	Quantity          *float64     `json:"quantity" binding:"required"`
+	ExpirationDate    *time.Time   `json:"expiry_date"`
 }
 
 type UpdateInventoryItemRequest struct {
-	Quantity       *float64   `json:"quantity" binding:"required"`
-	ExpirationDate *time.Time `json:"expiry_date"`
+	quantityInputs
+	DisplaySizeUnitID OptionalUnit `json:"display_size_unit_id,omitzero"`
+	QuantityUnitID    *uuid.UUID   `json:"quantity_unit_id"`
+	Quantity          *float64     `json:"quantity" binding:"required"`
+	ExpirationDate    *time.Time   `json:"expiry_date"`
 }
 
 type UpdateQuantityRequest struct {
-	Quantity *float64 `json:"quantity" binding:"required"`
+	quantityInputs
+	QuantityUnitID *uuid.UUID `json:"quantity_unit_id"`
+	Quantity       *float64   `json:"quantity" binding:"required"`
+}
+
+// PatchInventoryItem changes only submitted fields. Display edits never touch stock.
+func (h *InventoryItemHandler) PatchInventoryItem(c *gin.Context) { h.updateInventory(c, "patch") }
+
+func (h *InventoryItemHandler) updateInventory(c *gin.Context, mode string) {
+	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid inventory item ID")
+	if !ok {
+		return
+	}
+	var item models.InventoryItem
+	if err := h.DB.First(&item, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
+		return
+	}
+	if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
+		return
+	}
+	var req inventoryMutationRequest
+	if err := c.ShouldBindJSON(&req); err != nil || (req.Quantity == nil && !req.DisplaySizeUnitID.Present && len(req.Expiry) == 0) || (req.Quantity == nil && req.QuantityUnitID != nil) || (mode != "patch" && req.Quantity == nil) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+		return
+	}
+	if req.Quantity != nil && req.QuantityUnitID == nil {
+		quantityError(c, h.DB, models.ErrUnit)
+		return
+	}
+	if mode == "quantity" {
+		req.DisplaySizeUnitID = OptionalUnit{}
+		req.Expiry = nil
+	}
+	if mode == "put" && len(req.Expiry) == 0 {
+		req.Expiry = json.RawMessage("null")
+	}
+	var expiry *time.Time
+	if len(req.Expiry) > 0 {
+		if err := json.Unmarshal(req.Expiry, &expiry); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
+			return
+		}
+	}
+	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		var locked models.InventoryItem
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&locked, id).Error; err != nil {
+			return err
+		}
+		item = locked
+		var def models.ItemDefinition
+		if err := tx.Where("id = ? AND home_id = ?", item.ItemDefinitionID, item.HomeID).First(&def).Error; err != nil {
+			return err
+		}
+		updates := map[string]interface{}{}
+		if req.DisplaySizeUnitID.Present {
+			if err := validateDisplay(tx, req.DisplaySizeUnitID.ID, def.SizeUnitID); err != nil {
+				return err
+			}
+			updates["display_size_unit_id"] = req.DisplaySizeUnitID.ID
+		}
+		if len(req.Expiry) > 0 {
+			updates["expiration_date"] = expiry
+		}
+		change := 0.0
+		if req.Quantity != nil {
+			value, err := normalizeForUnit(tx, *req.Quantity, req.QuantityUnitID, def.SizeUnitID, false, req.raw("quantity"))
+			if err != nil {
+				return err
+			}
+			updates["quantity"] = value
+			change = quantity.Sub(value, item.Quantity)
+		}
+		if err := tx.Model(&item).Updates(updates).Error; err != nil {
+			return err
+		}
+		if change != 0 {
+			if err := tx.Create(&models.InventoryTransaction{ID: uuid.New(), HomeID: item.HomeID, ItemDefinitionID: item.ItemDefinitionID, InventoryItemID: item.ID, QuantityChange: change}).Error; err != nil {
+				return err
+			}
+		}
+		if change != 0 || len(req.Expiry) > 0 {
+			return utils.UpdateShoppingListForDefinition(tx, item.HomeID, item.ItemDefinitionID)
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, models.ErrUnit) || errors.Is(err, quantity.ErrInvalid) {
+			quantityError(c, h.DB, err)
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update inventory item")})
+		}
+		return
+	}
+	key := "Inventory item updated successfully"
+	if mode == "quantity" {
+		key = "Quantity updated successfully"
+	}
+	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, key)})
 }
 
 type ScanInventoryRequest struct {
-	Barcode string   `json:"barcode" binding:"required"`
-	Change  *float64 `json:"change" binding:"required"` // e.g. 1 to increment, -1 to decrement, 60 for a pack
+	quantityInputs
+	QuantityUnitID *uuid.UUID `json:"quantity_unit_id"`
+	Barcode        string     `json:"barcode" binding:"required"`
+	Change         *float64   `json:"change" binding:"required"` // e.g. 1 to increment, -1 to decrement, 60 for a pack
 }
 
 func (h *InventoryItemHandler) GetInventoryItems(c *gin.Context) {
@@ -142,11 +254,28 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 		return
 	}
 
+	var def models.ItemDefinition
+	if err := h.DB.Where("id = ? AND home_id = ?", req.ItemDefinitionID, homeID).First(&def).Error; err != nil {
+		quantityError(c, h.DB, err)
+		return
+	}
+	normalized, err := normalizeForUnit(h.DB, *req.Quantity, req.QuantityUnitID, def.SizeUnitID, false, req.raw("quantity"))
+	if err != nil {
+		quantityError(c, h.DB, err)
+		return
+	}
+	if err := validateDisplay(h.DB, req.DisplaySizeUnitID.ID, def.SizeUnitID); err != nil {
+		quantityError(c, h.DB, err)
+		return
+	}
+	req.Quantity = &normalized
 	item := models.InventoryItem{
-		HomeID:           homeID,
-		ItemDefinitionID: req.ItemDefinitionID,
-		Quantity:         *req.Quantity,
-		ExpirationDate:   req.ExpirationDate,
+		HomeID:            homeID,
+		ItemDefinitionID:  req.ItemDefinitionID,
+		Quantity:          *req.Quantity,
+		ExpirationDate:    req.ExpirationDate,
+		DisplaySizeUnitID: req.DisplaySizeUnitID.ID,
+		BaseSizeUnitID:    def.BaseSizeUnitID,
 	}
 
 	if err := h.DB.Transaction(func(tx *gorm.DB) error {
@@ -171,129 +300,18 @@ func (h *InventoryItemHandler) CreateInventoryItem(c *gin.Context) {
 		return
 	}
 
+	item.ItemDefinition = def
+	item.EffectiveDisplaySizeUnitID = item.DisplaySizeUnitID
+	if item.EffectiveDisplaySizeUnitID == nil {
+		item.EffectiveDisplaySizeUnitID = def.SizeUnitID
+	}
 	c.JSON(http.StatusCreated, item)
 }
 
-func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) {
-	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid inventory item ID")
-	if !ok {
-		return
-	}
-
-	// First find the item to check its home_id
-	var item models.InventoryItem
-	if err := h.DB.First(&item, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
-		return
-	}
-
-	if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
-		return
-	}
-
-	var req UpdateInventoryItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
-		return
-	}
-
-	if req.Quantity == nil || *req.Quantity < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
-		return
-	}
-
-	// Log transaction if quantity changed
-	quantityChange := *req.Quantity - item.Quantity
-
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		updates := map[string]interface{}{
-			"quantity":        *req.Quantity,
-			"expiration_date": req.ExpirationDate,
-		}
-
-		if err := tx.Model(&item).Updates(updates).Error; err != nil {
-			return err
-		}
-
-		if quantityChange != 0 {
-			txLog := models.InventoryTransaction{
-				HomeID:           item.HomeID,
-				ItemDefinitionID: item.ItemDefinitionID,
-				InventoryItemID:  item.ID,
-				QuantityChange:   quantityChange,
-			}
-			if err := tx.Create(&txLog).Error; err != nil {
-				return err
-			}
-		}
-		return utils.UpdateShoppingListForDefinition(tx, item.HomeID, item.ItemDefinitionID)
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update inventory item")})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Inventory item updated successfully")})
-}
+func (h *InventoryItemHandler) UpdateInventoryItem(c *gin.Context) { h.updateInventory(c, "put") }
 
 func (h *InventoryItemHandler) UpdateInventoryItemQuantity(c *gin.Context) {
-	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid inventory item ID")
-	if !ok {
-		return
-	}
-
-	var item models.InventoryItem
-	if err := h.DB.First(&item, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Inventory item not found")})
-		return
-	}
-
-	if !utils.VerifyHomeWriteAccess(c, h.DB, item.HomeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
-		return
-	}
-
-	var req UpdateQuantityRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
-		return
-	}
-
-	if req.Quantity == nil || *req.Quantity < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Invalid request payload")})
-		return
-	}
-
-	// Log transaction if quantity changed
-	quantityChange := *req.Quantity - item.Quantity
-
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&item).Update("quantity", *req.Quantity).Error; err != nil {
-			return err
-		}
-
-		if quantityChange != 0 {
-			txLog := models.InventoryTransaction{
-				HomeID:           item.HomeID,
-				ItemDefinitionID: item.ItemDefinitionID,
-				InventoryItemID:  item.ID,
-				QuantityChange:   quantityChange,
-			}
-			if err := tx.Create(&txLog).Error; err != nil {
-				return err
-			}
-		}
-		return utils.UpdateShoppingListForDefinition(tx, item.HomeID, item.ItemDefinitionID)
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update quantity")})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Quantity updated successfully")})
+	h.updateInventory(c, "quantity")
 }
 
 func (h *InventoryItemHandler) DeleteInventoryItem(c *gin.Context) {
@@ -314,6 +332,11 @@ func (h *InventoryItemHandler) DeleteInventoryItem(c *gin.Context) {
 	}
 
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		var locked models.InventoryItem
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&locked, id).Error; err != nil {
+			return err
+		}
+		item = locked
 		if item.Quantity > 0 {
 			txLog := models.InventoryTransaction{
 				HomeID:           item.HomeID,
@@ -413,9 +436,9 @@ func (h *InventoryItemHandler) GetAlmostFinishedItems(c *gin.Context) {
 		hasExpiringSoon := false
 
 		for _, item := range items {
-			totalQuantity += item.Quantity
+			totalQuantity = quantity.Add(totalQuantity, item.Quantity)
 			if item.ExpirationDate == nil || item.ExpirationDate.After(now) {
-				usableQuantity += item.Quantity
+				usableQuantity = quantity.Add(usableQuantity, item.Quantity)
 				if item.ExpirationDate != nil && item.Quantity > 0 && item.ExpirationDate.Before(threeDaysFromNow) {
 					hasExpiringSoon = true
 				}
@@ -512,10 +535,16 @@ func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) {
 		return
 	}
 
+	normalized, convertErr := normalizeForUnit(h.DB, *req.Change, req.QuantityUnitID, itemDef.SizeUnitID, true, req.raw("change"))
+	if convertErr != nil {
+		quantityError(c, h.DB, convertErr)
+		return
+	}
+	req.Change = &normalized
 	// 2. Find or create InventoryItem for this definition
 	var item models.InventoryItem
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		err := tx.Where("home_id = ? AND item_definition_id = ?", homeID, itemDef.ID).
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("home_id = ? AND item_definition_id = ?", homeID, itemDef.ID).
 			Order("expiration_date ASC NULLS LAST").
 			First(&item).Error
 
@@ -536,18 +565,25 @@ func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) {
 				return err
 			}
 		} else {
-			newQuantity := item.Quantity + *req.Change
+			newQuantity := quantity.Add(item.Quantity, *req.Change)
 			if newQuantity < 0 {
 				newQuantity = 0
 			}
 
+			if err := quantity.Validate(newQuantity); err != nil {
+				return err
+			}
+			*req.Change = quantity.Sub(newQuantity, item.Quantity)
 			if err := tx.Model(&item).Update("quantity", newQuantity).Error; err != nil {
 				return err
 			}
 			item.Quantity = newQuantity
 		}
 
-		// Log transaction
+		// Log the actual base-unit change.
+		if *req.Change == 0 {
+			return nil
+		}
 		txLog := models.InventoryTransaction{
 			HomeID:           homeID,
 			ItemDefinitionID: itemDef.ID,
@@ -562,6 +598,10 @@ func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) {
 	})
 
 	if err != nil {
+		if errors.Is(err, quantity.ErrInvalid) {
+			quantityError(c, h.DB, err)
+			return
+		}
 		if err.Error() == "insufficient stock" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient stock")})
 			return
@@ -570,6 +610,12 @@ func (h *InventoryItemHandler) ScanInventoryItem(c *gin.Context) {
 		return
 	}
 
+	item.ItemDefinition = itemDef
+	item.BaseSizeUnitID = itemDef.BaseSizeUnitID
+	item.EffectiveDisplaySizeUnitID = item.DisplaySizeUnitID
+	if item.EffectiveDisplaySizeUnitID == nil {
+		item.EffectiveDisplaySizeUnitID = itemDef.SizeUnitID
+	}
 	c.JSON(http.StatusOK, item)
 }
 
@@ -596,7 +642,15 @@ func (h *InventoryItemHandler) projectDepletion(
 	tasks []models.MaintenanceTask,
 	itemDefID uuid.UUID,
 	itemName string,
+	displayUnits ...models.SizeUnit,
 ) (*time.Time, string) {
+	formatAmount := func(v float64) string {
+		if len(displayUnits) > 0 {
+			u := displayUnits[0]
+			return strings.TrimRight(strings.TrimRight(strconv.FormatFloat(quantity.FromBase(v, u.FactorToBase), 'f', 9, 64), "0"), ".") + " " + u.Name
+		}
+		return fmt.Sprintf("%.2f units", v)
+	}
 	// Project occurrences for the next 90 days
 	var occurrences []projectedOccurrence
 	ninetyDaysFromNow := now.AddDate(0, 0, 90)
@@ -660,17 +714,17 @@ func (h *InventoryItemHandler) projectDepletion(
 					if firstDepletionDate == nil {
 						depDate := currentDate
 						firstDepletionDate = &depDate
-						template := i18n.TranslateDB(h.DB, c, "Maintenance task '%s' scheduled on %s requires %.2f units, but you will only have %.2f units.")
+						template := i18n.TranslateDB(h.DB, c, "Maintenance task '%s' scheduled on %s requires %s, but you will only have %s.")
 						depletionReason = fmt.Sprintf(
 							template,
 							occ.description,
 							occ.date.Format("2006-01-02"),
-							occ.quantityRequired,
-							stock,
+							formatAmount(occ.quantityRequired),
+							formatAmount(stock),
 						)
 					}
 				}
-				stock -= occ.quantityRequired
+				stock = quantity.Sub(stock, occ.quantityRequired)
 			}
 		}
 
@@ -679,19 +733,19 @@ func (h *InventoryItemHandler) projectDepletion(
 				depDate := currentDate
 				firstDepletionDate = &depDate
 				if currentStock == 0 {
-					template := i18n.TranslateDB(h.DB, c, "You are out of %s. Based on your usage, you consume %.2f daily.")
+					template := i18n.TranslateDB(h.DB, c, "You are out of %s. Based on your usage, you consume %s daily.")
 					depletionReason = fmt.Sprintf(
 						template,
 						itemName,
-						adc,
+						formatAmount(adc),
 					)
 				} else {
-					template := i18n.TranslateDB(h.DB, c, "Based on your usage of %s, you consume %.2f daily. Your current stock of %.2f will run out on %s.")
+					template := i18n.TranslateDB(h.DB, c, "Based on your usage of %s, you consume %s daily. Your current stock of %s will run out on %s.")
 					depletionReason = fmt.Sprintf(
 						template,
 						itemName,
-						adc,
-						currentStock,
+						formatAmount(adc),
+						formatAmount(currentStock),
 						currentDate.Format("2006-01-02"),
 					)
 				}
@@ -796,11 +850,11 @@ func (h *InventoryItemHandler) GetPredictiveRestockInsights(c *gin.Context) {
 		var currentStock float64
 		for _, item := range items {
 			if item.ExpirationDate == nil || item.ExpirationDate.After(now) {
-				currentStock += item.Quantity
+				currentStock = quantity.Add(currentStock, item.Quantity)
 			}
 		}
 
-		depDate, reason := h.projectDepletion(c, now, currentStock, adc, tasks, def.ID, def.Name)
+		depDate, reason := h.projectDepletion(c, now, currentStock, adc, tasks, def.ID, def.Name, models.DisplayUnits(h.DB, def)...)
 		if depDate != nil {
 			daysLeft := int(depDate.Sub(now).Hours() / 24)
 			if daysLeft < 0 {
@@ -831,6 +885,7 @@ type PredictionItemDetails struct {
 }
 
 type PredictionResponse struct {
+	BaseSizeUnitID        *uuid.UUID            `json:"base_size_unit_id"`
 	PredictionID          uuid.UUID             `json:"prediction_id"`
 	ItemDefinitionDetails PredictionItemDetails `json:"item_definition_details"`
 	PredictedAmount       float64               `json:"predicted_amount"`
@@ -842,8 +897,10 @@ type IgnorePredictionRequest struct {
 }
 
 type ApplyPredictionRequest struct {
-	PredictionID  uuid.UUID `json:"prediction_id" binding:"required"`
-	AppliedAmount float64   `json:"applied_amount" binding:"required"`
+	quantityInputs
+	QuantityUnitID *uuid.UUID `json:"quantity_unit_id"`
+	PredictionID   uuid.UUID  `json:"prediction_id" binding:"required"`
+	AppliedAmount  float64    `json:"applied_amount" binding:"required"`
 }
 
 func (h *InventoryItemHandler) GetHomePredictions(c *gin.Context) {
@@ -870,7 +927,8 @@ func (h *InventoryItemHandler) GetHomePredictions(c *gin.Context) {
 	var response []PredictionResponse
 	for _, p := range predictions {
 		response = append(response, PredictionResponse{
-			PredictionID: p.ID,
+			PredictionID:   p.ID,
+			BaseSizeUnitID: p.InventoryItem.ItemDefinition.BaseSizeUnitID,
 			ItemDefinitionDetails: PredictionItemDetails{
 				ID:         p.InventoryItem.ItemDefinition.ID,
 				Name:       p.InventoryItem.ItemDefinition.Name,
@@ -951,23 +1009,43 @@ func (h *InventoryItemHandler) ApplyPrediction(c *gin.Context) {
 		return
 	}
 
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
+	if prediction.Status != models.PredictionStatusPredicted {
+		c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Prediction not found")})
+		return
+	}
+	var definition models.InventoryItem
+	if err := h.DB.First(&definition, prediction.InventoryItemID).Error; err != nil {
+		quantityError(c, h.DB, err)
+		return
+	}
+	normalized, err := quantityForDefinition(h.DB, definition.ItemDefinitionID, homeID, req.AppliedAmount, req.QuantityUnitID, false, req.raw("applied_amount"))
+	if err != nil {
+		quantityError(c, h.DB, err)
+		return
+	}
+	req.AppliedAmount = normalized
+	err = h.DB.Transaction(func(tx *gorm.DB) error {
 		// Update status to Applied
-		if err := tx.Model(&prediction).Update("status", models.PredictionStatusApplied).Error; err != nil {
-			return err
+		result := tx.Model(&prediction).Where("status = ?", models.PredictionStatusPredicted).Update("status", models.PredictionStatusApplied)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
 		}
 
 		// Subtract applied_amount from InventoryItem quantity
 		var item models.InventoryItem
-		if err := tx.First(&item, prediction.InventoryItemID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&item, prediction.InventoryItemID).Error; err != nil {
 			return err
 		}
 
-		newQuantity := item.Quantity - req.AppliedAmount
+		newQuantity := quantity.Sub(item.Quantity, req.AppliedAmount)
 		if newQuantity < 0 {
 			newQuantity = 0
 		}
 
+		actualChange := quantity.Sub(newQuantity, item.Quantity)
 		if err := tx.Model(&item).Update("quantity", newQuantity).Error; err != nil {
 			return err
 		}
@@ -977,19 +1055,50 @@ func (h *InventoryItemHandler) ApplyPrediction(c *gin.Context) {
 			HomeID:           homeID,
 			ItemDefinitionID: item.ItemDefinitionID,
 			InventoryItemID:  item.ID,
-			QuantityChange:   -req.AppliedAmount,
+			QuantityChange:   actualChange,
 		}
-		if err := tx.Create(&txLog).Error; err != nil {
-			return err
+		if txLog.QuantityChange != 0 {
+			if err := tx.Create(&txLog).Error; err != nil {
+				return err
+			}
 		}
 
 		return utils.UpdateShoppingListForDefinition(tx, homeID, item.ItemDefinitionID)
 	})
 
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Prediction not found")})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to apply prediction")})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Prediction applied successfully")})
+}
+
+func (r *CreateInventoryItemRequest) UnmarshalJSON(b []byte) error {
+	type plain CreateInventoryItemRequest
+	return decodeQuantityRequest(b, (*plain)(r), &r.quantityInputs)
+}
+
+func (r *UpdateInventoryItemRequest) UnmarshalJSON(b []byte) error {
+	type plain UpdateInventoryItemRequest
+	return decodeQuantityRequest(b, (*plain)(r), &r.quantityInputs)
+}
+
+func (r *UpdateQuantityRequest) UnmarshalJSON(b []byte) error {
+	type plain UpdateQuantityRequest
+	return decodeQuantityRequest(b, (*plain)(r), &r.quantityInputs)
+}
+
+func (r *ScanInventoryRequest) UnmarshalJSON(b []byte) error {
+	type plain ScanInventoryRequest
+	return decodeQuantityRequest(b, (*plain)(r), &r.quantityInputs)
+}
+
+func (r *ApplyPredictionRequest) UnmarshalJSON(b []byte) error {
+	type plain ApplyPredictionRequest
+	return decodeQuantityRequest(b, (*plain)(r), &r.quantityInputs)
 }

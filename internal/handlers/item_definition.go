@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
@@ -18,16 +19,58 @@ type ItemDefinitionHandler struct {
 }
 
 type ItemDefinitionRequest struct {
-	Name              string     `json:"name" binding:"required"`
-	Description       string     `json:"description"`
-	CategoryID        *uuid.UUID `json:"category_id"`
-	SizeUnitID        *uuid.UUID `json:"size_unit_id" binding:"required"`
-	IsExpirable       bool       `json:"is_expirable"`
-	LowStockThreshold *float64   `json:"low_stock_threshold"`
-	TargetQuantity    *float64   `json:"target_quantity"`
-	Priority          string     `json:"priority"`
-	ImageURL          string     `json:"image_url"`
-	Barcode           *string    `json:"barcode"`
+	quantityInputs
+	QuantityUnitID            *uuid.UUID `json:"quantity_unit_id"`
+	lowPresent, targetPresent bool
+	Name                      string     `json:"name" binding:"required"`
+	Description               string     `json:"description"`
+	CategoryID                *uuid.UUID `json:"category_id"`
+	SizeUnitID                *uuid.UUID `json:"size_unit_id" binding:"required"`
+	IsExpirable               bool       `json:"is_expirable"`
+	LowStockThreshold         *float64   `json:"low_stock_threshold"`
+	TargetQuantity            *float64   `json:"target_quantity"`
+	Priority                  string     `json:"priority"`
+	ImageURL                  string     `json:"image_url"`
+	Barcode                   *string    `json:"barcode"`
+}
+
+func (r *ItemDefinitionRequest) UnmarshalJSON(b []byte) error {
+	type plain ItemDefinitionRequest
+	if err := json.Unmarshal(b, (*plain)(r)); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b, &fields); err != nil {
+		return err
+	}
+	_, r.lowPresent = fields["low_stock_threshold"]
+	_, r.targetPresent = fields["target_quantity"]
+	return r.quantityInputs.read(b)
+}
+func normalizeDefinitionRequest(db *gorm.DB, r *ItemDefinitionRequest, previous *uuid.UUID) error {
+	catalog, err := models.Catalog(db)
+	if err != nil {
+		return err
+	}
+	if r.SizeUnitID == nil {
+		return models.ErrUnit
+	}
+	if _, ok := catalog.Units[*r.SizeUnitID]; !ok {
+		return models.ErrUnit
+	}
+	if previous != nil && !catalog.Compatible(previous, r.SizeUnitID) {
+		return models.ErrUnit
+	}
+	for index, amount := range []*float64{r.LowStockThreshold, r.TargetQuantity} {
+		if amount != nil {
+			normalized, err := catalog.Normalize(*amount, r.QuantityUnitID, r.SizeUnitID, false, r.raw([]string{"low_stock_threshold", "target_quantity"}[index]))
+			if err != nil {
+				return err
+			}
+			*amount = normalized
+		}
+	}
+	return nil
 }
 
 func (h *ItemDefinitionHandler) GetItemDefinitions(c *gin.Context) {
@@ -77,6 +120,11 @@ func (h *ItemDefinitionHandler) CreateItemDefinition(c *gin.Context) {
 		return
 	}
 
+	if err := normalizeDefinitionRequest(h.DB, &req, nil); err != nil {
+		quantityError(c, h.DB, err)
+		return
+	}
+
 	def := models.ItemDefinition{
 		HomeID:            homeID,
 		Name:              req.Name,
@@ -122,19 +170,29 @@ func (h *ItemDefinitionHandler) UpdateItemDefinition(c *gin.Context) {
 		return
 	}
 
-	updates := map[string]interface{}{
-		"name":                req.Name,
-		"description":         req.Description,
-		"category_id":         req.CategoryID,
-		"size_unit_id":        req.SizeUnitID,
-		"is_expirable":        req.IsExpirable,
-		"low_stock_threshold": req.LowStockThreshold,
-		"target_quantity":     req.TargetQuantity,
-		"priority":            req.Priority,
-		"image_url":           req.ImageURL,
-		"barcode":             req.Barcode,
+	if err := normalizeDefinitionRequest(h.DB, &req, itemDef.SizeUnitID); err != nil {
+		quantityError(c, h.DB, err)
+		return
 	}
 
+	updates := map[string]interface{}{
+		"name":         req.Name,
+		"description":  req.Description,
+		"category_id":  req.CategoryID,
+		"size_unit_id": req.SizeUnitID,
+		"is_expirable": req.IsExpirable,
+
+		"priority":  req.Priority,
+		"image_url": req.ImageURL,
+		"barcode":   req.Barcode,
+	}
+
+	if req.lowPresent {
+		updates["low_stock_threshold"] = req.LowStockThreshold
+	}
+	if req.targetPresent {
+		updates["target_quantity"] = req.TargetQuantity
+	}
 	if err := h.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&itemDef).Updates(updates).Error; err != nil {
 			return err

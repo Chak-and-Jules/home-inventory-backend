@@ -68,9 +68,14 @@ func main() {
 	done = bootStep("database auto migration")
 	err = db.AutoMigrate(autoMigrateModels()...)
 	if err != nil {
-		logger.Log.Sugar().Warnf("AutoMigrate warning: %v", err)
+		logger.Log.Sugar().Fatalf("Database schema initialization failed: %v", err)
 	}
 	done("completed")
+
+	db, err = models.InitializeUnits(db)
+	if err != nil {
+		logger.Log.Sugar().Fatalf("Unit catalog initialization failed: %v", err)
+	}
 
 	// Setup Gin Router
 	done = bootStep("router setup")
@@ -117,6 +122,8 @@ func autoMigrateModels() []interface{} {
 		&models.InventoryTransaction{},
 		&models.MaintenanceTask{},
 		&models.TaskItemDependency{},
+		&models.ReceiptJob{}, &models.ReceiptJobItem{},
+		&models.Recipe{}, &models.RecipeIngredient{}, &models.InventoryPrediction{},
 	}
 }
 

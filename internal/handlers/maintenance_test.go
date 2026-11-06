@@ -25,7 +25,7 @@ func setupMaintenanceTest(t *testing.T) (*MaintenanceTaskHandler, sqlmock.Sqlmoc
 	require.NoError(t, err)
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 	require.NoError(t, err)
-	handler := &MaintenanceTaskHandler{DB: gormDB}
+	handler := &MaintenanceTaskHandler{DB: withMockUnits(gormDB)}
 	return handler, mock
 }
 
@@ -387,7 +387,7 @@ func TestCreateMaintenanceTask(t *testing.T) {
 			Description:   "With Deps",
 			ScheduledDate: time.Now(),
 			Dependencies: []TaskItemDependencyRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 2},
+				{QuantityUnitID: &mockCountUnitID, ItemDefinitionID: itemDefID, QuantityRequired: 2},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -402,6 +402,7 @@ func TestCreateMaintenanceTask(t *testing.T) {
 		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
+		expectQuantityDefinition(mock, itemDefID, homeID)
 		mock.ExpectBegin()
 		taskID := uuid.New()
 		mock.ExpectQuery(`INSERT INTO "maintenance_tasks".*`).
@@ -754,7 +755,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 			Description:   "Updated",
 			ScheduledDate: time.Now(),
 			Dependencies: []TaskItemDependencyRequest{
-				{ItemDefinitionID: itemDefID, QuantityRequired: 3},
+				{QuantityUnitID: &mockCountUnitID, ItemDefinitionID: itemDefID, QuantityRequired: 3},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -772,6 +773,7 @@ func TestUpdateMaintenanceTask(t *testing.T) {
 		mock.ExpectQuery(`(?i)SELECT \* FROM "user_homes".*`).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "role"}).AddRow(userID, homeID, "owner"))
 
+		expectQuantityDefinition(mock, itemDefID, homeID)
 		mock.ExpectBegin()
 		mock.ExpectExec(`UPDATE "maintenance_tasks" SET.*`).
 			WillReturnResult(sqlmock.NewResult(0, 1))

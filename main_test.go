@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"reflect"
 	"testing"
 	"time"
 
@@ -100,6 +101,16 @@ func TestAutoMigrateModelsIncludesShoppingListItem(t *testing.T) {
 	}
 
 	assert.True(t, found, "ShoppingListItem must be registered for automatic migration")
+}
+
+func TestAutoMigrateModelsIncludesQuantityWorkflows(t *testing.T) {
+	registered := map[reflect.Type]bool{}
+	for _, model := range autoMigrateModels() {
+		registered[reflect.TypeOf(model)] = true
+	}
+	for _, model := range []any{&models.SizeUnit{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.InventoryPrediction{}, &models.MaintenanceTask{}, &models.TaskItemDependency{}} {
+		assert.True(t, registered[reflect.TypeOf(model)], "fresh schema must create %T", model)
+	}
 }
 
 // TestMainCrash verifies that main() crashes gracefully if database connection fails

@@ -160,7 +160,9 @@ func TestFetchAndVerifyToken_ECDSA(t *testing.T) {
 
 	t.Run("JWKS fetch error", func(t *testing.T) {
 		resetGlobals()
-		jwksURL = "http://invalid-url-that-does-not-exist"
+		closed := httptest.NewServer(http.NotFoundHandler())
+		closed.Close()
+		jwksURL = closed.URL
 
 		token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{
 			"sub": uuid.New().String(),
