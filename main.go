@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/authentication"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/routes"
@@ -79,7 +81,11 @@ func main() {
 
 	// Setup Gin Router
 	done = bootStep("router setup")
-	r := routes.SetupRouter(db)
+	authClient, err := authentication.NewClient(context.Background())
+	if err != nil {
+		logger.Log.Sugar().Fatalf("Firebase authentication initialization failed: %v", err)
+	}
+	r := routes.SetupRouter(db, authClient)
 	done("completed")
 
 	// Start background tasks

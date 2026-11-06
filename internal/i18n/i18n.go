@@ -15,6 +15,8 @@ var userLangCache sync.Map
 var Translations = map[string]map[string]string{
 	"English": {},
 	"Türkçe": {
+		"Authentication is not configured":                       "Kimlik doğrulama yapılandırılmamış",
+		"Unauthorized account deletion":                          "Hesap silme yetkiniz yok",
 		"Failed to confirm receipt items":                        "Fiş öğeleri onaylanamadı",
 		"Invalid or incompatible size unit":                      "Geçersiz veya uyumsuz ölçü birimi",
 		"Invalid quantity precision or range":                    "Geçersiz miktar hassasiyeti veya aralığı",

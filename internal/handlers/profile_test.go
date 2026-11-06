@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"firebase.google.com/go/v4/auth"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/DATA-DOG/go-sqlmock"
@@ -24,6 +26,7 @@ func TestSyncProfile(t *testing.T) {
 
 	userID := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 	email := "user@example.com"
+	firebaseUID := "firebase-user-not-a-uuid"
 
 	setupTest := func(t *testing.T) (*ProfileHandler, sqlmock.Sqlmock, func()) {
 		db, mock, err := sqlmock.New()
@@ -47,6 +50,7 @@ func TestSyncProfile(t *testing.T) {
 		c.Request = req
 		c.Set("userID", userID)
 		c.Set("email", email)
+		c.Set("firebaseUID", firebaseUID)
 
 		return w, c
 	}
@@ -55,12 +59,12 @@ func TestSyncProfile(t *testing.T) {
 		handler, mock, closeDB := setupTest(t)
 		defer closeDB()
 
-		body := `{"profile":{"id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}}`
+		body := `{"profile":{"id":"firebase-user-not-a-uuid","email":"user@example.com"}}`
 		w, c := setupContext(t, body)
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, firebaseUID, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -87,12 +91,12 @@ func TestSyncProfile(t *testing.T) {
 		handler, mock, closeDB := setupTest(t)
 		defer closeDB()
 
-		body := `{"profile":{"id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}}`
+		body := `{"profile":{"id":"firebase-user-not-a-uuid","email":"user@example.com"}}`
 		w, c := setupContext(t, body)
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, firebaseUID, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -134,7 +138,7 @@ func TestSyncProfile(t *testing.T) {
 		handler, _, closeDB := setupTest(t)
 		defer closeDB()
 
-		body := `{"profile":{"id":"123e4567-e89b-12d3-a456-426614174000","email":"other@example.com"}}`
+		body := `{"profile":{"id":"firebase-user-not-a-uuid","email":"other@example.com"}}`
 		w, c := setupContext(t, body)
 
 		handler.SyncProfile(c)
@@ -147,12 +151,12 @@ func TestSyncProfile(t *testing.T) {
 		handler, mock, closeDB := setupTest(t)
 		defer closeDB()
 
-		body := `{"profile":{"id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}}`
+		body := `{"profile":{"id":"firebase-user-not-a-uuid","email":"user@example.com"}}`
 		w, c := setupContext(t, body)
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, firebaseUID, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -171,12 +175,12 @@ func TestSyncProfile(t *testing.T) {
 		handler, mock, closeDB := setupTest(t)
 		defer closeDB()
 
-		body := `{"profile":{"id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}}`
+		body := `{"profile":{"id":"firebase-user-not-a-uuid","email":"user@example.com"}}`
 		w, c := setupContext(t, body)
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, firebaseUID, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -201,12 +205,12 @@ func TestSyncProfile(t *testing.T) {
 		handler, mock, closeDB := setupTest(t)
 		defer closeDB()
 
-		body := `{"profile":{"id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}}`
+		body := `{"profile":{"id":"firebase-user-not-a-uuid","email":"user@example.com"}}`
 		w, c := setupContext(t, body)
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles"`).
-			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, firebaseUID, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnError(errors.New("insert error"))
 		mock.ExpectRollback()
 
@@ -223,6 +227,7 @@ func TestDeleteAccount(t *testing.T) {
 
 	userID := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 	email := "user@example.com"
+	firebaseUID := "firebase-user-not-a-uuid"
 
 	setupTest := func(t *testing.T) (*ProfileHandler, sqlmock.Sqlmock, func()) {
 		db, mock, err := sqlmock.New()
@@ -231,7 +236,7 @@ func TestDeleteAccount(t *testing.T) {
 		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 		require.NoError(t, err)
 
-		return &ProfileHandler{DB: gormDB}, mock, func() {
+		return &ProfileHandler{DB: gormDB, Auth: &profileAuthStub{}}, mock, func() {
 			db.Close()
 		}
 	}
@@ -246,50 +251,64 @@ func TestDeleteAccount(t *testing.T) {
 		c.Request = req
 		c.Set("userID", userID)
 		c.Set("email", email)
+		c.Set("firebaseUID", firebaseUID)
 
 		return w, c
 	}
 
-	t.Run("success", func(t *testing.T) {
-		handler, mock, closeDB := setupTest(t)
-		defer closeDB()
+	for _, fail := range []bool{false, true} {
+		t.Run(map[bool]string{false: "success", true: "Firebase failure rolls back SQL"}[fail], func(t *testing.T) {
+			handler, mock, closeDB := setupTest(t)
+			defer closeDB()
 
-		body := `{"user_id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}`
-		w, c := setupContext(t, body)
+			body := `{"user_id":"123e4567-e89b-12d3-a456-426614174000","email":"user@example.com"}`
+			w, c := setupContext(t, body)
 
-		mock.ExpectQuery(`SELECT \* FROM "profiles" WHERE id = \$1 AND email = \$2 ORDER BY "profiles"\."id" LIMIT \$3`).
-			WithArgs(userID, email, 1).
-			WillReturnRows(sqlmock.NewRows([]string{"id", "email"}).AddRow(userID, email))
+			mock.ExpectQuery(`SELECT \* FROM "profiles" WHERE id = \$1 AND email = \$2 ORDER BY "profiles"\."id" LIMIT \$3`).
+				WithArgs(userID, email, 1).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "email", "firebase_uid"}).AddRow(userID, email, firebaseUID))
 
-		mock.ExpectBegin()
-		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND role = \$2`).
-			WithArgs(userID, models.RoleOwner).
-			WillReturnRows(sqlmock.NewRows([]string{"home_id", "user_id", "role"}).AddRow(uuid.New(), userID, models.RoleOwner))
+			mock.ExpectBegin()
+			mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND role = \$2`).
+				WithArgs(userID, models.RoleOwner).
+				WillReturnRows(sqlmock.NewRows([]string{"home_id", "user_id", "role"}).AddRow(uuid.New(), userID, models.RoleOwner))
 
-		mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE home_id = \$1 AND role = \$2 AND user_id != \$3`).
-			WithArgs(sqlmock.AnyArg(), models.RoleOwner, userID).
-			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+			mock.ExpectQuery(`SELECT count\(\*\) FROM "user_homes" WHERE home_id = \$1 AND role = \$2 AND user_id != \$3`).
+				WithArgs(sqlmock.AnyArg(), models.RoleOwner, userID).
+				WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-		mock.ExpectExec(`DELETE FROM "homes" WHERE id IN \(\$1\)`).
-			WithArgs(sqlmock.AnyArg()).
-			WillReturnResult(sqlmock.NewResult(1, 1))
+			mock.ExpectExec(`DELETE FROM "homes" WHERE id IN \(\$1\)`).
+				WithArgs(sqlmock.AnyArg()).
+				WillReturnResult(sqlmock.NewResult(1, 1))
 
-		mock.ExpectExec(`DELETE FROM "user_homes" WHERE user_id = \$1`).
-			WithArgs(userID).
-			WillReturnResult(sqlmock.NewResult(1, 1))
+			mock.ExpectExec(`DELETE FROM "user_homes" WHERE user_id = \$1`).
+				WithArgs(userID).
+				WillReturnResult(sqlmock.NewResult(1, 1))
 
-		mock.ExpectExec(`DELETE FROM "profiles" WHERE id = \$1`).
-			WithArgs(userID).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectCommit()
+			mock.ExpectExec(`DELETE FROM "profiles" WHERE id = \$1`).
+				WithArgs(userID).
+				WillReturnResult(sqlmock.NewResult(1, 1))
+			if fail {
+				mock.ExpectRollback()
+				handler.Auth.(*profileAuthStub).err = errors.New("Firebase unavailable")
+			} else {
+				mock.ExpectCommit()
+			}
 
-		handler.DeleteAccount(c)
+			handler.DeleteAccount(c)
 
-		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Contains(t, w.Body.String(), "Account deleted successfully")
-		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-
+			if fail {
+				assert.Equal(t, http.StatusInternalServerError, w.Code)
+			} else {
+				assert.Equal(t, http.StatusOK, w.Code)
+			}
+			assert.Equal(t, firebaseUID, handler.Auth.(*profileAuthStub).deletedUID)
+			if !fail {
+				assert.Contains(t, w.Body.String(), "Account deleted successfully")
+			}
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 	t.Run("unauthorized user", func(t *testing.T) {
 		handler, _, closeDB := setupTest(t)
 		defer closeDB()
@@ -583,4 +602,17 @@ func TestUpdateProfile(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+}
+
+type profileAuthStub struct {
+	err        error
+	deletedUID string
+}
+
+func (s *profileAuthStub) VerifyIDTokenAndCheckRevoked(context.Context, string) (*auth.Token, error) {
+	panic("unused")
+}
+func (s *profileAuthStub) DeleteUser(_ context.Context, uid string) error {
+	s.deletedUID = uid
+	return s.err
 }

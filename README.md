@@ -14,14 +14,68 @@ Run `go test ./...`
 Profiles retain their UUID primary key and can store a nullable, unique
 `firebase_uid` (up to 128 characters). Startup's existing `AutoMigrate` adds the
 column and unique index; existing profiles remain unlinked with `NULL` values.
-The mapping is internal and excluded from profile JSON. Firebase token
-verification and account linking are separate authentication changes.
+The mapping is internal and excluded from profile JSON.
 
 The default profile tests use in-memory SQLite. To exercise the same migration,
 lookup, and uniqueness checks against a disposable PostgreSQL database, set
 `PROFILE_TEST_POSTGRES_DSN` and run `go test ./internal/models -run '^TestProfile' -count=1`.
 The test role must be allowed to create schemas; each test uses an isolated schema
 and removes it afterward.
+
+## Firebase authentication
+
+All API routes require `Authorization: Bearer <Firebase ID token>` from the client
+SDK (for example, `await user.getIdToken()`). Supabase tokens and Firebase custom
+tokens are not accepted. The Admin SDK validates signature, issuer, audience,
+expiry, and revocation/disabled/deleted user status. Revocation checking performs
+a Firebase user lookup on each request; certificate keys are cached by the SDK.
+
+Set `FIREBASE_PROJECT_ID=home-inventory-11`. Startup fails if it is missing.
+On Cloud Run the SDK uses Application Default Credentials from the runtime
+service account; do not upload a service account key or the web `firebaseConfig`.
+Grant that service account `firebaseauth.users.get` (revocation checking) and
+`firebaseauth.users.delete` (account deletion) in the Firebase project, preferably
+through a custom role limited to those permissions. Ensure the Identity Toolkit
+API (`identitytoolkit.googleapis.com`) is enabled. Keep the existing Cloud SQL
+and Secret Manager permissions. Supabase auth environment variables are obsolete.
+
+Locally, use `gcloud auth application-default login` with an identity that has
+those permissions. The example database socket is specific to Cloud Run; for
+local access use the Cloud SQL Auth Proxy connection settings instead.
+`FIREBASE_AUTH_EMULATOR_HOST` is allowed only when `APP_ENV=local` outside Cloud Run; omit it on
+Cloud Run because emulator tokens are unsigned.
+
+On the first authenticated request, the backend creates a profile with a new
+internal UUID and the verified Firebase UID. Later requests resolve by UID and
+synchronize the verified token's email. Existing profiles with a NULL or different
+Firebase UID are never linked by email, even if the addresses match. An email
+collision fails without changing the existing account; fresh installations
+should use a fresh profile rather than silently claiming old data.
+
+Call `POST /api/v1/profiles/sync` after sign-in:
+
+```json
+{"profile":{"id":"<Firebase user.uid>","email":"<Firebase user.email>"}}
+```
+
+Both values must match the verified token. The response `ID` is the internal
+profile UUID, which clients must store separately from Firebase `user.uid` and
+use for database-facing identifiers such as account deletion `user_id`. Sync
+also creates the initial default home when the profile has no home memberships.
+Do not send `firebase_uid` in profile updates; it is server-managed.
+
+Both deletion routes (`/api/v1/profiles/delete-account` and
+`/api/v1/account/delete-request`) require a Firebase token and the internal UUID
+in `user_id`. The backend deletes the Firebase identity before committing the SQL
+cleanup. Firebase failures roll SQL back and return an error. These two systems
+do not share an atomic transaction: a SQL commit failure after Firebase deletion
+requires operator reconciliation of the remaining SQL data.
+
+Auth tests run without Google credentials or external services and exercise the
+real SDK with local signing keys and HTTPS fixtures. To test profile provisioning
+and concurrent first requests against disposable PostgreSQL, set
+`AUTH_TEST_POSTGRES_DSN` and run `go test ./internal/middleware -run '^TestFirebase' -count=1`.
+Each fixture creates and removes an isolated schema; do not use a production DB.
 
 ## Quantity and unit contract
 

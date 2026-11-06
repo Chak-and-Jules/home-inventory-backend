@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/authentication"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/handlers"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/middleware"
@@ -13,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB) *gin.Engine {
+func SetupRouter(db *gorm.DB, authClient authentication.Client) *gin.Engine {
 	done := bootStep("gin engine creation")
 	r := gin.New()
 	done()
@@ -33,7 +34,7 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	// Initialize handlers
 	done = bootStep("handler initialization")
 	homeHandler := &handlers.HomeHandler{DB: db}
-	profileHandler := &handlers.ProfileHandler{DB: db}
+	profileHandler := &handlers.ProfileHandler{DB: db, Auth: authClient}
 	categoryHandler := &handlers.CategoryHandler{DB: db}
 	itemDefHandler := &handlers.ItemDefinitionHandler{DB: db}
 	sizeUnitHandler := &handlers.SizeUnitHandler{DB: db}
@@ -47,17 +48,17 @@ func SetupRouter(db *gorm.DB) *gin.Engine {
 	done()
 
 	done = bootStep("public route registration")
-	// Public endpoints (no authentication required)
+	// Account deletion requires the same verified identity as all other API routes.
 	public := r.Group("/api/v1")
 	{
-		public.POST("/account/delete-request", profileHandler.DeleteAccount)
+		public.POST("/account/delete-request", middleware.FirebaseAuthMiddleware(db, authClient), profileHandler.DeleteAccount)
 	}
 	done()
 
 	// API v1 group
 	done = bootStep("authenticated route registration")
 	v1 := r.Group("/api/v1")
-	v1.Use(middleware.SupabaseAuthMiddleware())
+	v1.Use(middleware.FirebaseAuthMiddleware(db, authClient))
 	{
 		// Profiles
 		profiles := v1.Group("/profiles")

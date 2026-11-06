@@ -1,5 +1,11 @@
 # Google Cloud Platform (GCP) Migration Guide
 
+> Historical proposal. The active deployment now uses Cloud SQL PostgreSQL and
+> Firebase Authentication with a fresh database. Follow the Firebase configuration
+> and UID-to-profile mapping in [README.md](README.md#firebase-authentication).
+> The Supabase database, UUID-preserving auth import, and old deployment templates
+> below describe the earlier proposal and are not the current setup instructions.
+
 This document outlines the strategy, trade-offs, step-by-step procedure, local development configuration, and Infrastructure as Code (IaC) templates for migrating the **Home Inventory System** from Supabase (Auth + Storage) and Vercel (Frontend) to **Google Cloud Platform** (Cloud Identity Platform, Cloud Storage, and Cloud Run), while retaining PostgreSQL on Supabase.
 
 ---
