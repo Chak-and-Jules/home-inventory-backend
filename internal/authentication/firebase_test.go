@@ -37,6 +37,16 @@ func TestConfiguration(t *testing.T) {
 	require.ErrorContains(t, err, "outside Cloud Run")
 }
 
+func TestLocalFirebaseEmulatorInitialization(t *testing.T) {
+	t.Setenv("FIREBASE_PROJECT_ID", "local-project")
+	t.Setenv("APP_ENV", "local")
+	t.Setenv("K_SERVICE", "")
+	t.Setenv("FIREBASE_AUTH_EMULATOR_HOST", "127.0.0.1:9099")
+	client, err := NewClient(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, client)
+}
+
 // Exercise the real Admin SDK's cryptographic verification and user lookup.
 // All HTTPS traffic is redirected to this fixture; no cloud credentials are used.
 func TestSDKTokenVerification(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 
 	"firebase.google.com/go/v4/auth"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -184,4 +185,102 @@ func TestFirebaseProfileConcurrentFirstRequests(t *testing.T) {
 	var count int64
 	require.NoError(t, db.Model(&models.Profile{}).Count(&count).Error)
 	require.EqualValues(t, 1, count)
+}
+
+func TestFirebaseAuthMissingConfiguration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, missing := range []string{"client", "database"} {
+		t.Run(missing, func(t *testing.T) {
+			db := authTestDB(t)
+			client := &authStub{}
+			if missing == "client" {
+				client = nil
+			} else {
+				db = nil
+			}
+			router := gin.New()
+			if client == nil {
+				router.Use(FirebaseAuthMiddleware(db, nil))
+			} else {
+				router.Use(FirebaseAuthMiddleware(db, client))
+			}
+			router.GET("/test", func(c *gin.Context) { t.Error("misconfigured authentication reached the handler") })
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set("Authorization", "Bearer token")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			require.Equal(t, http.StatusInternalServerError, w.Code)
+			require.JSONEq(t, `{"error":"Authentication is not configured"}`, w.Body.String())
+			if client != nil {
+				require.Zero(t, client.calls)
+			}
+		})
+	}
+}
+
+func TestFirebaseAuthDatabaseFailures(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, stage := range []string{"lookup", "insert", "reread", "email update"} {
+		t.Run(stage, func(t *testing.T) {
+			conn, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			t.Cleanup(func() { conn.Close() })
+			db, err := gorm.Open(postgres.New(postgres.Config{Conn: conn}), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+			require.NoError(t, err)
+			uid, email := "firebase-user", "current@example.com"
+			query := `SELECT .* FROM "profiles" WHERE firebase_uid = \$1`
+			failure := errors.New("private database failure detail")
+			switch stage {
+			case "lookup":
+				mock.ExpectQuery(query).WithArgs(uid, 1).WillReturnError(failure)
+			case "insert", "reread":
+				mock.ExpectQuery(query).WithArgs(uid, 1).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+				mock.ExpectBegin()
+				insert := mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("firebase_uid"\) DO NOTHING`)
+				if stage == "insert" {
+					insert.WillReturnError(failure)
+					mock.ExpectRollback()
+				} else {
+					insert.WillReturnResult(sqlmock.NewResult(0, 1))
+					mock.ExpectCommit()
+					mock.ExpectQuery(query).WithArgs(uid, 1).WillReturnError(failure)
+				}
+			case "email update":
+				mock.ExpectQuery(query).WithArgs(uid, 1).WillReturnRows(sqlmock.NewRows([]string{"id", "email", "firebase_uid"}).AddRow(uuid.New(), "old@example.com", uid))
+				mock.ExpectBegin()
+				mock.ExpectExec(`UPDATE "profiles" SET "email"`).WillReturnError(failure)
+				mock.ExpectRollback()
+			}
+			client := &authStub{token: &auth.Token{UID: uid, Claims: map[string]interface{}{"email": email}}}
+			router := gin.New()
+			router.Use(FirebaseAuthMiddleware(db, client))
+			router.GET("/test", func(c *gin.Context) { t.Error("database failure reached the handler") })
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set("Authorization", "Bearer verified")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			require.Equal(t, http.StatusInternalServerError, w.Code)
+			require.JSONEq(t, `{"error":"Failed to sync profile"}`, w.Body.String())
+			require.Equal(t, 1, client.calls)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestFirebaseEmailChangeCannotClaimAnotherProfile(t *testing.T) {
+	db := authTestDB(t)
+	uid, otherUID := "first-firebase-user", "second-firebase-user"
+	first := models.Profile{ID: uuid.New(), Email: "first@example.com", FirebaseUID: &uid}
+	second := models.Profile{ID: uuid.New(), Email: "second@example.com", FirebaseUID: &otherUID, IsAdmin: true}
+	require.NoError(t, db.Create(&first).Error)
+	require.NoError(t, db.Create(&second).Error)
+	_, err := resolveFirebaseProfile(db, uid, second.Email)
+	require.Error(t, err)
+	for _, original := range []models.Profile{first, second} {
+		var stored models.Profile
+		require.NoError(t, db.First(&stored, "id = ?", original.ID).Error)
+		require.Equal(t, original.Email, stored.Email)
+		require.Equal(t, original.FirebaseUID, stored.FirebaseUID)
+		require.Equal(t, original.IsAdmin, stored.IsAdmin)
+	}
 }
