@@ -60,7 +60,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -92,7 +92,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -152,7 +152,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -176,7 +176,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles".*ON CONFLICT \("id"\) DO UPDATE SET "updated_at"="excluded"\."updated_at"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
 
@@ -206,7 +206,7 @@ func TestSyncProfile(t *testing.T) {
 
 		mock.ExpectBegin()
 		mock.ExpectExec(`INSERT INTO "profiles"`).
-			WithArgs(userID, email, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, email, nil, false, nil, nil, nil, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnError(errors.New("insert error"))
 		mock.ExpectRollback()
 

@@ -10,6 +10,7 @@ import (
 type Profile struct {
 	ID            uuid.UUID  `gorm:"type:uuid;primaryKey"`
 	Email         string     `gorm:"type:varchar(255);uniqueIndex"`
+	FirebaseUID   *string    `gorm:"type:varchar(128);uniqueIndex" json:"-"`
 	IsAdmin       bool       `gorm:"default:false"`
 	WebTheme      *string    `gorm:"type:varchar(50)"`
 	MobileTheme   *string    `gorm:"type:varchar(50)"`

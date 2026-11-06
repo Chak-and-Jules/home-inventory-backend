@@ -9,6 +9,20 @@
 
 Run `go test ./...`
 
+## Firebase profile identity mapping
+
+Profiles retain their UUID primary key and can store a nullable, unique
+`firebase_uid` (up to 128 characters). Startup's existing `AutoMigrate` adds the
+column and unique index; existing profiles remain unlinked with `NULL` values.
+The mapping is internal and excluded from profile JSON. Firebase token
+verification and account linking are separate authentication changes.
+
+The default profile tests use in-memory SQLite. To exercise the same migration,
+lookup, and uniqueness checks against a disposable PostgreSQL database, set
+`PROFILE_TEST_POSTGRES_DSN` and run `go test ./internal/models -run '^TestProfile' -count=1`.
+The test role must be allowed to create schemas; each test uses an isolated schema
+and removes it afterward.
+
 ## Quantity and unit contract
 
 This schema is intended for a fresh PostgreSQL 13+ database. Startup creates all
