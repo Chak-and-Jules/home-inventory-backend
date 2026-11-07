@@ -27,7 +27,7 @@ const (
 	MaxImageBytes       = 5 << 20
 	MaxImagePixels      = 20_000_000
 	MaxSignedImagePaths = 100
-	ImageURLLifetime    = 15 * time.Minute
+	ImageURLLifetime    = time.Hour
 )
 
 // Bound decoded-image memory on small Cloud Run instances. The slot spans the

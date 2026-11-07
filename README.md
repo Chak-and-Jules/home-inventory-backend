@@ -112,7 +112,7 @@ caching for five minutes. The API never makes the bucket or objects public.
 
 Save the returned object key in the existing item-definition `image_url` field.
 Signing accepts 1–100 keys from the selected home, deduplicates them, and creates
-V4 GET URLs valid for 15 minutes. The batch fails with 404 if any object is missing;
+V4 GET URLs valid for one hour. The batch fails with 404 if any object is missing;
 Cloud Storage/IAM failures return 502 without exposing provider error details.
 The response uses `Cache-Control: no-store`. Anyone holding a signed URL can read
 its object until expiry/deletion, even if their membership changes in the meantime.

@@ -176,7 +176,7 @@ func TestImageLifecycle(t *testing.T) {
 			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &signed))
 			require.Len(t, signed.Images, 1)
 			require.Equal(t, upload.Path, signed.Images[0].Path)
-			require.WithinDuration(t, before.Add(ImageURLLifetime), signed.Images[0].ExpiresAt, time.Second)
+			require.WithinDuration(t, before.Add(time.Hour), signed.Images[0].ExpiresAt, time.Second)
 			require.NoError(t, f.db.Model(&models.UserHome{}).Where("user_id = ?", f.user).Update("role", models.RoleEditor).Error)
 			for range 2 {
 				w = f.request("DELETE", "/images?path="+url.QueryEscape(upload.Path), "", nil)
