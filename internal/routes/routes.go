@@ -69,6 +69,11 @@ func SetupRouter(db *gorm.DB, authClient authentication.Client, images imagestor
 			images.POST("/signed-urls", imageHandler.SignedURLs)
 		}
 
+		// Guides: per-user lifecycle, with independently named platform checkpoints.
+		guideHandler := &handlers.GuideHandler{DB: db}
+		v1.GET("/guides", guideHandler.List)
+		v1.POST("/guides/:id/actions", guideHandler.Act)
+
 		// Profiles
 		profiles := v1.Group("/profiles")
 		{

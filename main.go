@@ -125,6 +125,7 @@ func bootStep(name string) func(string) {
 func autoMigrateModels() []interface{} {
 	return []interface{}{
 		&models.Profile{},
+		&models.GuideProgress{}, &models.GuideMutation{},
 		&models.Language{},
 		&models.Home{},
 		&models.UserHome{},

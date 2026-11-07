@@ -15,6 +15,12 @@ var userLangCache sync.Map
 var Translations = map[string]map[string]string{
 	"English": {},
 	"Türkçe": {
+		"Guide state changed; refresh and retry":                 "Rehber durumu değişti; yenileyip tekrar deneyin",
+		"Guide record not found in this home":                    "Rehber kaydı bu evde bulunamadı",
+		"Guide is not available":                                 "Rehber kullanılamıyor",
+		"Invalid guide action or checkpoint":                     "Geçersiz rehber işlemi veya adımı",
+		"Failed to load guides":                                  "Rehberler yüklenemedi",
+		"Failed to save guide progress":                          "Rehber ilerlemesi kaydedilemedi",
 		"Image uploads are busy; please retry":                   "Görsel yükleme kapasitesi dolu; lütfen tekrar deneyin",
 		"Failed to verify image access":                          "Görsel erişimi doğrulanamadı",
 		"Image storage is not configured":                        "Görsel depolama yapılandırılmamış",
