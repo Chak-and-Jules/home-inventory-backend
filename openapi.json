@@ -1523,6 +1523,249 @@
             }
           }
         }
+      },
+      "GuideVariant": {
+        "type": "object",
+        "properties": {
+          "content_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "min_client_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "entry_point": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "content_version",
+          "min_client_version",
+          "entry_point",
+          "steps"
+        ]
+      },
+      "GuideState": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "in_progress",
+              "completed",
+              "skipped"
+            ]
+          },
+          "step_id": {
+            "type": "string",
+            "description": "Platform-specific step ID, or empty before start/after restore."
+          },
+          "home_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "deferred_until": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "step_id",
+          "home_id",
+          "deferred_until"
+        ]
+      },
+      "GuideView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "title_key": {
+            "type": "string",
+            "description": "Translation key rendered by the client; not a localized title."
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "prerequisites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "requires_home": {
+            "type": "boolean"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "web",
+              "mobile"
+            ]
+          },
+          "variant": {
+            "$ref": "#/components/schemas/GuideVariant"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "state": {
+            "$ref": "#/components/schemas/GuideState"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "unavailable_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "home_required",
+                "home_access_required",
+                "role_required",
+                "prerequisite_required"
+              ]
+            }
+          },
+          "should_offer": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "title_key",
+          "published_at",
+          "prerequisites",
+          "requires_home",
+          "roles",
+          "platform",
+          "variant",
+          "version",
+          "state",
+          "available",
+          "unavailable_reasons",
+          "should_offer"
+        ],
+        "description": "Only the requested platform variant/state is returned. Availability is separate from completed/skipped/deferral. Completed and skipped guides remain in this list for platform-specific Settings restoration."
+      },
+      "GuideCommand": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Nonzero UUID unique per user command. Reuse the same ID and identical payload only for retries."
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "web",
+              "mobile"
+            ]
+          },
+          "client_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expected_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "start",
+              "checkpoint",
+              "maybe_later",
+              "complete",
+              "skip",
+              "restore"
+            ]
+          },
+          "step_id": {
+            "type": "string",
+            "description": "Required only for checkpoint; must belong to this platform variant."
+          },
+          "home_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Optional authorized home context, only for start/checkpoint/complete. If omitted, retained platform context is used. A start with a different home resets to the first step; checkpoint/complete cannot switch an in-progress guide to another home."
+          },
+          "defer_until": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Required only for maybe_later; must be in the future on first execution. The client chooses when to offer again."
+          }
+        },
+        "required": [
+          "request_id",
+          "platform",
+          "client_version",
+          "revision",
+          "expected_version",
+          "action"
+        ],
+        "additionalProperties": false,
+        "description": "Writes use optimistic concurrency on the whole logical guide/revision, including both platforms. checkpoint requires in_progress; complete requires in_progress at the last platform step. Terminal guides must be restored before resuming. skip applies to both; restore clears only the requesting platform checkpoint/home/deferral. New explicit complete/skip after restoration applies to both again. A successful identical request retry returns current state without replaying the action. After 409 reload, reconcile and use a new request ID for a changed command. Actions never create stock or homes."
+      },
+      "GuideError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "guide_not_found",
+              "state_conflict",
+              "request_id_reused",
+              "invalid_transition",
+              "guide_unavailable",
+              "home_access_denied",
+              "guide_storage_error"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "Localized explanation. Use code for programmatic handling."
+          }
+        },
+        "required": [
+          "code",
+          "error"
+        ]
       }
     },
     "securitySchemes": {
@@ -4421,6 +4664,180 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/guides": {
+      "get": {
+        "tags": [
+          "Guides"
+        ],
+        "summary": "List the current platform guide catalog and effective user progress",
+        "description": "Returns active/published variants supported by client_version, including completed/skipped guides for Settings. Accounts predating publication are eligible. Unavailable home/role/prerequisite states are retained with reasons; unsupported/inactive/unpublished variants are omitted. No progress is created by this read. client_version is an integer guide-renderer capability version, not an application semantic version. All responses are private and must not be cached.",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "web",
+                "mobile"
+              ]
+            }
+          },
+          {
+            "name": "client_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "X-Home-Id",
+            "in": "header",
+            "required": false,
+            "description": "Optional selected home for eligibility. Otherwise authorized retained platform context is used.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Platform guide metadata and current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GuideView"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or oversized request, malformed platform/client context or unexpected fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuideError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firebase authentication required."
+          },
+          "500": {
+            "description": "Storage operation failed; no partial action is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuideError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/guides/{id}/actions": {
+      "post": {
+        "tags": [
+          "Guides"
+        ],
+        "summary": "Apply a guide lifecycle action for the authenticated user",
+        "description": "Completion/skip propagates atomically to both web/mobile variants of this logical guide, even before first use of the other app. Checkpoint, deferral and restore are platform-specific. The saved platform-only restore survives normal reads/login until a later explicit action supersedes it. No user_id is accepted. Guide status is tutorial bookkeeping, not authorization to business APIs.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuideCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current state of the requesting platform after a successful action or identical retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuideView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or oversized request, malformed platform/client context or unexpected fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuideError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firebase authentication required."
+          },
+          "403": {
+            "description": "Required home access, role or prerequisite is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuideError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Guide has no active, published, supported variant for this client.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuideError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale aggregate/catalog revision, reused request ID, or invalid transition. Reload before reconciling.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuideError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage operation failed; no partial action is committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuideError"
                 }
               }
             }

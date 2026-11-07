@@ -15,6 +15,13 @@ var userLangCache sync.Map
 var Translations = map[string]map[string]string{
 	"English": {},
 	"Türkçe": {
+		"Failed to process guide state":                          "Rehber durumu işlenemedi",
+		"Invalid guide request":                                  "Geçersiz rehber isteği",
+		"Guide not available for this client":                    "Rehber bu uygulama sürümü için kullanılamıyor",
+		"Guide state changed. Reload and try again":              "Rehber durumu değişti. Yenileyip tekrar deneyin",
+		"Guide request ID has already been used":                 "Rehber istek kimliği daha önce kullanılmış",
+		"Guide action is not allowed in its current state":       "Rehberin mevcut durumunda bu işleme izin verilmiyor",
+		"Guide prerequisites are not satisfied":                  "Rehberin ön koşulları karşılanmıyor",
 		"Image uploads are busy; please retry":                   "Görsel yükleme kapasitesi dolu; lütfen tekrar deneyin",
 		"Failed to verify image access":                          "Görsel erişimi doğrulanamadı",
 		"Image storage is not configured":                        "Görsel depolama yapılandırılmamış",
