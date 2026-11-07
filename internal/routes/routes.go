@@ -7,6 +7,7 @@ import (
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/authentication"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/handlers"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/imagestore"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/middleware"
 	ginzap "github.com/gin-contrib/zap"
@@ -14,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB, authClient authentication.Client) *gin.Engine {
+func SetupRouter(db *gorm.DB, authClient authentication.Client, images imagestore.Store) *gin.Engine {
 	done := bootStep("gin engine creation")
 	r := gin.New()
 	done()
@@ -37,6 +38,7 @@ func SetupRouter(db *gorm.DB, authClient authentication.Client) *gin.Engine {
 	profileHandler := &handlers.ProfileHandler{DB: db, Auth: authClient}
 	categoryHandler := &handlers.CategoryHandler{DB: db}
 	itemDefHandler := &handlers.ItemDefinitionHandler{DB: db}
+	imageHandler := &handlers.ImageHandler{DB: db, Store: images}
 	sizeUnitHandler := &handlers.SizeUnitHandler{DB: db}
 	languageHandler := &handlers.LanguageHandler{DB: db}
 	inventoryItemHandler := &handlers.InventoryItemHandler{DB: db}
@@ -60,6 +62,13 @@ func SetupRouter(db *gorm.DB, authClient authentication.Client) *gin.Engine {
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.FirebaseAuthMiddleware(db, authClient))
 	{
+		images := v1.Group("/images")
+		{
+			images.POST("", imageHandler.Upload)
+			images.DELETE("", imageHandler.Delete)
+			images.POST("/signed-urls", imageHandler.SignedURLs)
+		}
+
 		// Profiles
 		profiles := v1.Group("/profiles")
 		{

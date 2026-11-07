@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/authentication"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/imagestore"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/routes"
@@ -85,7 +86,14 @@ func main() {
 	if err != nil {
 		logger.Log.Sugar().Fatalf("Firebase authentication initialization failed: %v", err)
 	}
-	r := routes.SetupRouter(db, authClient)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	imageStore, closeImages, err := imagestore.Open(ctx)
+	cancel()
+	if err != nil {
+		logger.Log.Sugar().Fatalf("Image storage initialization failed: %v", err)
+	}
+	defer closeImages()
+	r := routes.SetupRouter(db, authClient, imageStore)
 	done("completed")
 
 	// Start background tasks

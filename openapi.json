@@ -237,7 +237,8 @@
             "type": "string"
           },
           "ImageURL": {
-            "type": "string"
+            "type": "string",
+            "description": "Private image object key returned by POST /images, for example <home UUID>/<image UUID>.jpg. Use POST /images/signed-urls to display it; do not save temporary signed URLs."
           },
           "IsExpirable": {
             "type": "boolean"
@@ -317,7 +318,8 @@
             "type": "string"
           },
           "image_url": {
-            "type": "string"
+            "type": "string",
+            "description": "Private image object key returned by POST /images, for example <home UUID>/<image UUID>.jpg. Use POST /images/signed-urls to display it; do not save temporary signed URLs."
           },
           "barcode": {
             "type": "string",
@@ -1440,6 +1442,87 @@
             }
           }
         ]
+      },
+      "ImagePath": {
+        "type": "string",
+        "description": "Server-generated object key: <home UUID>/<image UUID>.jpg or .png. The home UUID must match X-Home-Id. Persist this key in item definition image_url; never persist the signed URL.",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png)$"
+      },
+      "ImageUploadResponse": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "$ref": "#/components/schemas/ImagePath"
+          }
+        }
+      },
+      "ImageErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "SignedImageURLsRequest": {
+        "type": "object",
+        "required": [
+          "paths"
+        ],
+        "properties": {
+          "paths": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "description": "All paths must belong to X-Home-Id. Duplicates count toward the limit and are signed only once.",
+            "items": {
+              "$ref": "#/components/schemas/ImagePath"
+            }
+          }
+        }
+      },
+      "SignedImageURL": {
+        "type": "object",
+        "required": [
+          "path",
+          "url",
+          "expires_at"
+        ],
+        "properties": {
+          "path": {
+            "$ref": "#/components/schemas/ImagePath"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "V4 signed GET URL. Anyone possessing it can read this object until expiry or deletion."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC expiry, approximately 15 minutes after the request starts."
+          }
+        }
+      },
+      "SignedImageURLsResponse": {
+        "type": "object",
+        "required": [
+          "images"
+        ],
+        "properties": {
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignedImageURL"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -1648,8 +1731,12 @@
           "400": {
             "description": "Invalid request payload"
           },
-          "401": {"description": "Missing or invalid Firebase ID token"},
-          "403": {"description": "Identity does not match the account"},
+          "401": {
+            "description": "Missing or invalid Firebase ID token"
+          },
+          "403": {
+            "description": "Identity does not match the account"
+          },
           "404": {
             "description": "Account not found"
           },
@@ -1658,7 +1745,9 @@
           }
         },
         "security": [
-          {"BearerAuth": []}
+          {
+            "BearerAuth": []
+          }
         ],
         "summary": "Request account deletion",
         "tags": [
@@ -1887,9 +1976,6 @@
             },
             "description": "Success"
           },
-          "404": {
-            "description": "Item definition not found"
-          },
           "400": {
             "description": "Invalid payload, missing/unknown/incompatible input or display unit, or unsupported quantity precision/range. No stock change is committed.",
             "content": {
@@ -1907,6 +1993,9 @@
           },
           "403": {
             "description": "The user lacks write access to this home."
+          },
+          "404": {
+            "description": "Item definition not found"
           }
         },
         "summary": "Update inventory quantity by barcode scan",
@@ -3400,11 +3489,11 @@
           "400": {
             "description": "Insufficient stock or already completed"
           },
-          "404": {
-            "description": "Maintenance task not found"
-          },
           "403": {
             "description": "The user lacks write access to this home."
+          },
+          "404": {
+            "description": "Maintenance task not found"
           }
         },
         "summary": "Mark a maintenance task as completed and deduct dependencies from inventory",
@@ -4000,6 +4089,341 @@
           },
           "403": {
             "description": "The user lacks write access to this home."
+          }
+        }
+      }
+    },
+    "/images": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Upload a private home image",
+        "description": "Owner/editor only. Upload exactly one multipart file field named file. Content is decoded and must be valid JPEG or PNG, at most 5 MiB and 20 megapixels. Filename and declared MIME type are not trusted. The server chooses a fresh UUID key and detected extension. Up to two uploads run concurrently per backend process; excess requests return 503 with Retry-After. Uploads pass through the backend, so bucket CORS is not required.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "One JPEG or PNG image; maximum 5 MiB and 20 megapixels."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Image stored. Save the returned path in image_url.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid home header, request, or image path.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Firebase ID token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Home membership or write permission is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File exceeds 5 MiB or the multipart envelope exceeds the allowed overhead.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported or corrupt image content.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Home membership lookup failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Cloud Storage or IAM signing failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Image storage is not configured, or both upload slots are occupied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Present for upload-capacity errors; retry after this many seconds.",
+                "schema": {
+                  "type": "integer",
+                  "example": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Delete a private home image",
+        "description": "Owner/editor only. Deletes the object, returning 204 if it is already missing. Does not change SQL image_url references. Update/clear saved references before deleting an old image. Cloud Storage soft-delete retention still applies.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImagePath"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Image deleted or already missing."
+          },
+          "400": {
+            "description": "Invalid home header, request, or image path.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Firebase ID token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Home membership or write permission is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Home membership lookup failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Cloud Storage or IAM signing failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Image storage is not configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/images/signed-urls": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Create temporary read URLs for home images",
+        "description": "Any member of the selected home may read. All keys are validated before any signing call; cross-home, URL, and traversal inputs are rejected. The batch is all-or-nothing: a missing object returns 404, provider failures return 502. Duplicate paths return one result each. URLs last 15 minutes and are bearer credentials. Cache only until expires_at, scoped to user/home, and clear them on logout or home changes. The response uses Cache-Control: no-store.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignedImageURLsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed URLs for unique paths.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedImageURLsResponse"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "no-store"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid home header, request, or image path.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Firebase ID token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Home membership or write permission is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "An image in the batch does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Home membership lookup failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Cloud Storage or IAM signing failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Image storage is not configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageErrorResponse"
+                }
+              }
+            }
           }
         }
       }

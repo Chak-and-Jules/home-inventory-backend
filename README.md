@@ -77,6 +77,61 @@ and concurrent first requests against disposable PostgreSQL, set
 `AUTH_TEST_POSTGRES_DSN` and run `go test ./internal/middleware -run '^TestFirebase' -count=1`.
 Each fixture creates and removes an isolated schema; do not use a production DB.
 
+## Private image storage
+
+Set `GCS_BUCKET_NAME=home-inventory-11-images` on the backend. Startup uses ADC
+for Cloud Storage and the IAM Service Account Credentials API. The Cloud Run
+runtime service account is discovered from metadata and must have Storage Object
+User on this bucket and `iam.serviceAccounts.signBlob` on itself. Enable
+`iamcredentials.googleapis.com` and keep uniform bucket-level access and public
+access prevention enabled. No bucket ACL changes or service account keys are used.
+
+For local ADC development with storage enabled, set `GCS_SIGNER_EMAIL` to the
+runtime service account's email and give your local identity `signBlob` access
+on that account as well as object access on the bucket. If `GCS_BUCKET_NAME` is
+omitted, the app starts with image endpoints disabled (503). A configured storage
+client that cannot initialize fails startup. Existing auth/database setup is
+still required.
+
+All image requests require a Firebase bearer token and `X-Home-Id`. The API
+checks current SQL home membership before touching storage. Owners/editors may
+upload and delete; viewers may obtain read URLs.
+
+| Request | Result |
+|---|---|
+| `POST /api/v1/images` with multipart field `file` | 201 `{"path":"<home UUID>/<image UUID>.jpg"}` |
+| `POST /api/v1/images/signed-urls` with `{"paths":["<object key>"]}` | 200 `{"images":[{"path":"<object key>","url":"<signed GET URL>","expires_at":"<UTC timestamp>"}]}` |
+| `DELETE /api/v1/images?path=<URL-encoded object key>` | 204, including when already missing |
+
+Uploads must be valid JPEG or PNG files, up to 5 MiB and 20 megapixels. The
+backend derives the MIME type and extension from decoded content, generates a
+fresh UUID key, and prevents overwrites. At most two uploads run per process;
+capacity errors return 503 with `Retry-After: 1`. Uploads go through Cloud Run,
+so the browser does not need bucket CORS permissions. Images have private browser
+caching for five minutes. The API never makes the bucket or objects public.
+
+Save the returned object key in the existing item-definition `image_url` field.
+Signing accepts 1–100 keys from the selected home, deduplicates them, and creates
+V4 GET URLs valid for 15 minutes. The batch fails with 404 if any object is missing;
+Cloud Storage/IAM failures return 502 without exposing provider error details.
+The response uses `Cache-Control: no-store`. Anyone holding a signed URL can read
+its object until expiry/deletion, even if their membership changes in the meantime.
+Clients must use `expires_at` for caching, scope caches to the signed-in user and
+home, clear them on logout/home changes, and never save signed URLs in SQL.
+
+Deletion removes the object only. Clear/replace SQL references before removing
+an old image; deleting an item definition or home does not automatically remove
+its stored objects. Soft-deleted objects follow the bucket's retention policy.
+Existing Supabase objects are not copied or deleted by this change. The web
+client must replace its Supabase upload/delete/signed-URL helpers before using
+these endpoints, including its previous one-year signed-URL cache.
+
+Tests exercise authorization, malformed/oversized/corrupt images, cross-home
+batches, provider failures, concurrent-upload limits, and real Storage/IAM SDK
+requests using local HTTP fixtures. They need no cloud credentials or live bucket.
+The handler tests also support disposable PostgreSQL through
+`UNIT_TEST_POSTGRES_DSN` (`go test ./internal/handlers -run '^TestImage' -count=1`).
+
 ## Quantity and unit contract
 
 This schema is intended for a fresh PostgreSQL 13+ database. Startup creates all

@@ -23,7 +23,7 @@ func TestSetupRouter(t *testing.T) {
 	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: db}), &gorm.Config{})
 	require.NoError(t, err)
 
-	router := SetupRouter(gormDB, nil)
+	router := SetupRouter(gormDB, nil, nil)
 	assert.NotNil(t, router)
 
 	routes := router.Routes()
@@ -44,6 +44,9 @@ func TestSetupRouter(t *testing.T) {
 	assert.True(t, paths["/api/v1/size-units"])
 	assert.True(t, paths["/api/v1/inventory"])
 	assert.True(t, methods["PATCH /api/v1/inventory/:id"])
+	assert.True(t, methods["POST /api/v1/images"])
+	assert.True(t, methods["DELETE /api/v1/images"])
+	assert.True(t, methods["POST /api/v1/images/signed-urls"])
 
 	// Test a 404 response
 	req, _ := http.NewRequest(http.MethodGet, "/invalid-route", nil)
@@ -57,6 +60,9 @@ func TestSetupRouter(t *testing.T) {
 		{http.MethodPost, "/api/v1/profiles/sync"},
 		{http.MethodPost, "/api/v1/profiles/delete-account"},
 		{http.MethodPost, "/api/v1/account/delete-request"},
+		{http.MethodPost, "/api/v1/images"},
+		{http.MethodDelete, "/api/v1/images"},
+		{http.MethodPost, "/api/v1/images/signed-urls"},
 	} {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(route.method, route.path, nil))
