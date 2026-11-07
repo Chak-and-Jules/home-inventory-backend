@@ -1506,7 +1506,7 @@
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "description": "UTC expiry, approximately 15 minutes after the request starts."
+            "description": "UTC expiry, approximately one hour after the request starts."
           }
         }
       },
@@ -4320,7 +4320,7 @@
           "Images"
         ],
         "summary": "Create temporary read URLs for home images",
-        "description": "Any member of the selected home may read. All keys are validated before any signing call; cross-home, URL, and traversal inputs are rejected. The batch is all-or-nothing: a missing object returns 404, provider failures return 502. Duplicate paths return one result each. URLs last 15 minutes and are bearer credentials. Cache only until expires_at, scoped to user/home, and clear them on logout or home changes. The response uses Cache-Control: no-store.",
+        "description": "Any member of the selected home may read. All keys are validated before any signing call; cross-home, URL, and traversal inputs are rejected. The batch is all-or-nothing: a missing object returns 404, provider failures return 502. Duplicate paths return one result each. URLs last one hour and are bearer credentials. Cache only until expires_at, scoped to user/home, and clear them on logout or home changes. The response uses Cache-Control: no-store.",
         "parameters": [
           {
             "$ref": "#/components/parameters/HomeIdHeader"

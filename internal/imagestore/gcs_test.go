@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -189,7 +190,7 @@ func TestGCSUploadSignDelete(t *testing.T) {
 	f.mu.Unlock()
 	// Even the adapter enforces immutable object names on retry/collision.
 	require.Error(t, f.store.Upload(ctx, path, "image/jpeg", []byte("replacement")))
-	expires := time.Now().UTC().Add(15 * time.Minute)
+	expires := time.Now().UTC().Add(time.Hour)
 	signed, err := f.store.SignedURL(ctx, path, expires)
 	require.NoError(t, err)
 	u, err := url.Parse(signed)
@@ -198,8 +199,15 @@ func TestGCSUploadSignDelete(t *testing.T) {
 	require.Equal(t, "storage.googleapis.com", u.Host)
 	require.Equal(t, "/test-images/"+path, u.Path)
 	require.Equal(t, "GOOG4-RSA-SHA256", u.Query().Get("X-Goog-Algorithm"))
-	// V4 signing rounds the remaining duration down to whole seconds.
-	require.Contains(t, []string{"899", "900"}, u.Query().Get("X-Goog-Expires"))
+	// Verify the effective URL expiry, accounting for V4 whole-second rounding
+	// and time spent looking up the object before signing.
+	seconds, err := strconv.Atoi(u.Query().Get("X-Goog-Expires"))
+	require.NoError(t, err)
+	require.Greater(t, seconds, 0)
+	require.LessOrEqual(t, seconds, 3600)
+	signedAt, err := time.Parse("20060102T150405Z", u.Query().Get("X-Goog-Date"))
+	require.NoError(t, err)
+	require.WithinDuration(t, expires, signedAt.Add(time.Duration(seconds)*time.Second), 2*time.Second)
 	require.True(t, strings.HasPrefix(u.Query().Get("X-Goog-Credential"), f.store.email+"/"))
 	signature, err := hex.DecodeString(u.Query().Get("X-Goog-Signature"))
 	require.NoError(t, err)
