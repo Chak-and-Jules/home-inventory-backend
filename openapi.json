@@ -1523,6 +1523,258 @@
             }
           }
         }
+      },
+      "GuideCheckpoint": {
+        "type": "object",
+        "required": [
+          "revision",
+          "status",
+          "step",
+          "restored",
+          "deferred_until",
+          "home_id",
+          "definition_id",
+          "inventory_id"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "in_progress"
+            ]
+          },
+          "step": {
+            "type": "string",
+            "description": "Named checkpoint from this platform variant; never transfer step names or indices across platforms."
+          },
+          "restored": {
+            "type": "boolean",
+            "description": "Persisted platform-only exception to an earlier shared completed/skipped outcome."
+          },
+          "deferred_until": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "home_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "inventory_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        }
+      },
+      "Guide": {
+        "type": "object",
+        "required": [
+          "id",
+          "revision",
+          "platform",
+          "platform_revision",
+          "steps",
+          "available",
+          "unavailable_reason",
+          "can_write",
+          "status",
+          "version",
+          "checkpoint"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "inventory-introduction"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Logical workflow revision. Only a deliberate reintroduction increments this; wording/translation/layout edits keep it."
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "web",
+              "mobile"
+            ]
+          },
+          "platform_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Checkpoint schema revision for this platform; changing it does not clear completed/skipped decisions."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Current publication/client support/permission/prerequisite eligibility, independent of progress and invitation deferral."
+          },
+          "unavailable_reason": {
+            "type": "string",
+            "enum": [
+              "",
+              "no_home",
+              "permission",
+              "prerequisite"
+            ]
+          },
+          "can_write": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "in_progress",
+              "completed",
+              "skipped"
+            ],
+            "description": "Effective state for the requested platform, including its explicit restore exception."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Per-user, per-logical-guide optimistic concurrency version shared by platform updates."
+          },
+          "checkpoint": {
+            "$ref": "#/components/schemas/GuideCheckpoint"
+          }
+        }
+      },
+      "GuideCatalog": {
+        "type": "object",
+        "required": [
+          "guides",
+          "invitation_id"
+        ],
+        "properties": {
+          "guides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Guide"
+            }
+          },
+          "invitation_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "At most one eligible, contextual invitation in catalog priority order. Registration time does not exclude newly published guides."
+          }
+        }
+      },
+      "GuideDefinitionInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "size_unit_id",
+          "is_expirable"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "size_unit_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "is_expirable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GuideAction": {
+        "type": "object",
+        "required": [
+          "platform",
+          "platform_revision",
+          "revision",
+          "expected_version",
+          "request_id",
+          "action"
+        ],
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": [
+              "web",
+              "mobile"
+            ]
+          },
+          "platform_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expected_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "New UUID for a deliberate action; reuse the identical body/home and UUID when retrying a lost response. A receipt is retained across later actions; replay returns current progress without repeating resource writes."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "start",
+              "checkpoint",
+              "defer",
+              "skip",
+              "restore",
+              "complete",
+              "choose_definition",
+              "create_definition",
+              "choose_inventory",
+              "create_inventory"
+            ]
+          },
+          "step": {
+            "type": "string"
+          },
+          "definition_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inventory_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/GuideDefinitionInput"
+          },
+          "inventory": {
+            "$ref": "#/components/schemas/CreateInventoryItemRequest"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -4424,6 +4676,192 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/guides": {
+      "get": {
+        "tags": [
+          "Guides"
+        ],
+        "summary": "List applicable tutorials and their platform-specific effective progress",
+        "description": "Authenticated per-user catalog. Published guides are eligible for existing as well as new accounts. Filter variants to the declared client capabilities. Progress is separate from eligibility. Return at most one contextual invitation by priority; deferral applies only to this platform. X-Home-Id is optional to list settings without a home; a provided home requires current membership. Owner/editor and viewer tutorial paths are supported.",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "web",
+                "mobile"
+              ]
+            }
+          },
+          {
+            "name": "capabilities",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "inventory-introduction:1",
+            "description": "Comma-separated logical guide ID:platform_revision capabilities implemented by this client. Unknown/unsupported/inactive/unpublished variants are not listed."
+          },
+          {
+            "name": "context",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "dashboard",
+            "description": "dashboard, inventory, item-definitions, or settings for the initial catalog. Settings lists progress without an automatic invitation."
+          },
+          {
+            "name": "X-Home-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Applicable variants and one optional contextual invitation.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuideCatalog"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid action/checkpoint/resource, missing home, or unmet guide prerequisites.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firebase authentication required."
+          },
+          "403": {
+            "description": "No access to the requested home."
+          },
+          "500": {
+            "description": "Progress/catalog persistence unavailable."
+          }
+        }
+      }
+    },
+    "/guides/{id}/actions": {
+      "post": {
+        "tags": [
+          "Guides"
+        ],
+        "summary": "Apply a versioned, idempotent tutorial action",
+        "description": "Use the platform revision and version returned by GET /guides. start resumes the current platform checkpoint, or starts in the selected home. checkpoint advances only to the next named platform step. defer retains the checkpoint and postpones this platform invitation for 24 hours. skip/complete set the logical outcome for BOTH platform variants, including an unused counterpart; they never change another logical guide. restore restarts ONLY the requested platform, preserving the counterpart outcome and all created data. The explicit restore exception survives login/refresh until another explicit skip/completion. Stale versions or protocol revisions return 409; refresh and let the user decide before another mutation. Initial setup supports choose_definition/choose_inventory to reuse same-home records; create_definition/create_inventory save resources and progress atomically. Writes require owner/editor membership and stock quantities retain explicit input units and existing validation. Complete requires the dashboard checkpoint and, for writers, a saved same-home inventory entry. Viewers may finish the read-only explanations. Retry the same body/home/request_id after a lost response; do not automatically replay mutations with a new ID.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "inventory-introduction"
+          },
+          {
+            "name": "X-Home-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Required for start, checkpoints, resource actions and completion. Optional for skip/defer/restore from Settings."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuideAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current effective platform state after applying or safely replaying an action.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Guide"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid action/checkpoint/resource, missing home, or unmet guide prerequisites.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firebase authentication required."
+          },
+          "403": {
+            "description": "Home access or write permission denied."
+          },
+          "404": {
+            "description": "Unknown, inactive, unpublished or unsupported guide, or selected record not found in this home."
+          },
+          "409": {
+            "description": "Stale progress/catalog/platform revision or reused request ID with different payload/home. No resource mutation is committed."
+          },
+          "500": {
+            "description": "Action failed; resource creation and guide progress roll back together."
           }
         }
       }

@@ -212,3 +212,53 @@ and functions. Each fixture creates and removes its own isolated schema.
 ### Code Coverage
 
 ![Codecov](https://codecov.io/github/Chak-and-Jules/home-inventory-backend/graphs/icicle.svg?token=UTALTUNJ65)
+
+## Reusable guides and first inventory setup
+
+`GET /api/v1/guides?platform=web|mobile&capabilities=inventory-introduction:1&context=dashboard`
+returns only published, supported platform variants, their effective per-user
+state, availability, and at most one contextual invitation. All requests use the
+normal Firebase authentication. Supply `X-Home-Id` explicitly when a home is
+selected. Settings can list a user's tutorials without a home. Guide publication
+is independent of account registration time.
+
+`POST /api/v1/guides/{id}/actions` accepts `platform`, `platform_revision`,
+`revision`, `expected_version`, a UUID `request_id`, and an `action`. Use the
+returned `version` for the next deliberate action. A lost response is retried
+with the identical UUID/body/home; retained receipts return current progress
+without repeating writes. A stale version or revision returns 409 and commits no
+resource changes. Clients refresh the guide before asking the user to continue.
+
+- `start` resumes this platform's named checkpoint. `checkpoint` advances to the
+  next platform step. Web and mobile step names deliberately differ.
+- `defer` preserves progress and postpones only the current platform invitation
+  for 24 hours. Manual resume is always available in that platform's Settings.
+- `complete` and `skip` apply the outcome to both variants of this logical guide,
+  even if the other app has never been used. They leave unrelated guides alone.
+- `restore` restarts only the requested platform, storing an explicit exception
+  to the earlier shared outcome. Login and refresh cannot overwrite that
+  exception; a later explicit completion/skip again applies to both variants.
+- The introduction's `choose_definition`/`choose_inventory` actions reuse
+  existing same-home records. `create_definition` and `create_inventory` save
+  their records and checkpoints in one transaction. Stock uses the existing
+  exact-unit normalization, transaction logging and shopping-list updates.
+  Owner/editor permissions are rechecked for every write. Viewers receive an
+  explanation-only path and cannot create resources. A writer can complete only
+  after reaching the dashboard with a persisted same-home inventory entry.
+
+The code catalog in `internal/guides/catalog.go` is intentionally small. Add a
+stable guide ID, publication/activation, priority, contexts, prerequisites,
+permissions and supported platform variants for future guides. A client declares
+only variants it implements in `capabilities`; Settings lists only that client's
+variants. Routine wording, translation and layout edits keep revisions and all
+completion/skip decisions. Change a platform revision only when its named
+checkpoint structure changes; terminal decisions survive that update. Increment
+the logical revision only for a deliberate, substantial workflow reintroduction.
+A future demo-house guide uses a separate ID and is not part of this release.
+
+Startup creates `guide_progresses` and `guide_mutations` through AutoMigrate.
+They reference the authenticated internal profile UUID and cascade on profile
+deletion. Deploy this backend before the matching web/mobile clients. Integration
+tests exercise actual SQL persistence (SQLite by default, disposable PostgreSQL
+via `UNIT_TEST_POSTGRES_DSN`), retries, concurrent/stale clients, isolation,
+platform restores, deferrals, publication and transactional stock setup.
