@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/authentication"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/guides"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/imagestore"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
@@ -81,6 +82,9 @@ func main() {
 	}
 
 	// Setup Gin Router
+	if err := guides.ValidateCatalog(guides.Catalog()); err != nil {
+		logger.Log.Sugar().Fatalf("Guide catalog validation failed: %v", err)
+	}
 	done = bootStep("router setup")
 	authClient, err := authentication.NewClient(context.Background())
 	if err != nil {
@@ -125,10 +129,10 @@ func bootStep(name string) func(string) {
 func autoMigrateModels() []interface{} {
 	return []interface{}{
 		&models.Profile{},
-		&models.GuideProgress{}, &models.GuideMutation{},
 		&models.Language{},
 		&models.Home{},
 		&models.UserHome{},
+		&models.GuideProgress{}, &models.GuideRequest{},
 		&models.SizeUnit{},
 		&models.Category{},
 		&models.ItemDefinition{},

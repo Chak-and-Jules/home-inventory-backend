@@ -1,42 +1,44 @@
 package models
 
 import (
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-// GuidePlatformState checkpoints use the variant's own named steps, never indices.
-type GuidePlatformState struct {
-	Revision      int        `json:"revision"`
-	Status        string     `json:"status"`
-	Step          string     `json:"step"`
-	Restored      bool       `json:"restored"`
-	DeferredUntil *time.Time `json:"deferred_until"`
-	HomeID        *uuid.UUID `json:"home_id"`
-	DefinitionID  *uuid.UUID `json:"definition_id"`
-	InventoryID   *uuid.UUID `json:"inventory_id"`
-}
-
+// GuideProgress is one versioned aggregate for both applications. Updating the
+// aggregate with compare-and-swap makes shared outcomes atomic without allowing
+// a stale checkpoint to overwrite a platform-specific restore.
 type GuideProgress struct {
-	UserID    uuid.UUID          `gorm:"type:uuid;primaryKey"`
-	GuideID   string             `gorm:"type:varchar(100);primaryKey"`
-	Revision  int                `gorm:"not null"`
-	Version   uint64             `gorm:"not null"`
-	Outcome   string             `gorm:"type:varchar(20);not null"`
-	Web       GuidePlatformState `gorm:"serializer:json;type:text;not null"`
-	Mobile    GuidePlatformState `gorm:"serializer:json;type:text;not null"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	User      Profile `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	UserID              uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	GuideID             string     `gorm:"type:varchar(100);primaryKey"`
+	Revision            int        `gorm:"primaryKey"`
+	Version             int64      `gorm:"not null;default:0"`
+	WebStatus           string     `gorm:"type:varchar(20);not null;default:not_started"`
+	WebStepID           string     `gorm:"type:varchar(100);not null;default:''"`
+	WebHomeID           *uuid.UUID `gorm:"type:uuid"`
+	WebDefinitionID     *uuid.UUID `gorm:"type:uuid"`
+	WebInventoryID      *uuid.UUID `gorm:"type:uuid"`
+	WebDeferredUntil    *time.Time
+	MobileStatus        string     `gorm:"type:varchar(20);not null;default:not_started"`
+	MobileStepID        string     `gorm:"type:varchar(100);not null;default:''"`
+	MobileHomeID        *uuid.UUID `gorm:"type:uuid"`
+	MobileDefinitionID  *uuid.UUID `gorm:"type:uuid"`
+	MobileInventoryID   *uuid.UUID `gorm:"type:uuid"`
+	MobileDeferredUntil *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	User                Profile `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	WebHome             *Home   `gorm:"foreignKey:WebHomeID;constraint:OnDelete:SET NULL"`
+	MobileHome          *Home   `gorm:"foreignKey:MobileHomeID;constraint:OnDelete:SET NULL"`
 }
 
-// A receipt survives subsequent actions, so retrying a lost response never
-// repeats a stock write or rolls back a newer disposition/restore.
-type GuideMutation struct {
+// GuideRequest records successful commands in the same transaction as progress.
+// Retrying an old command acknowledges it without replaying its side effects.
+type GuideRequest struct {
 	UserID      uuid.UUID `gorm:"type:uuid;primaryKey"`
-	GuideID     string    `gorm:"type:varchar(100);primaryKey"`
 	RequestID   uuid.UUID `gorm:"type:uuid;primaryKey"`
-	PayloadHash string    `gorm:"type:varchar(64);not null"`
+	Fingerprint string    `gorm:"type:char(64);not null"`
 	CreatedAt   time.Time
-	User        Profile `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	User        Profile `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
 }

@@ -1,84 +1,49 @@
-// Package guides defines the published catalog and revision policy. Wording,
-// translation and layout edits keep these revisions. Deliberate reintroduction
-// increments the logical revision; changed checkpoint structures increment only
-// the affected platform revision and never erase a completed/skipped outcome.
+// Package guides implements the catalog and durable guide lifecycle shared by
+// the web and mobile applications. Clients own their localized walkthrough UI.
 package guides
 
-import (
-	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
-	"time"
+import "time"
+
+type Platform string
+
+const (
+	Web    Platform = "web"
+	Mobile Platform = "mobile"
 )
 
-const Introduction = "inventory-introduction"
+func (p Platform) Valid() bool { return p == Web || p == Mobile }
+
+// Revision changes ONLY for deliberate reintroduction. ContentVersion can change
+// for routine content fixes without discarding any user's previous decision.
+type Definition struct {
+	ID            string               `json:"id"`
+	Revision      int                  `json:"revision"`
+	TitleKey      string               `json:"title_key"`
+	PublishedAt   time.Time            `json:"published_at"`
+	Active        bool                 `json:"-"`
+	Prerequisites []string             `json:"prerequisites"`
+	RequiresHome  bool                 `json:"requires_home"`
+	Roles         []string             `json:"roles"`
+	Variants      map[Platform]Variant `json:"-"`
+}
 
 type Variant struct {
-	Revision int      `json:"revision"`
-	Steps    []string `json:"steps"`
-}
-type Definition struct {
-	ID            string
-	Revision      int
-	Active        bool
-	PublishedAt   time.Time
-	Priority      int
-	Contexts      []string
-	Prerequisites []string
-	RequiresWrite bool
-	Variants      map[string]Variant
+	ContentVersion   int      `json:"content_version"`
+	MinClientVersion int      `json:"min_client_version"`
+	EntryPoint       string   `json:"entry_point"`
+	Steps            []string `json:"steps"`
 }
 
+// Catalog is deployed with the API. Adding a later guide does not depend on when
+// an account registered. Clients opt into their supported guide protocol version.
 func Catalog() []Definition {
-	return []Definition{{ID: Introduction, Revision: 1, Active: true,
-		PublishedAt: time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC), Priority: 10,
-		Contexts: []string{"dashboard", "inventory", "item-definitions"},
-		Variants: map[string]Variant{
-			"web":    {Revision: 1, Steps: []string{"welcome", "definition", "stock", "dashboard"}},
-			"mobile": {Revision: 1, Steps: []string{"home-basics", "choose-item", "add-stock", "dashboard-tips"}},
+	return []Definition{{
+		ID: "introduction", Revision: 1, TitleKey: "guides.introduction.title",
+		Active: true, PublishedAt: time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC),
+		Prerequisites: []string{}, RequiresHome: true, Roles: []string{"owner", "editor"},
+		Variants: map[Platform]Variant{
+			Web:    {ContentVersion: 1, MinClientVersion: 1, EntryPoint: "session", Steps: []string{"home", "definition", "stock", "quantity"}},
+			Mobile: {ContentVersion: 1, MinClientVersion: 1, EntryPoint: "session", Steps: []string{"home", "definition", "inventory", "quantity"}},
 		},
 	}}
-}
-
-func Platform(p *models.GuideProgress, platform string) *models.GuidePlatformState {
-	if platform == "web" {
-		return &p.Web
-	}
-	return &p.Mobile
-}
-func Normalize(p *models.GuideProgress, d Definition) {
-	if p.Revision != d.Revision {
-		p.Revision = d.Revision
-		p.Outcome = ""
-		p.Web = models.GuidePlatformState{}
-		p.Mobile = models.GuidePlatformState{}
-	}
-	for name, variant := range d.Variants {
-		s := Platform(p, name)
-		if s.Revision != variant.Revision {
-			s.Revision = variant.Revision
-			s.Step = variant.Steps[0]
-			// Preserve disposition and explicit restore exceptions across content updates.
-		}
-		if s.Status == "" {
-			s.Status = "available"
-		}
-	}
-}
-func Status(p *models.GuideProgress, platform string) string {
-	s := Platform(p, platform)
-	if p.Outcome != "" && !s.Restored {
-		return p.Outcome
-	}
-	return s.Status
-}
-func Supported(d Definition, platform string, now time.Time) bool {
-	_, ok := d.Variants[platform]
-	return ok && d.Active && !d.PublishedAt.After(now)
-}
-func Contains(values []string, value string) bool {
-	for _, v := range values {
-		if v == value {
-			return true
-		}
-	}
-	return false
 }
