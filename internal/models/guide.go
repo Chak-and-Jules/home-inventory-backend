@@ -17,10 +17,14 @@ type GuideProgress struct {
 	WebStatus           string     `gorm:"type:varchar(20);not null;default:not_started"`
 	WebStepID           string     `gorm:"type:varchar(100);not null;default:''"`
 	WebHomeID           *uuid.UUID `gorm:"type:uuid"`
+	WebDefinitionID     *uuid.UUID `gorm:"type:uuid"`
+	WebInventoryID      *uuid.UUID `gorm:"type:uuid"`
 	WebDeferredUntil    *time.Time
 	MobileStatus        string     `gorm:"type:varchar(20);not null;default:not_started"`
 	MobileStepID        string     `gorm:"type:varchar(100);not null;default:''"`
 	MobileHomeID        *uuid.UUID `gorm:"type:uuid"`
+	MobileDefinitionID  *uuid.UUID `gorm:"type:uuid"`
+	MobileInventoryID   *uuid.UUID `gorm:"type:uuid"`
 	MobileDeferredUntil *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time

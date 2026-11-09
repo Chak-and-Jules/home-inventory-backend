@@ -16,6 +16,7 @@ var Translations = map[string]map[string]string{
 	"English": {},
 	"Türkçe": {
 		"Failed to process guide state":                          "Rehber durumu işlenemedi",
+		"Guide record not found in this home":                    "Rehber kaydı bu evde bulunamadı",
 		"Invalid guide request":                                  "Geçersiz rehber isteği",
 		"Guide not available for this client":                    "Rehber bu uygulama sürümü için kullanılamıyor",
 		"Guide state changed. Reload and try again":              "Rehber durumu değişti. Yenileyip tekrar deneyin",

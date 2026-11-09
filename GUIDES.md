@@ -126,3 +126,50 @@ The role needs schema creation permission. Each fixture creates an isolated sche
 and drops it at cleanup. Do not point this test at production. HTTP tests and the
 router suite additionally verify platform filtering, validation, localization and
 authentication protection; normal repository vet/build/test checks still apply.
+
+## Renderer v2: continuous inventory setup
+
+This extends the lifecycle API above without replacing its catalog, logical ID
+`introduction`, tables, revisions, platform states, or per-user request receipts.
+Renderer-v1 discovery and actions keep their existing semantics. Renderer v2
+clients use `client_version: 2` with the same array-shaped discovery response,
+`state.step_id`, `variant`, and `maybe_later`/`defer_until` lifecycle fields.
+Each client maps the stable backend step names to its own localized screens.
+The response adds `can_write`, `state.definition_id`, and `state.inventory_id`.
+Version-2 viewers can start the introduction and read its explanatory steps;
+creation still requires owner/editor access. Catalog order, `should_offer`,
+entry points, prerequisites and the client's implemented guide registry determine
+one contextual invitation at a time.
+
+`POST /api/v1/guides/introduction/setup` accepts the usual request UUID,
+platform, revision, client_version (at least 2) and expected_version, plus one of:
+
+- `choose_definition` with `definition_id`, or `create_definition` with a minimal
+  `definition` (`name`, `size_unit_id`, optional `category_id`/`is_expirable`).
+- `choose_inventory` with `inventory_id`, or `create_inventory` with `inventory`
+  using the normal explicit-unit quantity and optional expiry contract.
+
+Always send the selected `X-Home-Id`. Setup does not accept a body `home_id`,
+`step_id`, or `defer_until`. Start explicitly in that home through the existing
+lifecycle API first. Resources must belong to the selected home. Saving/selecting
+an item definition advances from `definition` to `stock` on web or `inventory`
+on mobile; saving/selecting stock advances to `quantity`. Existing records can
+be reused without duplicates. A different-home start or platform Restore clears
+only that platform's setup references and leaves user-created records intact.
+Revoked/deleted home context hides saved resource references in responses.
+
+Resource writes, inventory logs, shopping updates, checkpoint and receipt use
+one transaction in the existing guide service. Failed stock saves preserve the
+saved definition; identical concurrent retries create stock once. Lifecycle and
+setup commands share the request-ID namespace, so an ID cannot be reused across
+these endpoints with different payloads. A lost-response retry returns the
+current guide state even after later completion/skip/restore. Exact decimal text
+is retained for quantity validation and receipt fingerprints.
+
+After reaching the dashboard, use the existing `complete` action. For renderer
+v2 writers, the saved inventory reference must still exist in the same home;
+viewers can complete the explanatory path. Shared completion/skip and durable
+platform-only Restore retain the rules above. Existing renderer-v1 clients and
+progress rows continue to work; the migration only adds nullable setup-reference
+columns. No second guide-progress table or alternate introduction identity is
+introduced. Deploy this additive backend update before the renderer-v2 clients.

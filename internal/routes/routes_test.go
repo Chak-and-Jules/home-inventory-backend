@@ -61,6 +61,7 @@ func TestSetupRouter(t *testing.T) {
 		{http.MethodGet, "/api/v1/homes"},
 		{http.MethodGet, "/api/v1/guides?platform=web&client_version=1"},
 		{http.MethodPost, "/api/v1/guides/introduction/actions"},
+		{http.MethodPost, "/api/v1/guides/introduction/setup"},
 		{http.MethodPost, "/api/v1/profiles/sync"},
 		{http.MethodPost, "/api/v1/profiles/delete-account"},
 		{http.MethodPost, "/api/v1/account/delete-request"},

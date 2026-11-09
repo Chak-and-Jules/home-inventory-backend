@@ -66,6 +66,7 @@ func SetupRouter(db *gorm.DB, authClient authentication.Client, images imagestor
 		guideHandler := &handlers.GuideHandler{Service: guides.New(db)}
 		v1.GET("/guides", guideHandler.List)
 		v1.POST("/guides/:id/actions", guideHandler.Act)
+		v1.POST("/guides/:id/setup", guideHandler.Setup)
 
 		images := v1.Group("/images")
 		{

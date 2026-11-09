@@ -38,6 +38,8 @@ type State struct {
 	StepID        string     `json:"step_id"`
 	HomeID        *uuid.UUID `json:"home_id"`
 	DeferredUntil *time.Time `json:"deferred_until"`
+	DefinitionID  *uuid.UUID `json:"definition_id"`
+	InventoryID   *uuid.UUID `json:"inventory_id"`
 }
 
 type View struct {
@@ -49,6 +51,7 @@ type View struct {
 	Available          bool     `json:"available"`
 	UnavailableReasons []string `json:"unavailable_reasons"`
 	ShouldOffer        bool     `json:"should_offer"`
+	CanWrite           bool     `json:"can_write"`
 }
 
 type Command struct {
@@ -75,6 +78,10 @@ func (s *Service) definition(id string, p Platform, client int) (Definition, boo
 	for _, d := range s.Definitions {
 		variant, exists := d.Variants[p]
 		if d.ID == id && exists && d.Active && !d.PublishedAt.After(s.Now()) && client >= variant.MinClientVersion {
+			// Renderer v2 implements the introduction's read-only viewer path.
+			if d.ID == "introduction" && client >= 2 {
+				d.Roles = append(append([]string{}, d.Roles...), "viewer")
+			}
 			return d, true
 		}
 	}
@@ -92,15 +99,17 @@ func progress(db *gorm.DB, user uuid.UUID, d Definition) (models.GuideProgress, 
 
 func state(p models.GuideProgress, platform Platform) State {
 	if platform == Web {
-		return State{p.WebStatus, p.WebStepID, p.WebHomeID, p.WebDeferredUntil}
+		return State{Status: p.WebStatus, StepID: p.WebStepID, HomeID: p.WebHomeID, DeferredUntil: p.WebDeferredUntil, DefinitionID: p.WebDefinitionID, InventoryID: p.WebInventoryID}
 	}
-	return State{p.MobileStatus, p.MobileStepID, p.MobileHomeID, p.MobileDeferredUntil}
+	return State{Status: p.MobileStatus, StepID: p.MobileStepID, HomeID: p.MobileHomeID, DeferredUntil: p.MobileDeferredUntil, DefinitionID: p.MobileDefinitionID, InventoryID: p.MobileInventoryID}
 }
 
 func setState(p *models.GuideProgress, platform Platform, v State) {
 	if platform == Web {
+		p.WebDefinitionID, p.WebInventoryID = v.DefinitionID, v.InventoryID
 		p.WebStatus, p.WebStepID, p.WebHomeID, p.WebDeferredUntil = v.Status, v.StepID, v.HomeID, v.DeferredUntil
 	} else {
+		p.MobileDefinitionID, p.MobileInventoryID = v.DefinitionID, v.InventoryID
 		p.MobileStatus, p.MobileStepID, p.MobileHomeID, p.MobileDeferredUntil = v.Status, v.StepID, v.HomeID, v.DeferredUntil
 	}
 }
@@ -129,8 +138,11 @@ func (s *Service) view(db *gorm.DB, user uuid.UUID, d Definition, platform Platf
 			return View{}, err
 		}
 		if role == "" {
-			v.State.HomeID = nil
+			v.State.HomeID, v.State.DefinitionID, v.State.InventoryID = nil, nil, nil
 		}
+	}
+	if v.State.HomeID == nil {
+		v.State.DefinitionID, v.State.InventoryID = nil, nil
 	}
 	if home == nil {
 		home = v.State.HomeID
@@ -143,6 +155,7 @@ func (s *Service) view(db *gorm.DB, user uuid.UUID, d Definition, platform Platf
 			if err != nil {
 				return View{}, err
 			}
+			v.CanWrite = role == "owner" || role == "editor"
 			if role == "" {
 				v.UnavailableReasons = append(v.UnavailableReasons, "home_access_required")
 			} else if len(d.Roles) > 0 && !slices.Contains(d.Roles, role) {
@@ -237,6 +250,19 @@ func receipt(db *gorm.DB, user uuid.UUID, request uuid.UUID, hash string) (bool,
 // Act uses a shared aggregate version even for platform-local changes. Conflicting
 // clients must reload and consciously retry; last-writer-wins would lose restores.
 func (s *Service) Act(ctx context.Context, user uuid.UUID, id string, c Command) (View, error) {
+	return s.act(ctx, user, id, c, nil, nil)
+}
+
+// CheckpointWith runs a business write and its checkpoint using the existing
+// aggregate and receipt transaction. Replays never invoke write a second time.
+func (s *Service) CheckpointWith(ctx context.Context, user uuid.UUID, id string, c Command, payload any, write func(*gorm.DB, *State) error) (View, error) {
+	if c.Action != "checkpoint" || c.ClientVersion < 2 || write == nil {
+		return View{}, ErrInvalid
+	}
+	return s.act(ctx, user, id, c, payload, write)
+}
+
+func (s *Service) act(ctx context.Context, user uuid.UUID, id string, c Command, payload any, write func(*gorm.DB, *State) error) (View, error) {
 	if err := validate(c); err != nil {
 		return View{}, err
 	}
@@ -249,6 +275,14 @@ func (s *Service) Act(ctx context.Context, user uuid.UUID, id string, c Command)
 	}
 	db := s.DB.WithContext(ctx)
 	hash := fingerprint(id, c)
+	if write != nil {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return View{}, ErrInvalid
+		}
+		digest := sha256.Sum256(append([]byte(hash+"\nsetup\n"), b...))
+		hash = hex.EncodeToString(digest[:])
+	}
 	err := db.Transaction(func(tx *gorm.DB) error {
 		replayed, err := receipt(tx, user, c.RequestID, hash)
 		if err != nil || replayed {
@@ -299,11 +333,17 @@ func (s *Service) Act(ctx context.Context, user uuid.UUID, id string, c Command)
 			}
 			if v.Status == NotStarted || contextChanged {
 				v.StepID = d.Variants[c.Platform].Steps[0]
+				v.DefinitionID, v.InventoryID = nil, nil
 			}
 			v.Status, v.DeferredUntil = InProgress, nil
 		case "checkpoint":
 			if v.Status != InProgress || !slices.Contains(d.Variants[c.Platform].Steps, c.StepID) {
 				return ErrTransition
+			}
+			if write != nil {
+				if err := write(tx, &v); err != nil {
+					return err
+				}
 			}
 			v.StepID = c.StepID
 		case "maybe_later":
@@ -318,6 +358,27 @@ func (s *Service) Act(ctx context.Context, user uuid.UUID, id string, c Command)
 				steps := d.Variants[c.Platform].Steps
 				if v.Status != InProgress || v.StepID != steps[len(steps)-1] {
 					return ErrTransition
+				}
+				if id == "introduction" && c.ClientVersion >= 2 {
+					if v.HomeID == nil {
+						return ErrHome
+					}
+					role, err := membership(tx, user, *v.HomeID)
+					if err != nil {
+						return err
+					}
+					if role == "owner" || role == "editor" {
+						if v.InventoryID == nil {
+							return ErrTransition
+						}
+						var item models.InventoryItem
+						if err := tx.Where("id = ? AND home_id = ?", v.InventoryID, v.HomeID).First(&item).Error; err != nil {
+							if errors.Is(err, gorm.ErrRecordNotFound) {
+								return ErrTransition
+							}
+							return err
+						}
+					}
 				}
 				v.Status = Completed
 			} else {
@@ -337,7 +398,7 @@ func (s *Service) Act(ctx context.Context, user uuid.UUID, id string, c Command)
 		p.UpdatedAt = s.Now()
 		updated := tx.Model(&models.GuideProgress{}).
 			Where("user_id = ? AND guide_id = ? AND revision = ? AND version = ?", user, id, d.Revision, *c.ExpectedVersion).
-			Select("version", "web_status", "web_step_id", "web_home_id", "web_deferred_until", "mobile_status", "mobile_step_id", "mobile_home_id", "mobile_deferred_until", "updated_at").Updates(&p)
+			Select("version", "web_status", "web_step_id", "web_home_id", "web_deferred_until", "web_definition_id", "web_inventory_id", "mobile_status", "mobile_step_id", "mobile_home_id", "mobile_deferred_until", "mobile_definition_id", "mobile_inventory_id", "updated_at").Updates(&p)
 		if updated.Error != nil {
 			return updated.Error
 		}
