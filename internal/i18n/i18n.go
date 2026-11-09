@@ -15,6 +15,10 @@ var userLangCache sync.Map
 var Translations = map[string]map[string]string{
 	"English": {},
 	"Türkçe": {
+		"Home not found": "Ev bulunamadı",
+		"Parent category must be a top-level category":                  "Üst kategori en üst düzeyde bir kategori olmalıdır",
+		"A category with children cannot become a child category":       "Alt kategorileri olan bir kategori, alt kategori yapılamaz",
+		"Failed to verify category children":                            "Alt kategoriler doğrulanamadı",
 		"Failed to process demo home":                                   "Örnek ev işlemi tamamlanamadı",
 		"Invalid demo home request":                                     "Geçersiz örnek ev isteği",
 		"Demo home state changed. Reload and try again":                 "Örnek ev durumu değişti. Yenileyip tekrar deneyin",

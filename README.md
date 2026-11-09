@@ -221,3 +221,5 @@ and functions. Each fixture creates and removes its own isolated schema.
 ### Code Coverage
 
 ![Codecov](https://codecov.io/github/Chak-and-Jules/home-inventory-backend/graphs/icicle.svg?token=UTALTUNJ65)
+
+Category hierarchy rules, concurrency behavior and read-only audits are documented in [CATEGORY_HIERARCHY.md](CATEGORY_HIERARCHY.md).

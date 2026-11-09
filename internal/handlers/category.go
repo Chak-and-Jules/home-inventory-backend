@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type CategoryHandler struct {
@@ -48,7 +50,11 @@ func (h *CategoryHandler) GetCategories(c *gin.Context) {
 	for i := range categories {
 		if categories[i].ParentID != nil {
 			if parent, ok := categoryMap[*categories[i].ParentID]; ok {
-				categories[i].Parent = parent
+				// Embed only the immediate parent. Legacy deep trees or cycles
+				// must not create recursive pointers during JSON serialization.
+				copy := *parent
+				copy.Parent = nil
+				categories[i].Parent = &copy
 			}
 		}
 	}
@@ -74,49 +80,26 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 		return
 	}
 
-	// If parent_id is provided, verify it belongs to the same home
-	if req.ParentID != nil {
-		var parent models.Category
-		if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&parent).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
-			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
-			}
-			return
-		}
-		if parent.HomeID != homeID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
-			return
-		}
-	}
-
-	// Check for unique name in the same hierarchy level (case-insensitive and ignoring whitespace)
-	var count int64
-	normalizedName := strings.ToLower(strings.ReplaceAll(req.Name, " ", ""))
-	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ?", homeID, normalizedName)
-	if req.ParentID == nil {
-		query = query.Where("parent_id IS NULL")
-	} else {
-		query = query.Where("parent_id = ?", req.ParentID)
-	}
-	if err := query.Count(&count).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to validate category uniqueness")})
-		return
-	}
-	if count > 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category with this name already exists at this level")})
-		return
-	}
-
 	category := models.Category{
 		HomeID:   homeID,
 		Name:     req.Name,
 		ParentID: req.ParentID,
 	}
 
-	if err := h.DB.Create(&category).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create category")})
+	err := h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := lockCategoryHome(tx, homeID); err != nil {
+			return err
+		}
+		if err := validateCategoryParent(tx, homeID, uuid.Nil, req.ParentID); err != nil {
+			return err
+		}
+		if err := validateCategoryName(tx, homeID, uuid.Nil, req); err != nil {
+			return err
+		}
+		return tx.Create(&category).Error
+	})
+	if err != nil {
+		h.categoryFailure(c, err, "Failed to create category")
 		return
 	}
 
@@ -146,52 +129,26 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	// If parent_id is provided, verify it belongs to the same home
-	if req.ParentID != nil {
-		// Prevent self-parenting
-		if *req.ParentID == id {
-			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category cannot be its own parent")})
-			return
+	err := h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := lockCategoryHome(tx, category.HomeID); err != nil {
+			return err
 		}
-
-		var parent models.Category
-		if err := h.DB.Select("id", "home_id").Where("id = ?", req.ParentID).First(&parent).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category not found")})
-			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to verify parent category")})
-			}
-			return
+		if err := validateCategoryParent(tx, category.HomeID, id, req.ParentID); err != nil {
+			return err
 		}
-		if parent.HomeID != category.HomeID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Parent category must belong to the same home")})
-			return
+		if err := validateCategoryName(tx, category.HomeID, id, req); err != nil {
+			return err
 		}
-	}
-
-	// Check for unique name in the same hierarchy level (case-insensitive and ignoring whitespace)
-	var count int64
-	normalizedName := strings.ToLower(strings.ReplaceAll(req.Name, " ", ""))
-	query := h.DB.Model(&models.Category{}).Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ? AND id != ?", category.HomeID, normalizedName, id)
-	if req.ParentID == nil {
-		query = query.Where("parent_id IS NULL")
-	} else {
-		query = query.Where("parent_id = ?", req.ParentID)
-	}
-	if err := query.Count(&count).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to validate category uniqueness")})
-		return
-	}
-	if count > 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": i18n.TranslateDB(h.DB, c, "A category with this name already exists at this level")})
-		return
-	}
-
-	if err := h.DB.Model(&category).Updates(map[string]interface{}{
-		"name":      req.Name,
-		"parent_id": req.ParentID,
-	}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update category")})
+		result := tx.Model(&category).Updates(map[string]interface{}{
+			"name": req.Name, "parent_id": req.ParentID,
+		})
+		if result.Error == nil && result.RowsAffected == 0 {
+			return &categoryResponseError{404, "Category not found"}
+		}
+		return result.Error
+	})
+	if err != nil {
+		h.categoryFailure(c, err, "Failed to update category")
 		return
 	}
 
@@ -215,10 +172,105 @@ func (h *CategoryHandler) DeleteCategory(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.Category{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete category")})
+	err := h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := lockCategoryHome(tx, category.HomeID); err != nil {
+			return err
+		}
+		result := tx.Delete(&models.Category{}, id)
+		if result.Error == nil && result.RowsAffected == 0 {
+			return &categoryResponseError{404, "Category not found"}
+		}
+		return result.Error
+	})
+	if err != nil {
+		h.categoryFailure(c, err, "Failed to delete category")
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Category deleted successfully")})
+}
+
+type categoryResponseError struct {
+	status int
+	key    string
+}
+
+func (e *categoryResponseError) Error() string { return e.key }
+
+func (h *CategoryHandler) categoryFailure(c *gin.Context, err error, fallback string) {
+	status, key := http.StatusInternalServerError, fallback
+	var response *categoryResponseError
+	if errors.As(err, &response) {
+		status, key = response.status, response.key
+	}
+	// Translate after rollback, including with single-connection database pools.
+	c.JSON(status, gin.H{"error": i18n.TranslateDB(h.DB, c, key)})
+}
+
+// Every category CRUD write takes this lock before checking or modifying the
+// tree. A common home row also serializes creation when no categories exist yet.
+func lockCategoryHome(tx *gorm.DB, homeID uuid.UUID) error {
+	var home models.Home
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&home, "id = ?", homeID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &categoryResponseError{404, "Home not found"}
+		}
+		return err
+	}
+	return nil
+}
+
+func validateCategoryParent(tx *gorm.DB, homeID, categoryID uuid.UUID, parentID *uuid.UUID) error {
+	if parentID == nil {
+		return nil
+	}
+	if categoryID != uuid.Nil && *parentID == categoryID {
+		return &categoryResponseError{400, "A category cannot be its own parent"}
+	}
+	var parent models.Category
+	if err := tx.Select("id", "home_id", "parent_id").Where("id = ?", parentID).First(&parent).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &categoryResponseError{404, "Parent category not found"}
+		}
+		return &categoryResponseError{500, "Failed to verify parent category"}
+	}
+	if parent.HomeID != homeID {
+		return &categoryResponseError{400, "Parent category must belong to the same home"}
+	}
+	if parent.ParentID != nil {
+		return &categoryResponseError{400, "Parent category must be a top-level category"}
+	}
+	if categoryID != uuid.Nil {
+		var count int64
+		if err := tx.Model(&models.Category{}).Where("parent_id = ?", categoryID).Count(&count).Error; err != nil {
+			return &categoryResponseError{500, "Failed to verify category children"}
+		}
+		if count > 0 {
+			return &categoryResponseError{400, "A category with children cannot become a child category"}
+		}
+	}
+	return nil
+}
+
+func validateCategoryName(tx *gorm.DB, homeID, categoryID uuid.UUID, req CategoryRequest) error {
+	normalizedName := strings.ToLower(strings.ReplaceAll(req.Name, " ", ""))
+	query := tx.Model(&models.Category{})
+	if categoryID == uuid.Nil {
+		query = query.Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ?", homeID, normalizedName)
+	} else {
+		query = query.Where("home_id = ? AND LOWER(REPLACE(name, ' ', '')) = ? AND id != ?", homeID, normalizedName, categoryID)
+	}
+	if req.ParentID == nil {
+		query = query.Where("parent_id IS NULL")
+	} else {
+		query = query.Where("parent_id = ?", req.ParentID)
+	}
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return &categoryResponseError{500, "Failed to validate category uniqueness"}
+	}
+	if count > 0 {
+		return &categoryResponseError{409, "A category with this name already exists at this level"}
+	}
+	return nil
 }
