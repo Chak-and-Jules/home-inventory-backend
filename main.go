@@ -132,6 +132,7 @@ func autoMigrateModels() []interface{} {
 		&models.Language{},
 		&models.Home{},
 		&models.UserHome{},
+		&models.UserDemoHome{},
 		&models.GuideProgress{}, &models.GuideRequest{},
 		&models.SizeUnit{},
 		&models.Category{},

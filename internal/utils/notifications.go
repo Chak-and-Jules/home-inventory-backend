@@ -17,9 +17,10 @@ func SendLowStockNotification(db *gorm.DB, homeID uuid.UUID, itemName string, pr
 	var home models.Home
 	homeName := homeID.String()
 	if db != nil {
-		if err := db.First(&home, homeID).Error; err == nil {
-			homeName = home.Name
+		if err := db.First(&home, homeID).Error; err != nil || home.IsDemo {
+			return
 		}
+		homeName = home.Name
 	}
 
 	msg := fmt.Sprintf("Low stock alert for home %s: %s", homeName, itemName)
@@ -42,9 +43,10 @@ func SendExpiryNotification(db *gorm.DB, homeID uuid.UUID, itemName string, expi
 	var home models.Home
 	homeName := homeID.String()
 	if db != nil {
-		if err := db.First(&home, homeID).Error; err == nil {
-			homeName = home.Name
+		if err := db.First(&home, homeID).Error; err != nil || home.IsDemo {
+			return
 		}
+		homeName = home.Name
 	}
 
 	msg := fmt.Sprintf("Item expiring soon for home %s: %s (expires on %s)", homeName, itemName, expiryDate.Format("2006-01-02"))

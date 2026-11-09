@@ -33,7 +33,7 @@ type GuideProgress struct {
 	MobileHome          *Home   `gorm:"foreignKey:MobileHomeID;constraint:OnDelete:SET NULL"`
 }
 
-// GuideRequest records successful commands in the same transaction as progress.
+// GuideRequest records successful guide/setup and demo-house commands atomically.
 // Retrying an old command acknowledges it without replaying its side effects.
 type GuideRequest struct {
 	UserID      uuid.UUID `gorm:"type:uuid;primaryKey"`

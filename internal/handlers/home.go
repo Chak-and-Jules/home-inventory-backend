@@ -362,7 +362,7 @@ func (h *HomeHandler) DeleteHome(c *gin.Context) {
 
 		if userHome.IsDefault {
 			var oldestHome models.UserHome
-			if err := tx.Where("user_id = ?", userID).Order("created_at asc").First(&oldestHome).Error; err != nil {
+			if err := tx.Where("user_id = ? AND home_id IN (SELECT id FROM homes WHERE is_demo = ?)", userID, false).Order("created_at asc").First(&oldestHome).Error; err != nil {
 				return err
 			}
 			if err := tx.Model(&oldestHome).Update("is_default", true).Error; err != nil {

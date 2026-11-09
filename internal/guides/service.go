@@ -44,14 +44,15 @@ type State struct {
 
 type View struct {
 	Definition
-	Platform           Platform `json:"platform"`
-	Variant            Variant  `json:"variant"`
-	Version            int64    `json:"version"`
-	State              State    `json:"state"`
-	Available          bool     `json:"available"`
-	UnavailableReasons []string `json:"unavailable_reasons"`
-	ShouldOffer        bool     `json:"should_offer"`
-	CanWrite           bool     `json:"can_write"`
+	Platform           Platform   `json:"platform"`
+	Variant            Variant    `json:"variant"`
+	Version            int64      `json:"version"`
+	State              State      `json:"state"`
+	Available          bool       `json:"available"`
+	UnavailableReasons []string   `json:"unavailable_reasons"`
+	ShouldOffer        bool       `json:"should_offer"`
+	CanWrite           bool       `json:"can_write"`
+	DemoHomeID         *uuid.UUID `json:"demo_home_id,omitempty"`
 }
 
 type Command struct {
@@ -123,6 +124,18 @@ func membership(db *gorm.DB, user, home uuid.UUID) (string, error) {
 	return h.Role, err
 }
 
+func demoHome(db *gorm.DB, user uuid.UUID) (*uuid.UUID, error) {
+	var record struct{ HomeID *uuid.UUID }
+	err := db.Table("user_demo_homes AS demo").Select("demo.home_id").
+		Joins("JOIN homes ON homes.id = demo.home_id AND homes.is_demo = ?", true).
+		Joins("JOIN user_homes AS membership ON membership.home_id = homes.id AND membership.user_id = demo.user_id AND membership.role = ?", models.RoleOwner).
+		Where("demo.user_id = ?", user).Take(&record).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return record.HomeID, err
+}
+
 func (s *Service) view(db *gorm.DB, user uuid.UUID, d Definition, platform Platform, p models.GuideProgress, home *uuid.UUID) (View, error) {
 	if d.Prerequisites == nil {
 		d.Prerequisites = []string{}
@@ -147,7 +160,27 @@ func (s *Service) view(db *gorm.DB, user uuid.UUID, d Definition, platform Platf
 	if home == nil {
 		home = v.State.HomeID
 	}
-	if d.RequiresHome {
+	if d.RequiresDemoHome {
+		id, err := demoHome(db, user)
+		if err != nil {
+			return View{}, err
+		}
+		v.DemoHomeID, home = id, id
+		if id == nil {
+			v.UnavailableReasons = append(v.UnavailableReasons, "demo_home_required")
+		}
+	}
+	if d.ID == "introduction" && home != nil {
+		var selected models.Home
+		if err := db.Select("id", "is_demo").Where("id = ?", home).First(&selected).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return View{}, err
+			}
+		} else if selected.IsDemo {
+			v.UnavailableReasons = append(v.UnavailableReasons, "personal_home_required")
+		}
+	}
+	if d.RequiresHome && !(d.RequiresDemoHome && home == nil) {
 		if home == nil {
 			v.UnavailableReasons = append(v.UnavailableReasons, "home_required")
 		} else {
@@ -173,7 +206,8 @@ func (s *Service) view(db *gorm.DB, user uuid.UUID, d Definition, platform Platf
 		if err != nil {
 			return View{}, err
 		}
-		if state(previous, platform).Status != Completed {
+		status := state(previous, platform).Status
+		if status != Completed && !(d.AllowSkippedPrerequisites && status == Skipped) {
 			v.UnavailableReasons = append(v.UnavailableReasons, "prerequisite_required")
 			break
 		}
@@ -247,6 +281,12 @@ func receipt(db *gorm.DB, user uuid.UUID, request uuid.UUID, hash string) (bool,
 	return true, nil
 }
 
+// CheckReceipt shares the per-user request namespace with demo-house commands.
+// Callers must insert the receipt atomically with their own state changes.
+func CheckReceipt(db *gorm.DB, user uuid.UUID, request uuid.UUID, hash string) (bool, error) {
+	return receipt(db, user, request, hash)
+}
+
 // Act uses a shared aggregate version even for platform-local changes. Conflicting
 // clients must reload and consciously retry; last-writer-wins would lose restores.
 func (s *Service) Act(ctx context.Context, user uuid.UUID, id string, c Command) (View, error) {
@@ -284,6 +324,14 @@ func (s *Service) act(ctx context.Context, user uuid.UUID, id string, c Command,
 		hash = hex.EncodeToString(digest[:])
 	}
 	err := db.Transaction(func(tx *gorm.DB) error {
+		if d.RequiresDemoHome {
+			// Match the demo lifecycle's profile-before-home lock order. Removal
+			// also clears guide home references through the foreign key.
+			var profile models.Profile
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&profile, "id = ?", user).Error; err != nil {
+				return err
+			}
+		}
 		replayed, err := receipt(tx, user, c.RequestID, hash)
 		if err != nil || replayed {
 			return err
@@ -300,12 +348,26 @@ func (s *Service) act(ctx context.Context, user uuid.UUID, id string, c Command,
 			return ErrConflict
 		}
 		v := state(p, c.Platform)
-		contextChanged := c.HomeID != nil && (v.HomeID == nil || *c.HomeID != *v.HomeID)
+		requestedHome := c.HomeID
+		if d.RequiresDemoHome && slices.Contains([]string{"start", "checkpoint", "complete"}, c.Action) {
+			id, err := demoHome(tx, user)
+			if err != nil {
+				return err
+			}
+			if id == nil {
+				return ErrUnavailable
+			}
+			if requestedHome != nil && *requestedHome != *id {
+				return ErrHome
+			}
+			requestedHome = id
+		}
+		contextChanged := requestedHome != nil && (v.HomeID == nil || *requestedHome != *v.HomeID)
 		if contextChanged && v.Status == InProgress && (c.Action == "checkpoint" || c.Action == "complete") {
 			return ErrTransition // Start explicitly in the new home before resuming.
 		}
-		if c.HomeID != nil {
-			v.HomeID = c.HomeID
+		if requestedHome != nil {
+			v.HomeID = requestedHome
 		}
 		if slices.Contains([]string{"start", "checkpoint", "complete"}, c.Action) {
 			if v.HomeID != nil {

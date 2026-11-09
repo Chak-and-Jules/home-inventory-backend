@@ -932,8 +932,8 @@ func TestDeleteHome(t *testing.T) {
 			WithArgs(homeID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 ORDER BY created_at asc.* LIMIT \$2`).
-			WithArgs(userID, 1).
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id IN \(SELECT id FROM homes WHERE is_demo = \$2\) ORDER BY created_at asc.* LIMIT \$3`).
+			WithArgs(userID, false, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "is_default"}).AddRow(userID, otherHomeID, false))
 
 		mock.ExpectExec(`UPDATE "user_homes" SET "is_default"=\$1,"updated_at"=\$2 WHERE "user_id" = \$3 AND "home_id" = \$4`).
@@ -1123,8 +1123,8 @@ func TestDeleteHome(t *testing.T) {
 			WithArgs(homeID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 ORDER BY created_at asc.* LIMIT \$2`).
-			WithArgs(userID, 1).
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id IN \(SELECT id FROM homes WHERE is_demo = \$2\) ORDER BY created_at asc.* LIMIT \$3`).
+			WithArgs(userID, false, 1).
 			WillReturnError(errors.New("find oldest error"))
 
 		mock.ExpectRollback()
@@ -1164,8 +1164,8 @@ func TestDeleteHome(t *testing.T) {
 			WithArgs(homeID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 ORDER BY created_at asc.* LIMIT \$2`).
-			WithArgs(userID, 1).
+		mock.ExpectQuery(`SELECT \* FROM "user_homes" WHERE user_id = \$1 AND home_id IN \(SELECT id FROM homes WHERE is_demo = \$2\) ORDER BY created_at asc.* LIMIT \$3`).
+			WithArgs(userID, false, 1).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id", "home_id", "is_default"}).AddRow(userID, otherHomeID, false))
 
 		mock.ExpectExec(`UPDATE "user_homes" SET "is_default"=\$1,"updated_at"=\$2 WHERE "user_id" = \$3 AND "home_id" = \$4`).
@@ -1349,8 +1349,8 @@ func TestCreateHome(t *testing.T) {
 		c.Set("userID", userID)
 
 		mock.ExpectBegin()
-		mock.ExpectQuery(`INSERT INTO "homes" \("name","created_at","updated_at"\) VALUES \(\$1,\$2,\$3\) RETURNING "id"`).
-			WithArgs("New Home", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		mock.ExpectQuery(`INSERT INTO "homes" \("name","is_demo","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4\) RETURNING "id"`).
+			WithArgs("New Home", false, sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
 
 		mock.ExpectExec(`INSERT INTO "user_homes" \("user_id","home_id","role","is_default","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6\)`).
@@ -1392,8 +1392,8 @@ func TestCreateHome(t *testing.T) {
 		c.Set("userID", userID)
 
 		mock.ExpectBegin()
-		mock.ExpectQuery(`INSERT INTO "homes" \("name","created_at","updated_at"\) VALUES \(\$1,\$2,\$3\) RETURNING "id"`).
-			WithArgs("New Home", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		mock.ExpectQuery(`INSERT INTO "homes" \("name","is_demo","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4\) RETURNING "id"`).
+			WithArgs("New Home", false, sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnError(errors.New("insert error"))
 		mock.ExpectRollback()
 
@@ -1415,8 +1415,8 @@ func TestCreateHome(t *testing.T) {
 		c.Set("userID", userID)
 
 		mock.ExpectBegin()
-		mock.ExpectQuery(`INSERT INTO "homes" \("name","created_at","updated_at"\) VALUES \(\$1,\$2,\$3\) RETURNING "id"`).
-			WithArgs("New Home", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		mock.ExpectQuery(`INSERT INTO "homes" \("name","is_demo","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4\) RETURNING "id"`).
+			WithArgs("New Home", false, sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uuid.New()))
 
 		mock.ExpectExec(`INSERT INTO "user_homes" \("user_id","home_id","role","is_default","created_at","updated_at"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6\)`).

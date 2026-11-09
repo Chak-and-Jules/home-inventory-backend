@@ -31,7 +31,9 @@ func TestFirebaseProfileLifecycle(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	db := openUnitTestDB(t)
-	require.NoError(t, db.AutoMigrate(&models.Profile{}, &models.Home{}, &models.UserHome{}))
+	require.NoError(t, db.AutoMigrate(&models.Profile{}, &models.Home{}, &models.UserHome{}, &models.UserDemoHome{}, &models.GuideProgress{}, &models.GuideRequest{}, &models.SizeUnit{}, &models.Category{}, &models.ItemDefinition{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.TaskItemDependency{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.InventoryPrediction{}))
+	_, err := models.InitializeUnits(db)
+	require.NoError(t, err)
 	uid, email := "firebase-user-not-a-uuid", "user@example.com"
 	client := &firebaseLifecycleAuth{token: &auth.Token{UID: uid, Claims: map[string]interface{}{"email": email}}}
 	handler := &ProfileHandler{DB: db, Auth: client}
@@ -64,12 +66,12 @@ func TestFirebaseProfileLifecycle(t *testing.T) {
 	require.NoError(t, db.First(&profile, "id = ?", internalID).Error)
 	require.Equal(t, uid, *profile.FirebaseUID)
 	var membership models.UserHome
-	require.NoError(t, db.First(&membership, "user_id = ?", internalID).Error)
+	require.NoError(t, db.First(&membership, "user_id = ? AND is_default = ?", internalID, true).Error)
 	require.Equal(t, models.RoleOwner, membership.Role)
 	require.True(t, membership.IsDefault)
 	var count int64
 	require.NoError(t, db.Model(&models.Home{}).Count(&count).Error)
-	require.EqualValues(t, 1, count)
+	require.EqualValues(t, 2, count)
 	// A supplied identity cannot replace the one established by the token.
 	w := request("/sync", `{"profile":{"id":"another-firebase-user","email":"user@example.com"}}`)
 	require.Equal(t, http.StatusForbidden, w.Code)

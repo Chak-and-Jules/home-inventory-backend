@@ -18,7 +18,7 @@ import (
 func TestNotificationLogging(t *testing.T) {
 	homeID := uuid.New()
 	expiry := time.Date(2026, 9, 25, 23, 30, 0, 0, time.FixedZone("local", 3*60*60))
-	for _, lookup := range []string{"no database", "found", "missing", "database error"} {
+	for _, lookup := range []string{"no database", "found", "demo", "missing", "database error"} {
 		for _, notification := range []string{"normal", "urgent", "expiry"} {
 			t.Run(lookup+"/"+notification, func(t *testing.T) {
 				core, logs := observer.New(zap.InfoLevel)
@@ -38,6 +38,8 @@ func TestNotificationLogging(t *testing.T) {
 					case "found":
 						homeName = "Kitchen"
 						query.WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(homeID, homeName))
+					case "demo":
+						query.WillReturnRows(sqlmock.NewRows([]string{"id", "name", "is_demo"}).AddRow(homeID, "Sample Home", true))
 					case "missing":
 						query.WillReturnRows(sqlmock.NewRows([]string{"id", "name"}))
 					case "database error":
@@ -60,6 +62,10 @@ func TestNotificationLogging(t *testing.T) {
 					}
 					SendLowStockNotification(db, homeID, "Milk", priority)
 					fields["type"], fields["priority"], fields["message"] = "low_stock", priority, message
+				}
+				if lookup == "demo" || lookup == "missing" || lookup == "database error" {
+					require.Zero(t, logs.Len())
+					return
 				}
 				require.Equal(t, 1, logs.Len())
 				entry := logs.All()[0]

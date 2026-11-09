@@ -144,6 +144,11 @@
           "UpdatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "IsDemo": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "True for an explicitly provisioned private sample home. Names are user-editable and must not be used to identify demo data."
           }
         },
         "type": "object"
@@ -1663,7 +1668,9 @@
                 "home_required",
                 "home_access_required",
                 "role_required",
-                "prerequisite_required"
+                "prerequisite_required",
+                "demo_home_required",
+                "personal_home_required"
               ]
             }
           },
@@ -1673,6 +1680,19 @@
           "can_write": {
             "type": "boolean",
             "description": "Whether the user can create definitions and stock in the evaluated home. Viewer renderer-v2 introductions have an explanation-only path."
+          },
+          "requires_demo_home": {
+            "type": "boolean",
+            "description": "Uses the authenticated user's private demo as guide context, independently of the selected real home."
+          },
+          "allow_skipped_prerequisites": {
+            "type": "boolean",
+            "description": "When true, a skipped prerequisite also satisfies eligibility. Existing guides default to false."
+          },
+          "demo_home_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Available only for a demo guide with a currently owned demo. Start that guide in this home; no creation is performed by discovery or Restore."
           }
         },
         "required": [
@@ -1690,7 +1710,9 @@
           "available",
           "unavailable_reasons",
           "should_offer",
-          "can_write"
+          "can_write",
+          "requires_demo_home",
+          "allow_skipped_prerequisites"
         ],
         "description": "Only the requested platform variant/state is returned. Availability is separate from completed/skipped/deferral. Completed and skipped guides remain in this list for platform-specific Settings restoration."
       },
@@ -1758,7 +1780,7 @@
           "action"
         ],
         "additionalProperties": false,
-        "description": "Writes use optimistic concurrency on the whole logical guide/revision, including both platforms. checkpoint requires in_progress; complete requires in_progress at the last platform step. Terminal guides must be restored before resuming. skip applies to both; restore clears only the requesting platform checkpoint/home/deferral. New explicit complete/skip after restoration applies to both again. A successful identical request retry returns current state without replaying the action. After 409 reload, reconcile and use a new request ID for a changed command. Actions never create stock or homes. Renderer v2 introduction completion for writers also requires a saved, same-home inventory reference from /guides/{id}/setup; viewers may finish the explanation-only path. This does not change renderer-v1 completion semantics."
+        "description": "Writes use optimistic concurrency on the whole logical guide/revision, including both platforms. checkpoint requires in_progress; complete requires in_progress at the last platform step. Terminal guides must be restored before resuming. skip applies to both; restore clears only the requesting platform checkpoint/home/deferral. New explicit complete/skip after restoration applies to both again. A successful identical request retry returns current state without replaying the action. After 409 reload, reconcile and use a new request ID for a changed command. Actions never create stock or homes. Renderer v2 introduction completion for writers also requires a saved, same-home inventory reference from /guides/{id}/setup; viewers may finish the explanation-only path. This does not change renderer-v1 completion semantics. For demo_house, an omitted home_id resolves to the authenticated user's private demo; an explicitly different home is rejected. Personal introduction progress cannot advance in demo homes."
       },
       "GuideError": {
         "type": "object",
@@ -1927,6 +1949,115 @@
             ]
           }
         ]
+      },
+      "DemoHomeView": {
+        "type": "object",
+        "required": [
+          "status",
+          "version",
+          "home",
+          "can_create"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_created",
+              "available",
+              "removed"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "home": {
+            "properties": {
+              "CreatedAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "ID": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "Name": {
+                "type": "string"
+              },
+              "UpdatedAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "IsDemo": {
+                "type": "boolean",
+                "readOnly": true,
+                "description": "True for an explicitly provisioned private sample home. Names are user-editable and must not be used to identify demo data."
+              }
+            },
+            "type": "object",
+            "nullable": true
+          },
+          "can_create": {
+            "type": "boolean",
+            "description": "Explicit create is allowed for not_created or removed. Login and guide restoration never recreate a removed home."
+          }
+        }
+      },
+      "DemoHomeCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request_id",
+          "expected_version",
+          "action"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Nonzero UUID for this explicit command; reused unchanged only for retries. Shares the per-user receipt namespace with guide/setup commands."
+          },
+          "expected_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "reset",
+              "remove"
+            ]
+          }
+        },
+        "description": "Targets only the authenticated user's private demo. No user/home ID is accepted. Create allows explicit opt-in/recreation; reset preserves its ID/name while replacing demo SQL content; remove leaves a persistent tombstone. A completed command retry returns current status without repeating side effects."
+      },
+      "DemoHomeError": {
+        "type": "object",
+        "required": [
+          "code",
+          "error"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "state_conflict",
+              "request_id_reused",
+              "demo_exists",
+              "demo_unavailable",
+              "demo_access_denied",
+              "demo_storage_error"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "Localized English/Turkish explanation."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2548,7 +2679,8 @@
         "summary": "Add a user to a home",
         "tags": [
           "Homes"
-        ]
+        ],
+        "description": " Private demo homes cannot be shared, have membership roles changed, or be set as default."
       }
     },
     "/homes/{id}/users/{userId}/role": {
@@ -2598,7 +2730,8 @@
         "summary": "Update a user's role within a home",
         "tags": [
           "Homes"
-        ]
+        ],
+        "description": " Private demo homes cannot be shared, have membership roles changed, or be set as default."
       }
     },
     "/homes/{id}/users/{userId}": {
@@ -2638,7 +2771,8 @@
         "summary": "Remove a user from a home",
         "tags": [
           "Homes"
-        ]
+        ],
+        "description": " Private demo homes cannot be shared, have membership roles changed, or be set as default."
       }
     },
     "/categories/{id}": {
@@ -2790,7 +2924,8 @@
         "summary": "Delete home",
         "tags": [
           "Homes"
-        ]
+        ],
+        "description": " Demo homes do not count as another real home when protecting the last real home. Deleting a demo through this route preserves its removal tombstone. Default fallback selects a real home."
       },
       "put": {
         "parameters": [
@@ -2860,7 +2995,8 @@
         "summary": "Set home as default",
         "tags": [
           "Homes"
-        ]
+        ],
+        "description": " Private demo homes cannot be shared, have membership roles changed, or be set as default."
       }
     },
     "/inventory": {
@@ -3452,7 +3588,7 @@
             "description": "Success"
           }
         },
-        "description": "Send the verified Firebase UID and email. Returns the internal profile UUID as ID; use that UUID for database-facing user identifiers. Creates a default home if needed.",
+        "description": "Send the verified Firebase UID and email. Returns the internal profile UUID as ID; use that UUID for database-facing user identifiers. Creates a default home if needed. Initial real-home and private demo provisioning is serialized and atomic. Existing real memberships/defaults remain unchanged, and a removed demo is never silently recreated.",
         "summary": "Sync profile",
         "tags": [
           "Profiles"
@@ -4838,7 +4974,7 @@
           "Guides"
         ],
         "summary": "List the current platform guide catalog and effective user progress",
-        "description": "Returns active/published variants supported by client_version, including completed/skipped guides for Settings. Accounts predating publication are eligible. Unavailable home/role/prerequisite states are retained with reasons; unsupported/inactive/unpublished variants are omitted. No progress is created by this read. client_version is an integer guide-renderer capability version, not an application semantic version. All responses are private and must not be cached.",
+        "description": "Returns active/published variants supported by client_version, including completed/skipped guides for Settings. Accounts predating publication are eligible. Unavailable home/role/prerequisite states are retained with reasons; unsupported/inactive/unpublished variants are omitted. No progress is created by this read. client_version is an integer guide-renderer capability version, not an application semantic version. All responses are private and must not be cached. Renderer client_version >= 3 additionally discovers demo_house, eligible after introduction is completed or skipped and a private demo is available. Its context is demo_home_id, independent of the selected real home. Demo houses cannot satisfy personal introduction progress.",
         "parameters": [
           {
             "name": "platform",
@@ -5102,6 +5238,134 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GuideError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo-home": {
+      "get": {
+        "tags": [
+          "Demo homes"
+        ],
+        "summary": "Read the authenticated user's private demo availability",
+        "description": "No provisioning occurs on this read. Missing history is not_created at version 0; deliberate removal is removed with its retained version. Only an available private home is returned. Responses are private/no-store.",
+        "responses": {
+          "200": {
+            "description": "Current private demo lifecycle state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoHomeView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firebase authentication required."
+          },
+          "403": {
+            "description": "Private demo ownership or membership is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoHomeError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failed; retry an uncertain command with its exact original ID/payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoHomeError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo-home/actions": {
+      "post": {
+        "tags": [
+          "Demo homes"
+        ],
+        "summary": "Explicitly create, reset or remove the user's private demo",
+        "description": "Profile sync automatically creates a separate real/default and demo/non-default home together when no real membership exists and no demo registry decision exists. Existing users may explicitly opt in here. All operations serialize per user; reset/remove affect only owned demo content. Receipts commit atomically with mutations and share the guide request-ID namespace. A stale command gets 409; reload/reconcile before changing its payload or ID. Guide Restore is a separate operation and never invokes provisioning.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoHomeCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current demo state after successful command or identical retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoHomeView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, oversized or invalid command.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoHomeError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Firebase authentication required."
+          },
+          "403": {
+            "description": "Private demo ownership or membership is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoHomeError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Reset/remove requested without an available demo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoHomeError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict, reused request ID, or create requested while a demo already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoHomeError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failed; retry an uncertain command with its exact original ID/payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoHomeError"
                 }
               }
             }
