@@ -39,14 +39,16 @@
           "ParentID": {
             "format": "uuid",
             "nullable": true,
-            "type": "string"
+            "type": "string",
+            "description": "Null for a root; otherwise the ID of a root category in the same home. Legacy malformed data may retain deeper/cyclic ParentID values until separately repaired."
           },
           "UpdatedAt": {
             "format": "date-time",
             "type": "string"
           }
         },
-        "type": "object"
+        "type": "object",
+        "description": "Home-scoped category with at most two levels: roots and their leaf children. GET returns a flat array and embeds only the immediate Parent snapshot, with that snapshot's Parent null. Legacy ParentID values are preserved; listing does not repair malformed relationships."
       },
       "CategoryRequest": {
         "properties": {
@@ -56,13 +58,15 @@
           "parent_id": {
             "format": "uuid",
             "nullable": true,
-            "type": "string"
+            "type": "string",
+            "description": "Optional root-category ID in the same home. Selecting a child, selecting this category itself, or moving a category with children under any parent returns 400 without changes. Omission/null means a root."
           }
         },
         "required": [
           "name"
         ],
-        "type": "object"
+        "type": "object",
+        "description": "Create or replace a category. A supplied parent must be a root in the same home. A category with children cannot become a child. Omitted/null parent_id creates or promotes a root; a child rename must include its current parent_id to preserve that relationship."
       },
       "DeleteAccountRequest": {
         "properties": {
@@ -2058,6 +2062,18 @@
             "description": "Localized English/Turkish explanation."
           }
         }
+      },
+      "CategoryError": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Localized English/Turkish explanation. Validation and transaction errors leave stored relationships unchanged."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2559,12 +2575,43 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid or missing home selection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied to this home.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to fetch categories.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
           }
         },
         "summary": "Get categories for home",
         "tags": [
           "Categories"
-        ]
+        ],
+        "description": "List all categories in the selected home as a flat array. Parent embeds only the immediate same-home parent snapshot; Parent.Parent is null. This bounds JSON serialization even for legacy cycles/deep trees, preserves stored ParentID values, and makes no repairs."
       },
       "post": {
         "parameters": [
@@ -2592,12 +2639,63 @@
               }
             },
             "description": "Created"
+          },
+          "400": {
+            "description": "Invalid payload or hierarchy: parent is a child, branch would become a child, self-parenting, or cross-home parent. No category changes are committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Write access denied to this home.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category, parent category, or home no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A category with this normalized name already exists in the resulting sibling group.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database or transaction failure; no category changes are committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
           }
         },
         "summary": "Create category",
         "tags": [
           "Categories"
-        ]
+        ],
+        "description": "Create a root or leaf child. The parent must exist, be a root, and belong to the selected home. Validation and creation share a transaction with a per-home write lock, including sibling-name uniqueness checks."
       }
     },
     "/homes/{id}/users": {
@@ -2798,12 +2896,53 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid category ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Write access denied to this home.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category or home no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to delete category; the transaction rolls back.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
           }
         },
         "summary": "Delete category",
         "tags": [
           "Categories"
-        ]
+        ],
+        "description": "Delete with the existing ownership/cascade behavior, serialized with other category writes in the same home."
       },
       "put": {
         "parameters": [
@@ -2837,12 +2976,63 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid payload or hierarchy: parent is a child, branch would become a child, self-parenting, or cross-home parent. No category changes are committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Write access denied to this home.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category, parent category, or home no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A category with this normalized name already exists in the resulting sibling group.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database or transaction failure; no category changes are committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryError"
+                }
+              }
+            }
           }
         },
         "summary": "Update category",
         "tags": [
           "Categories"
-        ]
+        ],
+        "description": "Replace name/parent after home write authorization. The parent must be a root in the same home, and a category with children must remain a root. Invalid depth, branch moves and self-parenting return 400 without changes. Omitted/null parent_id makes this category a root. Hierarchy validation and update share the per-home transaction lock used by creation/deletion."
       }
     },
     "/homes": {
