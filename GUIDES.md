@@ -115,6 +115,10 @@ clears nullable checkpoint home references. Receipts are retained with the user
 to prevent replay of older successful commands. Rollback can leave these additive
 tables in place; older application versions ignore them.
 
+Private demo lifecycle commands also use this per-user receipt namespace with
+their own payload fingerprint. See [DEMO_HOMES.md](DEMO_HOMES.md) for the demo API,
+the separate renderer-v3 `demo_house` guide and personal-onboarding isolation.
+
 Default tests use SQLite. For the same lifecycle/migration tests plus real
 concurrent transaction cases, use an explicitly disposable PostgreSQL database:
 

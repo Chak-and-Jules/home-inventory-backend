@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/authentication"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/demos"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/guides"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/handlers"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/imagestore"
@@ -63,6 +64,10 @@ func SetupRouter(db *gorm.DB, authClient authentication.Client, images imagestor
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.FirebaseAuthMiddleware(db, authClient))
 	{
+		demoService := demos.New(db)
+		demoHandler := &handlers.DemoHandler{Service: demoService}
+		v1.GET("/demo-home", demoHandler.Status)
+		v1.POST("/demo-home/actions", demoHandler.Act)
 		guideHandler := &handlers.GuideHandler{Service: guides.New(db)}
 		v1.GET("/guides", guideHandler.List)
 		v1.POST("/guides/:id/actions", guideHandler.Act)
@@ -86,6 +91,7 @@ func SetupRouter(db *gorm.DB, authClient authentication.Client, images imagestor
 
 		// Homes
 		homes := v1.Group("/homes")
+		homes.Use(middleware.DemoHomePolicy(demoService))
 		{
 			homes.GET("", homeHandler.GetHomes)
 			homes.POST("", homeHandler.CreateHome)

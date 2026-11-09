@@ -39,6 +39,8 @@ func TestSetupRouter(t *testing.T) {
 
 	assert.True(t, paths["/api/v1/homes"])
 	assert.True(t, methods["GET /api/v1/guides"])
+	assert.True(t, methods["GET /api/v1/demo-home"])
+	assert.True(t, methods["POST /api/v1/demo-home/actions"])
 	assert.True(t, methods["POST /api/v1/guides/:id/actions"])
 	assert.True(t, paths["/api/v1/profiles/sync"])
 	assert.True(t, paths["/api/v1/categories"])
@@ -59,6 +61,8 @@ func TestSetupRouter(t *testing.T) {
 	// Every route, including the deletion alias, must reject missing credentials.
 	for _, route := range []struct{ method, path string }{
 		{http.MethodGet, "/api/v1/homes"},
+		{http.MethodGet, "/api/v1/demo-home"},
+		{http.MethodPost, "/api/v1/demo-home/actions"},
 		{http.MethodGet, "/api/v1/guides?platform=web&client_version=1"},
 		{http.MethodPost, "/api/v1/guides/introduction/actions"},
 		{http.MethodPost, "/api/v1/guides/introduction/setup"},

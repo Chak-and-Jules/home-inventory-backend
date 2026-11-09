@@ -108,7 +108,7 @@ func TestAutoMigrateModelsIncludesQuantityWorkflows(t *testing.T) {
 	for _, model := range autoMigrateModels() {
 		registered[reflect.TypeOf(model)] = true
 	}
-	for _, model := range []any{&models.GuideProgress{}, &models.GuideRequest{}, &models.SizeUnit{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.InventoryPrediction{}, &models.MaintenanceTask{}, &models.TaskItemDependency{}} {
+	for _, model := range []any{&models.UserDemoHome{}, &models.GuideProgress{}, &models.GuideRequest{}, &models.SizeUnit{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.InventoryPrediction{}, &models.MaintenanceTask{}, &models.TaskItemDependency{}} {
 		assert.True(t, registered[reflect.TypeOf(model)], "fresh schema must create %T", model)
 	}
 }

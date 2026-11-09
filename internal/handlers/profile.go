@@ -8,6 +8,7 @@ import (
 
 	"firebase.google.com/go/v4/auth"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/authentication"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/demos"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
@@ -80,35 +81,10 @@ func (h *ProfileHandler) SyncProfile(c *gin.Context) {
 		return
 	}
 
-	var exists int
-	if err := h.DB.Model(&models.UserHome{}).Select("1").Where("user_id = ?", authUserID).Limit(1).Find(&exists).Error; err != nil {
-		logger.Log.Error("Failed to check homes", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to check homes")})
+	if err := demos.New(h.DB).EnsureInitialHomes(c.Request.Context(), authUserID, demoLabels(h.DB, c)); err != nil {
+		logger.Log.Error("Failed to provision homes", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to provision homes")})
 		return
-	}
-
-	if exists == 0 {
-		home := models.Home{Name: "My Home"}
-
-		err := h.DB.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Create(&home).Error; err != nil {
-				return err
-			}
-
-			userHome := models.UserHome{
-				UserID:    authUserID,
-				HomeID:    home.ID,
-				Role:      models.RoleOwner,
-				IsDefault: true,
-			}
-			return tx.Create(&userHome).Error
-		})
-
-		if err != nil {
-			logger.Log.Error("Failed to create default home", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to create default home")})
-			return
-		}
 	}
 
 	c.JSON(http.StatusOK, profile)

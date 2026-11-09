@@ -35,6 +35,7 @@ type Language struct {
 type Home struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
 	Name      string    `gorm:"type:varchar(255);not null"`
+	IsDemo    bool      `gorm:"not null;default:false"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

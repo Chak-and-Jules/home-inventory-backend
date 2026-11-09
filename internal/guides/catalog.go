@@ -16,15 +16,17 @@ func (p Platform) Valid() bool { return p == Web || p == Mobile }
 // Revision changes ONLY for deliberate reintroduction. ContentVersion can change
 // for routine content fixes without discarding any user's previous decision.
 type Definition struct {
-	ID            string               `json:"id"`
-	Revision      int                  `json:"revision"`
-	TitleKey      string               `json:"title_key"`
-	PublishedAt   time.Time            `json:"published_at"`
-	Active        bool                 `json:"-"`
-	Prerequisites []string             `json:"prerequisites"`
-	RequiresHome  bool                 `json:"requires_home"`
-	Roles         []string             `json:"roles"`
-	Variants      map[Platform]Variant `json:"-"`
+	ID                        string               `json:"id"`
+	Revision                  int                  `json:"revision"`
+	TitleKey                  string               `json:"title_key"`
+	PublishedAt               time.Time            `json:"published_at"`
+	Active                    bool                 `json:"-"`
+	Prerequisites             []string             `json:"prerequisites"`
+	RequiresHome              bool                 `json:"requires_home"`
+	RequiresDemoHome          bool                 `json:"requires_demo_home"`
+	AllowSkippedPrerequisites bool                 `json:"allow_skipped_prerequisites"`
+	Roles                     []string             `json:"roles"`
+	Variants                  map[Platform]Variant `json:"-"`
 }
 
 type Variant struct {
@@ -44,6 +46,15 @@ func Catalog() []Definition {
 		Variants: map[Platform]Variant{
 			Web:    {ContentVersion: 1, MinClientVersion: 1, EntryPoint: "session", Steps: []string{"home", "definition", "stock", "quantity"}},
 			Mobile: {ContentVersion: 1, MinClientVersion: 1, EntryPoint: "session", Steps: []string{"home", "definition", "inventory", "quantity"}},
+		},
+	}, {
+		ID: "demo_house", Revision: 1, TitleKey: "guides.demoHouse.title",
+		Active: true, PublishedAt: time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC),
+		Prerequisites: []string{"introduction"}, AllowSkippedPrerequisites: true,
+		RequiresHome: true, RequiresDemoHome: true, Roles: []string{"owner"},
+		Variants: map[Platform]Variant{
+			Web:    {ContentVersion: 1, MinClientVersion: 3, EntryPoint: "after_introduction", Steps: []string{"switch_home", "explore_demo", "return_home"}},
+			Mobile: {ContentVersion: 1, MinClientVersion: 3, EntryPoint: "after_introduction", Steps: []string{"select_demo", "explore_demo", "return_home"}},
 		},
 	}}
 }

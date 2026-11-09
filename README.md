@@ -15,6 +15,9 @@ See [GUIDES.md](GUIDES.md) for the authenticated catalog/action endpoints,
 cross-platform completion and skip behavior, platform-only restoration,
 concurrency/retry contract, publication policy and disposable PostgreSQL tests.
 
+See [DEMO_HOMES.md](DEMO_HOMES.md) for private sample-house provisioning,
+reset/removal, notification boundaries and the separate house-switching guide.
+
 ## Firebase profile identity mapping
 
 Profiles retain their UUID primary key and can store a nullable, unique
