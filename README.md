@@ -9,6 +9,13 @@
 
 Run `go test ./...`
 
+## Maintenance policy
+
+See [MAINTENANCE_POLICY.md](MAINTENANCE_POLICY.md) for the agreed scheduling,
+overdue, time-zone, lifecycle, correction and legacy-transition rules for the
+maintenance milestone. It describes planned behavior; the current API remains
+documented in [openapi.json](openapi.json) until the implementing issues ship.
+
 ## Guide catalog and user progress
 
 See [GUIDES.md](GUIDES.md) for the authenticated catalog/action endpoints,
