@@ -15,7 +15,12 @@ var userLangCache sync.Map
 var Translations = map[string]map[string]string{
 	"English": {},
 	"Türkçe": {
-		"Home not found": "Ev bulunamadı",
+		"Invalid maintenance request":                                   "Geçersiz bakım isteği",
+		"Maintenance task state changed. Reload and try again":          "Bakım görevinin durumu değişti. Yenileyip tekrar deneyin",
+		"Maintenance request ID has already been used":                  "Bakım isteğinin kimliği daha önce kullanılmış",
+		"Completed maintenance tasks require an explicit correction":    "Tamamlanmış bakım görevleri açık bir düzeltme işlemi gerektirir",
+		"Invalid maintenance task dependency":                           "Geçersiz bakım malzemesi gereksinimi",
+		"Home not found":                                                "Ev bulunamadı",
 		"Parent category must be a top-level category":                  "Üst kategori en üst düzeyde bir kategori olmalıdır",
 		"A category with children cannot become a child category":       "Alt kategorileri olan bir kategori, alt kategori yapılamaz",
 		"Failed to verify category children":                            "Alt kategoriler doğrulanamadı",

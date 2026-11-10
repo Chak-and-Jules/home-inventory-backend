@@ -31,7 +31,7 @@ func TestFirebaseProfileLifecycle(t *testing.T) {
 	logger.InitLogger()
 	gin.SetMode(gin.TestMode)
 	db := openUnitTestDB(t)
-	require.NoError(t, db.AutoMigrate(&models.Profile{}, &models.Home{}, &models.UserHome{}, &models.UserDemoHome{}, &models.GuideProgress{}, &models.GuideRequest{}, &models.SizeUnit{}, &models.Category{}, &models.ItemDefinition{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.TaskItemDependency{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.InventoryPrediction{}))
+	require.NoError(t, db.AutoMigrate(&models.Profile{}, &models.Home{}, &models.UserHome{}, &models.UserDemoHome{}, &models.GuideProgress{}, &models.GuideRequest{}, &models.SizeUnit{}, &models.Category{}, &models.ItemDefinition{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.TaskItemDependency{}, &models.MaintenanceExecution{}, &models.MaintenanceConsumption{}, &models.MaintenanceRequest{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.InventoryPrediction{}))
 	_, err := models.InitializeUnits(db)
 	require.NoError(t, err)
 	uid, email := "firebase-user-not-a-uuid", "user@example.com"

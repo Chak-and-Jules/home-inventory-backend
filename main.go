@@ -141,7 +141,7 @@ func autoMigrateModels() []interface{} {
 		&models.ShoppingListItem{},
 		&models.InventoryTransaction{},
 		&models.MaintenanceTask{},
-		&models.TaskItemDependency{},
+		&models.TaskItemDependency{}, &models.MaintenanceExecution{}, &models.MaintenanceConsumption{}, &models.MaintenanceRequest{},
 		&models.ReceiptJob{}, &models.ReceiptJobItem{},
 		&models.Recipe{}, &models.RecipeIngredient{}, &models.InventoryPrediction{},
 	}

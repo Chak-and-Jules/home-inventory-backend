@@ -36,7 +36,7 @@ func updateShoppingListWithDef(tx *gorm.DB, homeID uuid.UUID, itemDef *models.It
 			return nil
 		}
 		logger.Log.Error("Failed to fetch existing shopping list item", zap.Error(err))
-		return nil
+		return err
 	}
 
 	var totalQuantity float64

@@ -857,6 +857,13 @@
           "UpdatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "Version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "readOnly": true,
+            "description": "Task revision. Starts at 0; every successful edit or initial completion increments it. Use as expected_version for stale-state protection."
           }
         },
         "type": "object"
@@ -2072,6 +2079,116 @@
           "error": {
             "type": "string",
             "description": "Localized English/Turkish explanation. Validation and transaction errors leave stored relationships unchanged."
+          }
+        }
+      },
+      "MaintenanceTaskUpdateRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MaintenanceTaskRequest"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "expected_version": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "description": "Optional revision from the task read. Mismatch returns 409 without changes. Omission keeps legacy behavior."
+              }
+            }
+          }
+        ]
+      },
+      "MaintenanceCompleteRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Optional identified completion. An empty body or {} remains valid for legacy clients. If expected_version is supplied, request_id is required. Explicit null values are rejected. UUIDs must be nonzero. Maximum body size: 4096 bytes.",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Client-generated ID, unique per user across maintenance completions. Persist and reuse the same ID and payload after an uncertain response; a different task or expected_version with the same ID returns 409."
+          },
+          "expected_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Optional expected task revision; requires request_id. A mismatch returns 409, except an exact successful command retry acknowledges its recorded outcome."
+          }
+        }
+      },
+      "MaintenanceCompleteResponse": {
+        "type": "object",
+        "required": [
+          "message",
+          "task_id",
+          "execution_id",
+          "completed_at",
+          "version",
+          "already_completed",
+          "replayed"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Localized success/already-completed message."
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "execution_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Immutable execution identifier. Null for historical completed tasks without a recorded execution."
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Recorded completion time in UTC; unknown historical values remain null."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "already_completed": {
+            "type": "boolean",
+            "description": "True if the original command acknowledged an already completed task. Exact retries preserve the original value."
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True when a successful identified command is acknowledged from its receipt. No stock or history changes occur."
+          }
+        }
+      },
+      "MaintenanceCommandError": {
+        "type": "object",
+        "required": [
+          "code",
+          "error"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "task_not_found",
+              "write_access_denied",
+              "state_conflict",
+              "request_id_reused",
+              "completed_task_immutable",
+              "insufficient_stock",
+              "invalid_dependency",
+              "maintenance_storage_error"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "Localized English/Turkish explanation."
           }
         }
       }
@@ -4210,26 +4327,81 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/MaintenanceCompleteResponse"
                 }
               }
             },
             "description": "Success"
           },
           "400": {
-            "description": "Insufficient stock or already completed"
+            "description": "Invalid command/dependency, insufficient stock, or body exceeds 4096 bytes. All database effects roll back.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceCommandError"
+                }
+              }
+            }
           },
           "403": {
-            "description": "The user lacks write access to this home."
+            "description": "Current owner/editor access to the task home is required, including replay and already-completed acknowledgements.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceCommandError"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Maintenance task not found"
+            "description": "Task or home not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceCommandError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "409": {
+            "description": "Stale task version, conflicting request ID reuse, or unsupported re-completion after a raw reopen. No effects are committed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceCommandError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database failure. All database effects roll back; retry with the same request ID and payload after an uncertain response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceCommandError"
+                }
+              }
+            }
           }
         },
         "summary": "Mark a maintenance task as completed and deduct dependencies from inventory",
         "tags": [
           "Maintenance Tasks"
-        ]
+        ],
+        "description": "Atomically completes the current task, consumes its current dependencies, records execution/consumption provenance, and updates shopping quantities. Concurrent completions execute once. Legacy repeats on an already completed task acknowledge it with 200 and never deduct stock again. Identified retries return the recorded successful outcome after checking current home write access; conflicting ID reuse or a stale expected_version returns 409. Completion does not generate a successor occurrence. Stock expiry eligibility is unchanged (backend #153).",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceCompleteRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/maintenance-tasks/{id}": {
@@ -4243,6 +4415,17 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            },
+            "description": "Optional task revision; mismatch returns 409. Must be a nonnegative whole integer."
           }
         ],
         "responses": {
@@ -4255,12 +4438,42 @@
               }
             },
             "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input/version. No task changes are committed."
+          },
+          "403": {
+            "description": "Owner/editor access to the task home is required."
+          },
+          "404": {
+            "description": "Task not found."
+          },
+          "409": {
+            "description": "Expected version mismatch or completed task; reload or use explicit correction handling.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceCommandError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failure; all task/dependency changes roll back.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceCommandError"
+                }
+              }
+            }
           }
         },
         "summary": "Delete maintenance task",
         "tags": [
           "Maintenance Tasks"
-        ]
+        ],
+        "description": "Deletes a pending task under the same task lock as completion. Completed tasks return 409 to preserve execution history; explicit history/correction handling follows in backend #156."
       },
       "get": {
         "parameters": [
@@ -4307,7 +4520,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MaintenanceTaskRequest"
+                "$ref": "#/components/schemas/MaintenanceTaskUpdateRequest"
               }
             }
           },
@@ -4341,12 +4554,36 @@
           },
           "403": {
             "description": "The user lacks write access to this home."
+          },
+          "404": {
+            "description": "Task not found."
+          },
+          "409": {
+            "description": "Expected version mismatch or completed task; reload or use explicit correction handling.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceCommandError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Storage failure; all task/dependency changes roll back.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceCommandError"
+                }
+              }
+            }
           }
         },
         "summary": "Update maintenance task",
         "tags": [
           "Maintenance Tasks"
-        ]
+        ],
+        "description": "Edits and dependency replacement share completion’s task lock and increment Version. Completed tasks return 409 and require a future explicit correction workflow; the generic editor cannot reopen or rewrite them. Omitted expected_version retains legacy behavior. Omitted dependencies preserve existing requirements. is_completed retains the existing legacy input behavior pending backend #156."
       }
     },
     "/homes/predictions": {
