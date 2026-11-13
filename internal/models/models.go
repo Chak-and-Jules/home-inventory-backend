@@ -164,11 +164,15 @@ type InventoryTransaction struct {
 	InventoryItemID  uuid.UUID `gorm:"type:uuid;not null;index"`
 	QuantityChange   float64   `gorm:"type:numeric(22,6);not null;check:transaction_quantity_range,quantity_change >= -1000000000 and quantity_change <= 1000000000"`
 	CreatedAt        time.Time
+	// NULL preserves unknown provenance on existing/non-maintenance records.
+	Source                 *string    `gorm:"type:varchar(32);default:null;index" json:"source,omitempty"`
+	MaintenanceExecutionID *uuid.UUID `gorm:"type:uuid;default:null;index" json:"maintenance_execution_id,omitempty"`
 
 	// Relations
-	Home           Home           `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
-	ItemDefinition ItemDefinition `gorm:"foreignKey:ItemDefinitionID;constraint:OnDelete:CASCADE"`
-	InventoryItem  InventoryItem  `gorm:"foreignKey:InventoryItemID;constraint:OnDelete:CASCADE"`
+	Home                 Home                  `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
+	ItemDefinition       ItemDefinition        `gorm:"foreignKey:ItemDefinitionID;constraint:OnDelete:CASCADE"`
+	InventoryItem        InventoryItem         `gorm:"foreignKey:InventoryItemID;constraint:OnDelete:CASCADE"`
+	MaintenanceExecution *MaintenanceExecution `gorm:"foreignKey:MaintenanceExecutionID;constraint:OnDelete:SET NULL" json:"-"`
 }
 
 // MaintenanceTask represents a recurring or one-time maintenance task
@@ -185,6 +189,7 @@ type MaintenanceTask struct {
 	CompletedAt           *time.Time `gorm:"type:timestamp with time zone"`
 	CreatedAt             time.Time
 	UpdatedAt             time.Time `gorm:"index"`
+	Version               int64     `gorm:"not null;default:0"`
 
 	// Relations
 	Home          Home                 `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`

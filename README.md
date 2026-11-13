@@ -16,6 +16,9 @@ overdue, time-zone, lifecycle, correction and legacy-transition rules for the
 maintenance milestone. It describes planned behavior; the current API remains
 documented in [openapi.json](openapi.json) until the implementing issues ship.
 
+See [MAINTENANCE_COMPLETION.md](MAINTENANCE_COMPLETION.md) for the implemented
+atomic completion, request replay, task-version and consumption audit contract.
+
 ## Guide catalog and user progress
 
 See [GUIDES.md](GUIDES.md) for the authenticated catalog/action endpoints,

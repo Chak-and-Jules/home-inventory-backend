@@ -1,19 +1,18 @@
 package handlers
 
 import (
-	"fmt"
-	"github.com/Chak-and-Jules/home-inventory-backend/internal/quantity"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/i18n"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/maintenance"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type MaintenanceTaskHandler struct {
@@ -28,6 +27,7 @@ type TaskItemDependencyRequest struct {
 }
 
 type MaintenanceTaskRequest struct {
+	ExpectedVersion       *int64                      `json:"expected_version,omitempty"`
 	InventoryItemID       *uuid.UUID                  `json:"inventory_item_id"`
 	Description           string                      `json:"description" binding:"required"`
 	ScheduledDate         time.Time                   `json:"scheduled_date" binding:"required"`
@@ -269,9 +269,32 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 		"custom_frequency_metric": req.CustomFrequencyMetric,
 	}
 
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&task).Updates(updates).Error; err != nil {
+	user, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
+	if req.ExpectedVersion != nil && *req.ExpectedVersion < 0 {
+		h.maintenanceFailure(c, maintenance.ErrInvalid, "Failed to update maintenance task")
+		return
+	}
+	err := h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		locked, err := maintenance.LoadForWrite(tx, user, id)
+		if err != nil {
 			return err
+		}
+		if err := maintenance.CheckVersion(locked, req.ExpectedVersion); err != nil {
+			return err
+		}
+		if locked.IsCompleted {
+			return maintenance.ErrCompleted
+		}
+		updates["version"] = locked.Version + 1
+		changed := tx.Model(&locked).Updates(updates)
+		if changed.Error != nil {
+			return changed.Error
+		}
+		if changed.RowsAffected != 1 {
+			return maintenance.ErrConflict
 		}
 
 		// ⚡ Bolt: Only update dependencies if they are provided in the request to support partial updates and avoid data loss.
@@ -297,7 +320,7 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to update maintenance task")})
+		h.maintenanceFailure(c, err, "Failed to update maintenance task")
 		return
 	}
 
@@ -325,116 +348,49 @@ func (h *MaintenanceTaskHandler) DeleteMaintenanceTask(c *gin.Context) {
 		return
 	}
 
-	if err := h.DB.Delete(&models.MaintenanceTask{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to delete maintenance task")})
+	user, ok := utils.GetAuthUserID(c, h.DB)
+	if !ok {
+		return
+	}
+	var expected *int64
+	if values, supplied := c.Request.URL.Query()["expected_version"]; supplied {
+		if len(values) != 1 {
+			h.maintenanceFailure(c, maintenance.ErrInvalid, "Failed to delete maintenance task")
+			return
+		}
+		version, err := strconv.ParseInt(values[0], 10, 64)
+		if err != nil || version < 0 {
+			h.maintenanceFailure(c, maintenance.ErrInvalid, "Failed to delete maintenance task")
+			return
+		}
+		expected = &version
+	}
+	err := h.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		locked, err := maintenance.LoadForWrite(tx, user, id)
+		if err != nil {
+			return err
+		}
+		if err := maintenance.CheckVersion(locked, expected); err != nil {
+			return err
+		}
+		if locked.IsCompleted {
+			return maintenance.ErrCompleted
+		}
+		deleted := tx.Delete(&locked)
+		if deleted.Error != nil {
+			return deleted.Error
+		}
+		if deleted.RowsAffected != 1 {
+			return maintenance.ErrConflict
+		}
+		return nil
+	})
+	if err != nil {
+		h.maintenanceFailure(c, err, "Failed to delete maintenance task")
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Maintenance task deleted successfully")})
-}
-
-func (h *MaintenanceTaskHandler) CompleteMaintenanceTask(c *gin.Context) {
-	id, ok := utils.ParseUUIDParam(c, h.DB, "id", "Invalid maintenance task ID")
-	if !ok {
-		return
-	}
-
-	var task models.MaintenanceTask
-	if err := h.DB.Preload("Dependencies").First(&task, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task not found")})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to fetch maintenance task")})
-		}
-		return
-	}
-
-	if task.IsCompleted {
-		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Maintenance task already completed")})
-		return
-	}
-
-	if !utils.VerifyHomeWriteAccess(c, h.DB, task.HomeID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateDB(h.DB, c, "Write access denied to this home")})
-		return
-	}
-
-	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		now := time.Now()
-		updates := map[string]interface{}{
-			"is_completed": true,
-			"completed_at": &now,
-		}
-
-		if err := tx.Model(&models.MaintenanceTask{}).Where("id = ?", task.ID).Updates(updates).Error; err != nil {
-			return err
-		}
-
-		for _, dep := range task.Dependencies {
-			remainingToDeduct := dep.QuantityRequired
-
-			var items []models.InventoryItem
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("home_id = ? AND item_definition_id = ?", task.HomeID, dep.ItemDefinitionID).
-				Order("expiration_date ASC NULLS LAST").
-				Find(&items).Error; err != nil {
-				return err
-			}
-
-			var totalAvailable float64
-			for _, item := range items {
-				totalAvailable = quantity.Add(totalAvailable, item.Quantity)
-			}
-
-			if totalAvailable < dep.QuantityRequired {
-				return fmt.Errorf("insufficient stock for item %s", dep.ItemDefinitionID)
-			}
-
-			for _, item := range items {
-				if remainingToDeduct <= 0 {
-					break
-				}
-
-				deduction := item.Quantity
-				if deduction > remainingToDeduct {
-					deduction = remainingToDeduct
-				}
-
-				if err := tx.Model(&item).Update("quantity", quantity.Sub(item.Quantity, deduction)).Error; err != nil {
-					return err
-				}
-
-				// Log transaction
-				txLog := models.InventoryTransaction{
-					HomeID:           task.HomeID,
-					ItemDefinitionID: dep.ItemDefinitionID,
-					InventoryItemID:  item.ID,
-					QuantityChange:   -deduction,
-				}
-				if err := tx.Create(&txLog).Error; err != nil {
-					return err
-				}
-
-				remainingToDeduct = quantity.Sub(remainingToDeduct, deduction)
-			}
-
-			if err := utils.UpdateShoppingListForDefinition(tx, task.HomeID, dep.ItemDefinitionID); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		if strings.HasPrefix(err.Error(), "insufficient stock") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateDB(h.DB, c, "Insufficient stock for task dependencies")})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.TranslateDB(h.DB, c, "Failed to complete maintenance task")})
-		}
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": i18n.TranslateDB(h.DB, c, "Maintenance task completed successfully")})
 }
 
 func isValidFrequency(freq string) bool {
