@@ -2,6 +2,8 @@
 
 The current legacy-task API implements the completion safety foundation from
 [#152](https://github.com/Chak-and-Jules/home-inventory-backend/issues/152).
+Eligible stock selection and expiry boundaries follow
+[#153](https://github.com/Chak-and-Jules/home-inventory-backend/issues/153).
 [MAINTENANCE_POLICY.md](MAINTENANCE_POLICY.md) remains the target policy for the
 larger maintenance milestone; recurrence and lifecycle commands are separate work.
 
@@ -90,6 +92,37 @@ second supply, rolls everything back. Concurrent commands sharing a request ID
 on different tasks resolve through the receipt uniqueness constraint; a losing
 transaction rolls back all of its tentative effects before returning conflict.
 
+## Eligible maintenance supplies
+
+Completion captures one UTC operation time at microsecond precision after
+locking and checking the task. Every requirement and the resulting shopping
+update uses that same cutoff. Eligible batches belong to the task's home and
+required definition, have positive quantity, and either have no expiry or expire
+strictly after the cutoff. A batch expiring exactly at the cutoff is expired.
+Expiry is an absolute instant; no server/device time-zone or calendar-day
+reinterpretation is applied.
+
+Availability and deductions come from the same locked eligible rows. Deductions
+use earliest valid expiry first, UUID ascending to break ties, with non-expiring
+batches last. The locked values are sorted again after a lock wait because
+PostgreSQL can otherwise return the pre-wait order after an expiry edit. An
+expiry edit that makes a waiting batch ineligible is rechecked by PostgreSQL's
+locking query. A batch's natural expiry after the captured operation cutoff does
+not move that cutoff during the transaction.
+
+If eligible stock is insufficient, completion returns `400 insufficient_stock`
+with an English/Turkish explanation that unexpired stock is insufficient. All
+task, stock, history, shopping and receipt changes roll back, including tentative
+deductions of earlier requirements. Expired and empty/discarded batches are
+retained without maintenance deductions or new maintenance usage records.
+Existing restock insights and predictive shopping suggestions exclude expired
+stock from their current-stock input; future recurrence/projection and general
+usage classification remain in #157–#158. Existing historical consumption is not
+reclassified by this fix. Replays of successful requests acknowledge the recorded
+outcome even if the selected batch has since expired.
+
+## Persistence and audit retention
+
 Startup `AutoMigrate` adds:
 
 - `maintenance_tasks.version`, non-null with default 0.
@@ -112,11 +145,9 @@ that demo home's journal. There is no public audit mutation/history API yet.
 
 ## Remaining scope
 
-Stock expiry eligibility is deliberately unchanged here: completion still
-selects positive stock by expiration, including expired batches. #153 fixes that
-selection rule and its boundary tests. This change does not generate future
-occurrences, schedule recurring tasks, infer legacy usage, restore consumed
-stock, send durable reminders or implement history corrections. #154–#158 build
+This change does not generate future occurrences, schedule recurring tasks,
+infer legacy usage, restore consumed stock, send durable reminders or implement
+history corrections. #154–#158 build
 on these execution IDs/receipts; the one-execution-per-legacy-task constraint
 must evolve with their occurrence identity rather than creating a second audit
 mechanism. Current low-stock notification helpers only log; durable delivery
@@ -138,6 +169,8 @@ UNIT_TEST_POSTGRES_DSN='host=127.0.0.1 port=5432 user=postgres password=... dbna
 The database must allow schema creation/deletion; never supply a production DSN.
 PostgreSQL tests cover concurrent legacy and identified completions, distinct
 commands with stale versions, cross-task request reuse, edit/delete races,
-authoritative dependency reads after lock waits, shared-stock exhaustion, and
-late failures. The default suite skips only the PostgreSQL-specific races when
+authoritative dependency reads after lock waits, shared-stock exhaustion,
+expired-only/mixed stock, exact expiry boundaries, stable expiry/UUID ordering,
+unit-family splits, expiry edits during stock lock waits and late failures.
+The default suite skips only the PostgreSQL-specific races when
 this environment variable is absent.

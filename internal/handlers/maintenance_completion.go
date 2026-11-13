@@ -81,7 +81,7 @@ func (h *MaintenanceTaskHandler) maintenanceFailure(c *gin.Context, err error, f
 	case errors.Is(err, maintenance.ErrCompleted):
 		status, code, key = 409, "completed_task_immutable", "Completed maintenance tasks require an explicit correction"
 	case errors.Is(err, maintenance.ErrInsufficient):
-		status, code, key = 400, "insufficient_stock", "Insufficient stock for task dependencies"
+		status, code, key = 400, "insufficient_stock", "Insufficient unexpired stock for task dependencies"
 	case errors.Is(err, maintenance.ErrDependency):
 		status, code, key = 400, "invalid_dependency", "Invalid maintenance task dependency"
 	default:

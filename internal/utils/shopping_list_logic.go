@@ -1,11 +1,11 @@
 package utils
 
 import (
-	"github.com/Chak-and-Jules/home-inventory-backend/internal/quantity"
 	"time"
 
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/quantity"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -13,15 +13,29 @@ import (
 
 // UpdateShoppingListForDefinition checks the stock levels for a given item definition and updates the shopping list accordingly.
 func UpdateShoppingListForDefinition(tx *gorm.DB, homeID uuid.UUID, itemDefID uuid.UUID) error {
+	return updateShoppingListForDefinitionAt(tx, homeID, itemDefID, nil)
+}
+
+// UpdateShoppingListForDefinitionAt uses the caller's operation time for stock
+// expiry, so a coordinated completion and its shopping update share a cutoff.
+func UpdateShoppingListForDefinitionAt(tx *gorm.DB, homeID uuid.UUID, itemDefID uuid.UUID, at time.Time) error {
+	return updateShoppingListForDefinitionAt(tx, homeID, itemDefID, &at)
+}
+
+func updateShoppingListForDefinitionAt(tx *gorm.DB, homeID uuid.UUID, itemDefID uuid.UUID, at *time.Time) error {
 	var itemDef models.ItemDefinition
 	if err := tx.First(&itemDef, itemDefID).Error; err != nil {
 		logger.Log.Error("Failed to fetch item definition", zap.Error(err))
 		return err
 	}
-	return updateShoppingListWithDef(tx, homeID, &itemDef)
+	return updateShoppingListWithDefAt(tx, homeID, &itemDef, at)
 }
 
 func updateShoppingListWithDef(tx *gorm.DB, homeID uuid.UUID, itemDef *models.ItemDefinition) error {
+	return updateShoppingListWithDefAt(tx, homeID, itemDef, nil)
+}
+
+func updateShoppingListWithDefAt(tx *gorm.DB, homeID uuid.UUID, itemDef *models.ItemDefinition, at *time.Time) error {
 	var existingItem models.ShoppingListItem
 	err := tx.Where("home_id = ? AND item_definition_id = ? AND is_auto_generated = ? AND is_bought = ?",
 		homeID, itemDef.ID, true, false).First(&existingItem).Error
@@ -40,9 +54,14 @@ func updateShoppingListWithDef(tx *gorm.DB, homeID uuid.UUID, itemDef *models.It
 	}
 
 	var totalQuantity float64
-	if err := tx.Model(&models.InventoryItem{}).
-		Where("home_id = ? AND item_definition_id = ? AND (expiration_date IS NULL OR expiration_date > NOW())", homeID, itemDef.ID).
-		Select("COALESCE(SUM(quantity), 0)").
+	stock := tx.Model(&models.InventoryItem{})
+	if at == nil {
+		// Preserve the existing database-clock behavior of other stock writers.
+		stock = stock.Where("home_id = ? AND item_definition_id = ? AND (expiration_date IS NULL OR expiration_date > NOW())", homeID, itemDef.ID)
+	} else {
+		stock = stock.Where("home_id = ? AND item_definition_id = ? AND quantity > 0 AND (expiration_date IS NULL OR expiration_date > ?)", homeID, itemDef.ID, *at)
+	}
+	if err := stock.Select("COALESCE(SUM(quantity), 0)").
 		Scan(&totalQuantity).Error; err != nil {
 		logger.Log.Error("Failed to calculate total quantity", zap.Error(err))
 		return err
