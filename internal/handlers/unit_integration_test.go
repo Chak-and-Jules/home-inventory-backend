@@ -40,7 +40,7 @@ func newUnitFixture(t *testing.T) *unitFixture {
 	gin.SetMode(gin.TestMode)
 	db := openUnitTestDB(t)
 	var err error
-	require.NoError(t, db.AutoMigrate(&models.Language{}, &models.Profile{}, &models.Home{}, &models.UserHome{}, &models.SizeUnit{}, &models.Category{}, &models.ItemDefinition{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.TaskItemDependency{}, &models.MaintenanceExecution{}, &models.MaintenanceConsumption{}, &models.MaintenanceRequest{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.InventoryPrediction{}))
+	require.NoError(t, db.AutoMigrate(&models.Language{}, &models.Profile{}, &models.Home{}, &models.UserHome{}, &models.SizeUnit{}, &models.Category{}, &models.ItemDefinition{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.MaintenanceSchedule{}, &models.MaintenanceOccurrence{}, &models.TaskItemDependency{}, &models.MaintenanceExecution{}, &models.MaintenanceConsumption{}, &models.MaintenanceRequest{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.InventoryPrediction{}))
 	db, err = models.InitializeUnits(db)
 	require.NoError(t, err)
 	f := &unitFixture{db: db, home: uuid.New(), user: uuid.New(), units: map[string]uuid.UUID{}}

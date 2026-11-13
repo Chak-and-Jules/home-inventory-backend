@@ -10,6 +10,7 @@ import (
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/guides"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/imagestore"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/logger"
+	"github.com/Chak-and-Jules/home-inventory-backend/internal/maintenance"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/models"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/routes"
 	"github.com/Chak-and-Jules/home-inventory-backend/internal/utils"
@@ -81,6 +82,13 @@ func main() {
 		logger.Log.Sugar().Fatalf("Unit catalog initialization failed: %v", err)
 	}
 
+	done = bootStep("maintenance legacy initialization")
+	if err := maintenance.InitializeLegacy(context.Background(), db); err != nil {
+		done("failed")
+		logger.Log.Sugar().Fatalf("Maintenance initialization failed: %v", err)
+	}
+	done("completed")
+
 	// Setup Gin Router
 	if err := guides.ValidateCatalog(guides.Catalog()); err != nil {
 		logger.Log.Sugar().Fatalf("Guide catalog validation failed: %v", err)
@@ -141,6 +149,7 @@ func autoMigrateModels() []interface{} {
 		&models.ShoppingListItem{},
 		&models.InventoryTransaction{},
 		&models.MaintenanceTask{},
+		&models.MaintenanceSchedule{}, &models.MaintenanceOccurrence{},
 		&models.TaskItemDependency{}, &models.MaintenanceExecution{}, &models.MaintenanceConsumption{}, &models.MaintenanceRequest{},
 		&models.ReceiptJob{}, &models.ReceiptJobItem{},
 		&models.Recipe{}, &models.RecipeIngredient{}, &models.InventoryPrediction{},

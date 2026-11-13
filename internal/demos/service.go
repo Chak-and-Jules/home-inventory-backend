@@ -298,7 +298,7 @@ func clearContent(tx *gorm.DB, home uuid.UUID) error {
 			return err
 		}
 	}
-	for _, model := range []any{&models.MaintenanceRequest{}, &models.MaintenanceExecution{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.Recipe{}, &models.ReceiptJob{}, &models.InventoryItem{}, &models.ItemDefinition{}, &models.Category{}} {
+	for _, model := range []any{&models.MaintenanceRequest{}, &models.MaintenanceExecution{}, &models.MaintenanceOccurrence{}, &models.MaintenanceSchedule{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.Recipe{}, &models.ReceiptJob{}, &models.InventoryItem{}, &models.ItemDefinition{}, &models.Category{}} {
 		if err := tx.Where("home_id = ?", home).Delete(model).Error; err != nil {
 			return err
 		}

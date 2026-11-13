@@ -221,6 +221,9 @@ func (s *Service) Complete(ctx context.Context, user, taskID uuid.UUID, c Comman
 }
 
 func (s *Service) execute(tx *gorm.DB, user uuid.UUID, task *models.MaintenanceTask, requestID *uuid.UUID, result *Result) error {
+	if err := CheckLegacyWrite(tx, *task); err != nil {
+		return err
+	}
 	// The task lock protects this dependency set from supported edits/deletion.
 	if err := tx.Where("maintenance_task_id = ?", task.ID).Order("item_definition_id, id").Find(&task.Dependencies).Error; err != nil {
 		return err
@@ -269,6 +272,9 @@ func (s *Service) execute(tx *gorm.DB, user uuid.UUID, task *models.MaintenanceT
 		if err := utils.UpdateShoppingListForDefinitionAt(tx, task.HomeID, id, now); err != nil {
 			return err
 		}
+	}
+	if err := SyncLegacyTask(tx, task.ID); err != nil {
+		return err
 	}
 	result.ExecutionID, result.CompletedAt, result.Version = &execution.ID, &now, task.Version+1
 	return nil

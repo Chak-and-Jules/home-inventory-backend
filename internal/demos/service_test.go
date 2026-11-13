@@ -65,7 +65,7 @@ func serviceFixture(t *testing.T) (*Service, uuid.UUID) {
 			tx.Statement.SQL.WriteString(strings.ReplaceAll(q, "timestamp with time zone", "datetime"))
 		}))
 	}
-	require.NoError(t, db.AutoMigrate(&models.Profile{}, &models.Home{}, &models.UserHome{}, &models.UserDemoHome{}, &models.GuideProgress{}, &models.GuideRequest{}, &models.SizeUnit{}, &models.Category{}, &models.ItemDefinition{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.TaskItemDependency{}, &models.MaintenanceExecution{}, &models.MaintenanceConsumption{}, &models.MaintenanceRequest{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.InventoryPrediction{}))
+	require.NoError(t, db.AutoMigrate(&models.Profile{}, &models.Home{}, &models.UserHome{}, &models.UserDemoHome{}, &models.GuideProgress{}, &models.GuideRequest{}, &models.SizeUnit{}, &models.Category{}, &models.ItemDefinition{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.MaintenanceSchedule{}, &models.MaintenanceOccurrence{}, &models.TaskItemDependency{}, &models.MaintenanceExecution{}, &models.MaintenanceConsumption{}, &models.MaintenanceRequest{}, &models.Recipe{}, &models.RecipeIngredient{}, &models.ReceiptJob{}, &models.ReceiptJobItem{}, &models.InventoryPrediction{}))
 	db, err = models.InitializeUnits(db)
 	require.NoError(t, err)
 	user := uuid.New()

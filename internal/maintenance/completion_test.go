@@ -39,11 +39,11 @@ func testDB(t *testing.T) *gorm.DB {
 	var db *gorm.DB
 	var err error
 	if dsn := os.Getenv("UNIT_TEST_POSTGRES_DSN"); dsn != "" {
-		admin, e := gorm.Open(postgres.Open(dsn), config)
+		admin, e := gorm.Open(postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true}), config)
 		require.NoError(t, e)
 		schema := "maintenance_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 		require.NoError(t, admin.Exec("CREATE SCHEMA "+schema).Error)
-		db, err = gorm.Open(postgres.Open(dsn+" search_path="+schema), config)
+		db, err = gorm.Open(postgres.New(postgres.Config{DSN: dsn + " search_path=" + schema, PreferSimpleProtocol: true}), config)
 		t.Cleanup(func() {
 			c, _ := db.DB()
 			c.Close()
@@ -80,7 +80,7 @@ func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	logger.InitLogger()
 	db := testDB(t)
-	require.NoError(t, db.AutoMigrate(&models.Profile{}, &models.Home{}, &models.UserHome{}, &models.SizeUnit{}, &models.ItemDefinition{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.TaskItemDependency{}, &models.MaintenanceExecution{}, &models.MaintenanceConsumption{}, &models.MaintenanceRequest{}))
+	require.NoError(t, db.AutoMigrate(&models.Profile{}, &models.Home{}, &models.UserHome{}, &models.SizeUnit{}, &models.ItemDefinition{}, &models.InventoryItem{}, &models.InventoryTransaction{}, &models.ShoppingListItem{}, &models.MaintenanceTask{}, &models.MaintenanceSchedule{}, &models.MaintenanceOccurrence{}, &models.TaskItemDependency{}, &models.MaintenanceExecution{}, &models.MaintenanceConsumption{}, &models.MaintenanceRequest{}))
 	db, err := models.InitializeUnits(db)
 	require.NoError(t, err)
 	f := &fixture{Service: New(db), user: uuid.New(), home: uuid.New()}

@@ -33,11 +33,12 @@ type Language struct {
 
 // Home represents a physical location where items are stored
 type Home struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
-	Name      string    `gorm:"type:varchar(255);not null"`
-	IsDemo    bool      `gorm:"not null;default:false"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID                  uuid.UUID `gorm:"type:uuid;primaryKey;default:(gen_random_uuid())"`
+	Name                string    `gorm:"type:varchar(255);not null"`
+	IsDemo              bool      `gorm:"not null;default:false"`
+	MaintenanceTimeZone *string   `gorm:"type:varchar(64);default:null" json:"maintenance_time_zone,omitempty"`
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 const (

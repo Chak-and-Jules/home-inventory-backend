@@ -19,6 +19,9 @@ documented in [openapi.json](openapi.json) until the implementing issues ship.
 See [MAINTENANCE_COMPLETION.md](MAINTENANCE_COMPLETION.md) for the implemented
 atomic completion, request replay, task-version and consumption audit contract.
 
+See [MAINTENANCE_HISTORY.md](MAINTENANCE_HISTORY.md) for schedule/occurrence
+persistence, legacy upgrade rules and the home-scoped history read contract.
+
 ## Guide catalog and user progress
 
 See [GUIDES.md](GUIDES.md) for the authenticated catalog/action endpoints,
