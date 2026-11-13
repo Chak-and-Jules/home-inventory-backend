@@ -266,7 +266,7 @@ func (s *Service) execute(tx *gorm.DB, user uuid.UUID, task *models.MaintenanceT
 		return ErrConflict
 	}
 	for _, id := range ids {
-		if err := utils.UpdateShoppingListForDefinition(tx, task.HomeID, id); err != nil {
+		if err := utils.UpdateShoppingListForDefinitionAt(tx, task.HomeID, id, now); err != nil {
 			return err
 		}
 	}
@@ -292,12 +292,29 @@ func (s *Service) consume(tx *gorm.DB, home, execution, definition uuid.UUID, wa
 	}
 	base := catalog.Units[*baseID]
 	var items []models.InventoryItem
-	// Eligibility/expiry changes are intentionally isolated in follow-up #153.
+	// Availability and deductions use these same locked rows at one operation
+	// instant. Expiry equal to that instant is already expired; NULL sorts last.
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("home_id = ? AND item_definition_id = ? AND quantity > 0", home, definition).
+		Where("home_id = ? AND item_definition_id = ? AND quantity > 0 AND (expiration_date IS NULL OR expiration_date > ?)", home, definition, now).
 		Order("expiration_date ASC NULLS LAST, id ASC").Find(&items).Error; err != nil {
 		return err
 	}
+	// At READ COMMITTED, PostgreSQL orders before waiting on row locks. A
+	// concurrent expiry edit can change that order while we wait; sort the
+	// authoritative locked values again before choosing deductions.
+	sort.Slice(items, func(i, j int) bool {
+		a, b := items[i].ExpirationDate, items[j].ExpirationDate
+		if a == nil && b != nil {
+			return false
+		}
+		if a != nil && b == nil {
+			return true
+		}
+		if a != nil && !a.Equal(*b) {
+			return a.Before(*b)
+		}
+		return items[i].ID.String() < items[j].ID.String()
+	})
 	remaining := wanted
 	for _, item := range items {
 		if remaining <= 0 {

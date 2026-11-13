@@ -4334,7 +4334,7 @@
             "description": "Success"
           },
           "400": {
-            "description": "Invalid command/dependency, insufficient stock, or body exceeds 4096 bytes. All database effects roll back.",
+            "description": "Invalid command/dependency, insufficient unexpired stock (code insufficient_stock with localized English/Turkish explanation), or body exceeds 4096 bytes. All database effects roll back; expired stock is not consumed to make up a shortage.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4391,7 +4391,7 @@
         "tags": [
           "Maintenance Tasks"
         ],
-        "description": "Atomically completes the current task, consumes its current dependencies, records execution/consumption provenance, and updates shopping quantities. Concurrent completions execute once. Legacy repeats on an already completed task acknowledge it with 200 and never deduct stock again. Identified retries return the recorded successful outcome after checking current home write access; conflicting ID reuse or a stale expected_version returns 409. Completion does not generate a successor occurrence. Stock expiry eligibility is unchanged (backend #153).",
+        "description": "Atomically completes the current task, consumes its current dependencies, records execution/consumption provenance, and updates shopping quantities. Concurrent completions execute once. Legacy repeats on an already completed task acknowledge it with 200 and never deduct stock again. Identified retries return the recorded successful outcome after checking current home write access; conflicting ID reuse or a stale expected_version returns 409. Completion does not generate a successor occurrence. Consumes only positive stock in the correct home/definition with no expiry or expiry strictly after one captured UTC operation time; expiry equal to the cutoff is expired. Availability, deductions and the resulting shopping update use that cutoff. Deductions use earliest valid expiry, UUID ascending for ties, and non-expiring batches last; locked rows are reordered after competing expiry edits. Expired/empty batches remain unchanged and cannot satisfy requirements. If eligible stock is insufficient, the whole operation rolls back. Successful-command retries still acknowledge the original outcome after stock later expires.",
         "requestBody": {
           "required": false,
           "content": {

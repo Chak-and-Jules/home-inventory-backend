@@ -125,7 +125,7 @@ var Translations = map[string]map[string]string{
 		"Home not found or access denied":                        "Ev bulunamadı veya erişim reddedildi",
 		"Home updated successfully":                              "Ev başarıyla güncellendi",
 		"Insufficient stock":                                     "Yetersiz stok",
-		"Insufficient stock for task dependencies":               "Görev bağımlılıkları için yetersiz stok",
+		"Insufficient unexpired stock for task dependencies":     "Görev malzemeleri için son kullanma tarihi geçmemiş stok yetersiz",
 		"This is your default home. Please confirm deletion.":    "Bu sizin varsayılan evinizdir. Lütfen silme işlemini onaylayın.",
 		"Insufficient permissions to update home":                "Evi güncellemek için yetersiz izinler",
 		"Invalid ID":                                                "Geçersiz ID",
