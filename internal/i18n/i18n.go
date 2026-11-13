@@ -15,6 +15,10 @@ var userLangCache sync.Map
 var Translations = map[string]map[string]string{
 	"English": {},
 	"Türkçe": {
+		"Invalid maintenance query":                                     "Geçersiz bakım sorgusu",
+		"Failed to fetch maintenance history":                           "Bakım geçmişi getirilemedi",
+		"Maintenance schedule not found":                                "Bakım planı bulunamadı",
+		"Maintenance occurrence not found":                              "Bakım işi bulunamadı",
 		"Invalid maintenance request":                                   "Geçersiz bakım isteği",
 		"Maintenance task state changed. Reload and try again":          "Bakım görevinin durumu değişti. Yenileyip tekrar deneyin",
 		"Maintenance request ID has already been used":                  "Bakım isteğinin kimliği daha önce kullanılmış",

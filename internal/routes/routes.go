@@ -191,6 +191,12 @@ func SetupRouter(db *gorm.DB, authClient authentication.Client, images imagestor
 			maintenance.POST("/:id/complete", maintenanceHandler.CompleteMaintenanceTask)
 		}
 
+		v1.GET("/maintenance-schedules", maintenanceHandler.GetMaintenanceSchedules)
+		v1.GET("/maintenance-schedules/:id", maintenanceHandler.GetMaintenanceSchedule)
+		v1.GET("/maintenance-occurrences", maintenanceHandler.GetMaintenanceOccurrences)
+		v1.GET("/maintenance-occurrences/:id", maintenanceHandler.GetMaintenanceOccurrence)
+		v1.GET("/maintenance-occurrences/:id/history", maintenanceHandler.GetMaintenanceOccurrenceHistory)
+
 		// Receipt Scanning
 		receipts := v1.Group("/receipts")
 		{

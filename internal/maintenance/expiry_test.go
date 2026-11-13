@@ -22,7 +22,7 @@ func persistedState(t *testing.T, db *gorm.DB) map[string]string {
 		model any
 		order string
 	}{
-		{&[]models.MaintenanceTask{}, "id"}, {&[]models.TaskItemDependency{}, "id"},
+		{&[]models.MaintenanceTask{}, "id"}, {&[]models.MaintenanceSchedule{}, "id"}, {&[]models.MaintenanceOccurrence{}, "id"}, {&[]models.TaskItemDependency{}, "id"},
 		{&[]models.InventoryItem{}, "id"}, {&[]models.InventoryTransaction{}, "id"},
 		{&[]models.ShoppingListItem{}, "id"}, {&[]models.MaintenanceExecution{}, "id"},
 		{&[]models.MaintenanceConsumption{}, "id"}, {&[]models.MaintenanceRequest{}, "user_id, request_id"},

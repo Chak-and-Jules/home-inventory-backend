@@ -184,7 +184,7 @@ func (h *MaintenanceTaskHandler) CreateMaintenanceTask(c *gin.Context) {
 			}
 		}
 
-		return nil
+		return maintenance.SyncLegacyTask(tx, task.ID)
 	})
 
 	if err != nil {
@@ -288,6 +288,9 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 		if locked.IsCompleted {
 			return maintenance.ErrCompleted
 		}
+		if err := maintenance.CheckLegacyWrite(tx, locked); err != nil {
+			return err
+		}
 		updates["version"] = locked.Version + 1
 		changed := tx.Model(&locked).Updates(updates)
 		if changed.Error != nil {
@@ -316,7 +319,7 @@ func (h *MaintenanceTaskHandler) UpdateMaintenanceTask(c *gin.Context) {
 			}
 		}
 
-		return nil
+		return maintenance.SyncLegacyTask(tx, task.ID)
 	})
 
 	if err != nil {
@@ -375,6 +378,9 @@ func (h *MaintenanceTaskHandler) DeleteMaintenanceTask(c *gin.Context) {
 		}
 		if locked.IsCompleted {
 			return maintenance.ErrCompleted
+		}
+		if err := maintenance.RetireLegacyTask(tx, locked, user, time.Now()); err != nil {
+			return err
 		}
 		deleted := tx.Delete(&locked)
 		if deleted.Error != nil {

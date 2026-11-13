@@ -153,6 +153,12 @@
             "type": "boolean",
             "readOnly": true,
             "description": "True for an explicitly provisioned private sample home. Names are user-editable and must not be used to identify demo data."
+          },
+          "maintenance_time_zone": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true,
+            "description": "Reserved persisted home maintenance IANA zone; omitted while unset. Owner configuration/review API follows in backend #155; the current generic home PUT does not set this field."
           }
         },
         "type": "object"
@@ -2191,6 +2197,571 @@
             "description": "Localized English/Turkish explanation."
           }
         }
+      },
+      "MaintenanceRequirementSnapshot": {
+        "type": "object",
+        "properties": {
+          "dependency_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "item_definition_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Original stored base-unit quantity; no inferred conversion or consumption."
+          },
+          "definition_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "base_unit_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "unit_family": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "dependency_id",
+          "item_definition_id",
+          "quantity",
+          "definition_name",
+          "base_size_unit_id",
+          "base_unit_name",
+          "unit_family"
+        ]
+      },
+      "MaintenanceSchedule": {
+        "type": "object",
+        "required": [
+          "id",
+          "home_id",
+          "legacy_task_id",
+          "state",
+          "description",
+          "inventory_item_id",
+          "recurrence_mode",
+          "interval_count",
+          "interval_unit",
+          "time_zone",
+          "anchor_at",
+          "anchor_local",
+          "restart_required",
+          "review_reason",
+          "version",
+          "created_at",
+          "updated_at",
+          "requirements"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "home_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "legacy_task_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "needs_review",
+              "archived"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "inventory_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "recurrence_mode": {
+            "type": "string",
+            "enum": [
+              "calendar",
+              "after_completion"
+            ],
+            "nullable": true
+          },
+          "interval_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "nullable": true
+          },
+          "interval_unit": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
+            "nullable": true
+          },
+          "time_zone": {
+            "type": "string",
+            "nullable": true
+          },
+          "anchor_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "anchor_local": {
+            "type": "string",
+            "nullable": true
+          },
+          "restart_required": {
+            "type": "boolean"
+          },
+          "review_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MaintenanceRequirementSnapshot"
+            }
+          }
+        },
+        "description": "Future defaults and explicit review/restart context. Legacy mode/zone/local anchor remain unknown; no recurrence generation is enabled by migration."
+      },
+      "MaintenanceOccurrence": {
+        "type": "object",
+        "required": [
+          "id",
+          "home_id",
+          "schedule_id",
+          "legacy_task_id",
+          "slot_key",
+          "occupies_slot",
+          "state",
+          "description",
+          "inventory_item_id",
+          "original_due_at",
+          "due_at",
+          "time_zone",
+          "snapshot_origin",
+          "version",
+          "completed_at",
+          "cancelled_at",
+          "cancelled_by",
+          "cancellation_reason",
+          "created_at",
+          "updated_at",
+          "requirements"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "home_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "schedule_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "legacy_task_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "slot_key": {
+            "type": "string"
+          },
+          "occupies_slot": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "skipped",
+              "cancelled"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "inventory_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "original_due_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "time_zone": {
+            "type": "string",
+            "nullable": true
+          },
+          "snapshot_origin": {
+            "type": "string",
+            "enum": [
+              "legacy_current_record",
+              "recorded_execution",
+              "execution_only"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cancelled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cancelled_by": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "cancellation_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MaintenanceRequirementSnapshot"
+            }
+          }
+        },
+        "description": "One permanent job ID and its independent requirement/assignment snapshot. Unknown historical timestamps/labels remain null. Later schedule/default edits cannot rewrite completed facts."
+      },
+      "MaintenanceConsumptionSnapshot": {
+        "type": "object",
+        "required": [
+          "id",
+          "execution_id",
+          "inventory_transaction_id",
+          "item_definition_id",
+          "inventory_item_id",
+          "definition_name",
+          "base_size_unit_id",
+          "base_unit_name",
+          "unit_family",
+          "quantity",
+          "expiry_date",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "execution_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inventory_transaction_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "item_definition_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inventory_item_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "definition_name": {
+            "type": "string"
+          },
+          "base_size_unit_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "base_unit_name": {
+            "type": "string"
+          },
+          "unit_family": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "minimum": 0
+          },
+          "expiry_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MaintenanceExecutionHistory": {
+        "type": "object",
+        "required": [
+          "id",
+          "occurrence_id",
+          "legacy_task_id",
+          "actor_user_id",
+          "request_id",
+          "version",
+          "performed_at",
+          "recorded_at",
+          "consumptions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurrence_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "legacy_task_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actor_user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "performed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "consumptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MaintenanceConsumptionSnapshot"
+            }
+          }
+        },
+        "description": "Existing journal identity and actual recorded facts. No fabricated execution is added for older completed tasks."
+      },
+      "MaintenanceOccurrenceHistory": {
+        "type": "object",
+        "required": [
+          "contract",
+          "occurrence",
+          "execution_history_known",
+          "executions"
+        ],
+        "properties": {
+          "contract": {
+            "type": "string",
+            "enum": [
+              "occurrences-v1"
+            ]
+          },
+          "occurrence": {
+            "$ref": "#/components/schemas/MaintenanceOccurrence"
+          },
+          "execution_history_known": {
+            "type": "boolean"
+          },
+          "executions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MaintenanceExecutionHistory"
+            }
+          }
+        }
+      },
+      "MaintenanceReadError": {
+        "type": "object",
+        "required": [
+          "code",
+          "error"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "read_access_denied",
+              "resource_not_found",
+              "maintenance_storage_error"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "Localized English/Turkish explanation."
+          }
+        }
+      },
+      "MaintenanceSchedulePage": {
+        "type": "object",
+        "required": [
+          "contract",
+          "items",
+          "next_offset"
+        ],
+        "properties": {
+          "contract": {
+            "type": "string",
+            "enum": [
+              "occurrences-v1"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MaintenanceSchedule"
+            }
+          },
+          "next_offset": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true
+          }
+        }
+      },
+      "MaintenanceOccurrencePage": {
+        "type": "object",
+        "required": [
+          "contract",
+          "items",
+          "next_offset"
+        ],
+        "properties": {
+          "contract": {
+            "type": "string",
+            "enum": [
+              "occurrences-v1"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MaintenanceOccurrence"
+            }
+          },
+          "next_offset": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true
+          }
+        }
+      }
+    },
+    "responses": {
+      "MaintenanceReadBadRequest": {
+        "description": "Invalid home/id/query/state/date range or pagination.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MaintenanceReadError"
+            }
+          }
+        }
+      },
+      "MaintenanceReadUnauthorized": {
+        "description": "Authentication required."
+      },
+      "MaintenanceReadForbidden": {
+        "description": "Selected home membership required.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MaintenanceReadError"
+            }
+          }
+        }
+      },
+      "MaintenanceReadNotFound": {
+        "description": "Resource does not belong to the selected home or does not exist.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MaintenanceReadError"
+            }
+          }
+        }
+      },
+      "MaintenanceReadFailure": {
+        "description": "Storage or stored snapshot decoding failure.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MaintenanceReadError"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2209,6 +2780,410 @@
   },
   "openapi": "3.0.3",
   "paths": {
+    "/maintenance-schedules": {
+      "get": {
+        "tags": [
+          "Maintenance Tasks"
+        ],
+        "summary": "List maintenance schedules",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647,
+              "default": 0
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "paused",
+                "needs_review",
+                "archived"
+              ]
+            }
+          }
+        ],
+        "description": "Read contract occurrences-v1. Authenticated members, including viewers, may read the selected home. Foreign-home IDs return 404, even when the caller belongs to both homes. Unknown/repeated/empty query values are rejected. Multi-query reads use one consistent snapshot. Raw stored snapshot payloads are not exposed. Lists have stable ordering for unchanged data; refetch after concurrent mutations. See MAINTENANCE_HISTORY.md.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store"
+              },
+              "X-Maintenance-Contract": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "occurrences-v1"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceSchedulePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/MaintenanceReadBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/MaintenanceReadUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/MaintenanceReadForbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/MaintenanceReadNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/MaintenanceReadFailure"
+          }
+        }
+      }
+    },
+    "/maintenance-schedules/{id}": {
+      "get": {
+        "tags": [
+          "Maintenance Tasks"
+        ],
+        "summary": "Read maintenance schedule",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Read contract occurrences-v1. Authenticated members, including viewers, may read the selected home. Foreign-home IDs return 404, even when the caller belongs to both homes. Unknown/repeated/empty query values are rejected. Multi-query reads use one consistent snapshot. Raw stored snapshot payloads are not exposed. Lists have stable ordering for unchanged data; refetch after concurrent mutations. See MAINTENANCE_HISTORY.md.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store"
+              },
+              "X-Maintenance-Contract": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "occurrences-v1"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceSchedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/MaintenanceReadBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/MaintenanceReadUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/MaintenanceReadForbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/MaintenanceReadNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/MaintenanceReadFailure"
+          }
+        }
+      }
+    },
+    "/maintenance-occurrences": {
+      "get": {
+        "tags": [
+          "Maintenance Tasks"
+        ],
+        "summary": "List maintenance occurrences",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647,
+              "default": 0
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "completed",
+                "skipped",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "schedule_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "due_after",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Inclusive earliest due instant."
+          },
+          {
+            "in": "query",
+            "name": "due_before",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Inclusive latest due instant."
+          }
+        ],
+        "description": "Read contract occurrences-v1. Authenticated members, including viewers, may read the selected home. Foreign-home IDs return 404, even when the caller belongs to both homes. Unknown/repeated/empty query values are rejected. Multi-query reads use one consistent snapshot. Raw stored snapshot payloads are not exposed. Lists have stable ordering for unchanged data; refetch after concurrent mutations. See MAINTENANCE_HISTORY.md.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store"
+              },
+              "X-Maintenance-Contract": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "occurrences-v1"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceOccurrencePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/MaintenanceReadBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/MaintenanceReadUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/MaintenanceReadForbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/MaintenanceReadNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/MaintenanceReadFailure"
+          }
+        }
+      }
+    },
+    "/maintenance-occurrences/{id}": {
+      "get": {
+        "tags": [
+          "Maintenance Tasks"
+        ],
+        "summary": "Read maintenance occurrence",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Read contract occurrences-v1. Authenticated members, including viewers, may read the selected home. Foreign-home IDs return 404, even when the caller belongs to both homes. Unknown/repeated/empty query values are rejected. Multi-query reads use one consistent snapshot. Raw stored snapshot payloads are not exposed. Lists have stable ordering for unchanged data; refetch after concurrent mutations. See MAINTENANCE_HISTORY.md.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store"
+              },
+              "X-Maintenance-Contract": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "occurrences-v1"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceOccurrence"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/MaintenanceReadBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/MaintenanceReadUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/MaintenanceReadForbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/MaintenanceReadNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/MaintenanceReadFailure"
+          }
+        }
+      }
+    },
+    "/maintenance-occurrences/{id}/history": {
+      "get": {
+        "tags": [
+          "Maintenance Tasks"
+        ],
+        "summary": "Read maintenance execution and consumption history",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HomeIdHeader"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Read contract occurrences-v1. Authenticated members, including viewers, may read the selected home. Foreign-home IDs return 404, even when the caller belongs to both homes. Unknown/repeated/empty query values are rejected. Multi-query reads use one consistent snapshot. Raw stored snapshot payloads are not exposed. Lists have stable ordering for unchanged data; refetch after concurrent mutations. See MAINTENANCE_HISTORY.md.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store"
+              },
+              "X-Maintenance-Contract": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "occurrences-v1"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceOccurrenceHistory"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/MaintenanceReadBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/MaintenanceReadUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/MaintenanceReadForbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/MaintenanceReadNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/MaintenanceReadFailure"
+          }
+        }
+      }
+    },
     "/receipts/scan": {
       "post": {
         "parameters": [
@@ -4391,7 +5366,7 @@
         "tags": [
           "Maintenance Tasks"
         ],
-        "description": "Atomically completes the current task, consumes its current dependencies, records execution/consumption provenance, and updates shopping quantities. Concurrent completions execute once. Legacy repeats on an already completed task acknowledge it with 200 and never deduct stock again. Identified retries return the recorded successful outcome after checking current home write access; conflicting ID reuse or a stale expected_version returns 409. Completion does not generate a successor occurrence. Consumes only positive stock in the correct home/definition with no expiry or expiry strictly after one captured UTC operation time; expiry equal to the cutoff is expired. Availability, deductions and the resulting shopping update use that cutoff. Deductions use earliest valid expiry, UUID ascending for ties, and non-expiring batches last; locked rows are reordered after competing expiry edits. Expired/empty batches remain unchanged and cannot satisfy requirements. If eligible stock is insufficient, the whole operation rolls back. Successful-command retries still acknowledge the original outcome after stock later expires.",
+        "description": "Atomically completes the current task, consumes its current dependencies, records execution/consumption provenance, and updates shopping quantities. Concurrent completions execute once. Legacy repeats on an already completed task acknowledge it with 200 and never deduct stock again. Identified retries return the recorded successful outcome after checking current home write access; conflicting ID reuse or a stale expected_version returns 409. Completion does not generate a successor occurrence. Consumes only positive stock in the correct home/definition with no expiry or expiry strictly after one captured UTC operation time; expiry equal to the cutoff is expired. Availability, deductions and the resulting shopping update use that cutoff. Deductions use earliest valid expiry, UUID ascending for ties, and non-expiring batches last; locked rows are reordered after competing expiry edits. Expired/empty batches remain unchanged and cannot satisfy requirements. If eligible stock is insufficient, the whole operation rolls back. Successful-command retries still acknowledge the original outcome after stock later expires. The original task ID maps permanently to its initial occurrence. Completion links the existing journal to that occurrence and freezes history in the same transaction; it does not restart legacy recurring schedules.",
         "requestBody": {
           "required": false,
           "content": {
@@ -4473,7 +5448,7 @@
         "tags": [
           "Maintenance Tasks"
         ],
-        "description": "Deletes a pending task under the same task lock as completion. Completed tasks return 409 to preserve execution history; explicit history/correction handling follows in backend #156."
+        "description": "Deletes a pending task under the same task lock as completion. Completed tasks return 409 to preserve execution history; explicit history/correction handling follows in backend #156. A successful legacy pending deletion retains a cancelled occurrence with actor/time/reason legacy_delete and an archived schedule, readable through the occurrence API; the legacy task URL then returns 404."
       },
       "get": {
         "parameters": [
@@ -4583,7 +5558,7 @@
         "tags": [
           "Maintenance Tasks"
         ],
-        "description": "Edits and dependency replacement share completion’s task lock and increment Version. Completed tasks return 409 and require a future explicit correction workflow; the generic editor cannot reopen or rewrite them. Omitted expected_version retains legacy behavior. Omitted dependencies preserve existing requirements. is_completed retains the existing legacy input behavior pending backend #156."
+        "description": "Edits and dependency replacement share completion’s task lock and increment Version. Completed tasks return 409 and require a future explicit correction workflow; the generic editor cannot reopen or rewrite them. Omitted expected_version retains legacy behavior. Omitted dependencies preserve existing requirements. is_completed retains the existing legacy input behavior pending backend #156. The mapped pending occurrence requirements and future defaults update in the same transaction; completed snapshots remain immutable. A newer canonical revision or a confirmed mode/zone that this legacy request cannot express returns 409 without changing either model."
       }
     },
     "/homes/predictions": {

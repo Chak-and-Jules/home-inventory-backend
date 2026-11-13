@@ -38,6 +38,9 @@ func TestSetupRouter(t *testing.T) {
 	}
 
 	assert.True(t, paths["/api/v1/homes"])
+	for _, path := range []string{"/api/v1/maintenance-schedules", "/api/v1/maintenance-schedules/:id", "/api/v1/maintenance-occurrences", "/api/v1/maintenance-occurrences/:id", "/api/v1/maintenance-occurrences/:id/history"} {
+		assert.True(t, methods["GET "+path])
+	}
 	assert.True(t, methods["GET /api/v1/guides"])
 	assert.True(t, methods["GET /api/v1/demo-home"])
 	assert.True(t, methods["POST /api/v1/demo-home/actions"])

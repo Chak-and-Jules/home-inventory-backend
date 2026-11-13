@@ -11,16 +11,18 @@ const InventorySourceMaintenance = "maintenance"
 // MaintenanceExecution is the initial, immutable execution of a legacy task.
 // Task/user identifiers are snapshots, not cascading foreign keys: task, actor
 // or batch deletion must not erase the home's service/consumption history.
-// The occurrence work will reuse these execution IDs and their command journal.
+// Occurrences reuse these execution IDs and their original command journal.
 type MaintenanceExecution struct {
-	ID           uuid.UUID  `gorm:"type:uuid;primaryKey"`
-	HomeID       uuid.UUID  `gorm:"type:uuid;not null;index"`
-	TaskID       uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex"`
-	ActorUserID  uuid.UUID  `gorm:"type:uuid;not null"`
-	RequestID    *uuid.UUID `gorm:"type:uuid"`
-	TaskVersion  int64      `gorm:"not null"`
-	CompletedAt  time.Time  `gorm:"not null"`
-	SnapshotJSON string     `gorm:"type:text;not null"`
+	OccurrenceID *uuid.UUID             `gorm:"type:uuid;index"`
+	Occurrence   *MaintenanceOccurrence `gorm:"foreignKey:HomeID,OccurrenceID;references:HomeID,ID;constraint:OnDelete:NO ACTION" json:"-"`
+	ID           uuid.UUID              `gorm:"type:uuid;primaryKey"`
+	HomeID       uuid.UUID              `gorm:"type:uuid;not null;index"`
+	TaskID       uuid.UUID              `gorm:"type:uuid;not null;uniqueIndex"`
+	ActorUserID  uuid.UUID              `gorm:"type:uuid;not null"`
+	RequestID    *uuid.UUID             `gorm:"type:uuid"`
+	TaskVersion  int64                  `gorm:"not null"`
+	CompletedAt  time.Time              `gorm:"not null"`
+	SnapshotJSON string                 `gorm:"type:text;not null"`
 	CreatedAt    time.Time
 	Home         Home `gorm:"foreignKey:HomeID;constraint:OnDelete:CASCADE"`
 }

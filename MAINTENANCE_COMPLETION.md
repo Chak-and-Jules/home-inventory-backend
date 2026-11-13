@@ -141,13 +141,15 @@ foreign-key cascades from those live records. The home owns the audit lifetime.
 Deleting a live inventory batch can still remove its ordinary transactions via
 existing cascades, while the consumption snapshot retains their IDs and facts.
 Home deletion cascades through the journal; demo reset explicitly clears only
-that demo home's journal. There is no public audit mutation/history API yet.
+that demo home's journal. History reads and schedule/occurrence persistence are documented in
+[MAINTENANCE_HISTORY.md](MAINTENANCE_HISTORY.md). Public correction/mutation
+commands remain follow-up work.
 
 ## Remaining scope
 
 This change does not generate future occurrences, schedule recurring tasks,
 infer legacy usage, restore consumed stock, send durable reminders or implement
-history corrections. #154–#158 build
+history corrections. #155–#158 build
 on these execution IDs/receipts; the one-execution-per-legacy-task constraint
 must evolve with their occurrence identity rather than creating a second audit
 mechanism. Current low-stock notification helpers only log; durable delivery
